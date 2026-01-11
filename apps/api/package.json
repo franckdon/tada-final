@@ -2,7 +2,6 @@
   "name": "@tada/api",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "scripts": {
     "dev:api": "tsx watch --env-file=.env.local src/dev.ts",
     "build": "tsc -p tsconfig.json",

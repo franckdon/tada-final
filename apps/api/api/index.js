@@ -1,6 +1,7 @@
-import app from "../src/app";
+// apps/api/api/index.js
+const app = require("../dist/app").default;
 
-export default async function handler(req: any, res: any) {
+module.exports = async function handler(req, res) {
   try {
     const proto = req.headers["x-forwarded-proto"] || "https";
     const host = req.headers.host;
@@ -16,7 +17,7 @@ export default async function handler(req: any, res: any) {
     const response = await app.fetch(request);
 
     res.statusCode = response.status;
-    response.headers.forEach((value: string, key: string) => res.setHeader(key, value));
+    response.headers.forEach((value, key) => res.setHeader(key, value));
 
     const buf = Buffer.from(await response.arrayBuffer());
     res.end(buf);
@@ -26,4 +27,4 @@ export default async function handler(req: any, res: any) {
     res.setHeader("content-type", "application/json");
     res.end(JSON.stringify({ error: "Serverless function crashed", details: String(err) }));
   }
-}
+};

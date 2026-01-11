@@ -1,9 +1,10 @@
-import { SignJWT, jwtVerify } from "jose/node/cjs";
 import { env } from "../env";
 
 const secret = new TextEncoder().encode(env.MOBILE_JWT_SECRET);
 
 export async function signAccessToken(userId: string) {
+  const { SignJWT } = await import("jose");
+
   const now = Math.floor(Date.now() / 1000);
   return new SignJWT({ typ: "access" })
     .setProtectedHeader({ alg: "HS256" })
@@ -16,6 +17,8 @@ export async function signAccessToken(userId: string) {
 }
 
 export async function verifyAccessToken(token: string) {
+  const { jwtVerify } = await import("jose");
+
   const { payload } = await jwtVerify(token, secret, {
     issuer: "tada-api",
     audience: "tada-mobile",
