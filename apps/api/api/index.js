@@ -1,5 +1,5 @@
 // apps/api/api/index.js
-const { openapi } = require("../openapi");
+const { openapi } = require("./openapi");
 
 module.exports = async function handler(req, res) {
   try {
