@@ -16,7 +16,7 @@ export default async function handler(req: any, res: any) {
     const response = await app.fetch(request);
 
     res.statusCode = response.status;
-    response.headers.forEach((value, key) => res.setHeader(key, value));
+    response.headers.forEach((value: string, key: string) => res.setHeader(key, value));
 
     const buf = Buffer.from(await response.arrayBuffer());
     res.end(buf);
