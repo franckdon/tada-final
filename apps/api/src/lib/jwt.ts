@@ -2,8 +2,15 @@ import { env } from "../env";
 
 const secret = new TextEncoder().encode(env.MOBILE_JWT_SECRET);
 
+type JoseModule = typeof import("jose");
+
+async function jose(): Promise<JoseModule> {
+  // ESM-only package -> dynamic import works in CommonJS runtime
+  return await import("jose");
+}
+
 export async function signAccessToken(userId: string) {
-  const { SignJWT } = await import("jose");
+  const { SignJWT } = await jose();
 
   const now = Math.floor(Date.now() / 1000);
   return new SignJWT({ typ: "access" })
@@ -17,7 +24,7 @@ export async function signAccessToken(userId: string) {
 }
 
 export async function verifyAccessToken(token: string) {
-  const { jwtVerify } = await import("jose");
+  const { jwtVerify } = await jose();
 
   const { payload } = await jwtVerify(token, secret, {
     issuer: "tada-api",
