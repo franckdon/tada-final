@@ -1,3 +1,4 @@
+// apps/api/tsconfig.json
 {
   "compilerOptions": {
     "outDir": "dist",

@@ -1,3 +1,4 @@
+// apps/api/api/index.js
 const { openapi } = require("../dist/openapi");
 
 module.exports = async function handler(req, res) {
