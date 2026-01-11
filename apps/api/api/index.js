@@ -1,7 +1,6 @@
-// apps/api/api/index.ts
-const { openapi } = require("../src/openapi");
+const { openapi } = require("../dist/openapi");
 
-export default async function handler(req: any, res: any) {
+module.exports = async function handler(req, res) {
   try {
     const proto = req.headers["x-forwarded-proto"] || "https";
     const host = req.headers.host;
@@ -10,14 +9,14 @@ export default async function handler(req: any, res: any) {
 
     const request = new Request(url.toString(), {
       method: req.method,
-      headers: req.headers as any,
+      headers: req.headers,
       body: req.method === "GET" || req.method === "HEAD" ? undefined : req,
     });
 
     const response = await openapi.fetch(request);
 
     res.statusCode = response.status;
-    response.headers.forEach((value: string, key: string) => res.setHeader(key, value));
+    response.headers.forEach((value, key) => res.setHeader(key, value));
 
     const buf = Buffer.from(await response.arrayBuffer());
     res.end(buf);
@@ -27,4 +26,4 @@ export default async function handler(req: any, res: any) {
     res.setHeader("content-type", "application/json");
     res.end(JSON.stringify({ error: "Serverless function crashed", details: String(err) }));
   }
-}
+};
