@@ -8,6 +8,7 @@ import { requireMobileAuth } from "../../../middleware/requireMobileAuth";
 import { formatZodIssuesFr, jsonError } from "./mobile.errors";
 import { uploadUserAvatar } from "../../../lib/storage/avatar.service";
 import { getUserImage, updateUserImage } from "./user.avatar.repo";
+import { ContentfulStatusCode } from "hono/utils/http-status";
 
 export const mobileUserAvatarRoutes = new Hono<{ Variables: HonoVariables }>();
 
@@ -70,7 +71,9 @@ async function avatarHandler(c: any) {
   if (!v.ok) return jsonError(c, 400, v.message);
 
   const up = await uploadUserAvatar({ userId, file });
-  if (!up.ok) return jsonError(c, up.status, up.message);
+  if (!up.ok) {
+    return jsonError(c, up.status as ContentfulStatusCode, up.message);
+  }
 
   const updated = await updateUserImage(userId, up.publicUrl);
   if (!updated) return jsonError(c, 404, "Utilisateur introuvable");
