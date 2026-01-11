@@ -1,0 +1,85 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Gilroy';
+  src: url('https://cdn.jsdelivr.net/gh/repalash/gilroy-free-webfont@fonts/Gilroy-Light.eot');
+  src: local('Gilroy Light'), local('Gilroy-Light'),
+  url('https://cdn.jsdelivr.net/gh/repalash/gilroy-free-webfont@fonts/Gilroy-Light.eot?#iefix') format('embedded-opentype'),
+  url('https://cdn.jsdelivr.net/gh/repalash/gilroy-free-webfont@fonts/Gilroy-Light.woff') format('woff'),
+  url('https://cdn.jsdelivr.net/gh/repalash/gilroy-free-webfont@fonts/Gilroy-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'RationalDisplay-Book';
+  src: url('https://ext.same-assets.com/829373065/1139697966.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'RationalDisplay-Medium';
+  src: url('https://ext.same-assets.com/829373065/1367910400.woff') format('woff');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'RationalDisplay-SemiBold';
+  src: url('https://ext.same-assets.com/829373065/1431330270.woff') format('woff');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'RationalDisplay-Bold';
+  src: url('https://ext.same-assets.com/829373065/3426720646.woff') format('woff');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+
+
+
+
+
+@layer base {
+
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Gilroy', sans-serif;
+  }
+
+  h1, h2, h3 {
+    font-family: 'Gilroy', sans-serif;
+  }
+
+  h4, h5, h6 {
+    font-family: 'Gilroy', sans-serif;
+  }
+}
+
+@layer components {
+
+
+  .container-custom {
+    @apply max-w-[1200px] mx-auto px-4;
+  }
+
+  .nav-link {
+    @apply text-gray-800 hover:text-blue-600 transition-colors duration-200;
+  }
+}

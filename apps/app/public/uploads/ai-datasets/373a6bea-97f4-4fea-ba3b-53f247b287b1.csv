@@ -1,0 +1,11 @@
+respondent_id,age,gender,country,segment,satisfaction_score,nps_score,monthly_spend,churned,survey_date
+1,25,F,CI,Freemium,4.2,30,0.0,False,2025-11-01
+2,32,M,CI,Premium,4.8,70,12.5,False,2025-11-02
+3,41,F,SN,Premium,3.1,-10,9.9,True,2025-11-02
+4,29,M,CI,Freemium,2.9,-30,0.0,True,2025-11-03
+5,37,F,GH,Business,4.9,90,49.0,False,2025-11-03
+6,22,M,CI,Freemium,3.7,10,3.5,False,2025-11-04
+7,45,F,NG,Business,4.1,20,35.0,False,2025-11-04
+8,31,M,CI,Premium,4.5,60,15.0,False,2025-11-05
+9,28,F,CI,Freemium,3.3,0,1.0,False,2025-11-05
+10,39,M,SN,Business,2.4,-50,20.0,True,2025-11-06

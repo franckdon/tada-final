@@ -1,0 +1,55 @@
+{
+  "name": "tada",
+  "private": true,
+  "workspaces": ["packages/*", "apps/*", "tooling/*"],
+  "scripts": {
+    "build": "turbo build",
+    "clean": "turbo clean && rm -rf node_modules",
+    "clean:workspaces": "turbo clean",
+    "dev": "turbo dev",
+    "dev:web": "turbo dev --filter=@tada/web",
+    "dev:jobs": "turbo jobs --filter=@v1/jobs",
+    "dev:app": "turbo dev --filter=@tada/app",
+    "dev:admin": "turbo dev --filter=@tada/admin",
+    "dev:contributors": "turbo dev --filter=@tada/contributors",
+    "start:web": "turbo start --filter=@tada/web",
+    "start:app": "turbo start --filter=@tada/app",
+    "start:admin": "turbo start --filter=@tada/admin",
+    "start:contributors": "turbo start --filter=@tada/contributors",
+    "test": "turbo test --parallel",
+    "format": "turbo format",
+    "lint": "turbo lint",
+    "lint:repo": "bunx sherif@latest",
+    "lint:repo:fix": "bunx sherif@latest --fix",
+    "typecheck": "turbo typecheck"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.5.3",
+    "@t3-oss/env-nextjs": "^0.11.1",
+    "@types/json2csv": "^5.0.7",
+    "@veltdev/types": "^4.5.0-beta.61",
+    "turbo": "^1.12.4",
+    "typescript": "^5.5.4"
+  },
+  "packageManager": "bun@1.1.26",
+  "dependencies": {
+    "@novu/nextjs": "^3.5.0",
+    "@radix-ui/react-select": "^2.1.6",
+    "@stripe/stripe-js": "^7.4.0",
+    "@supabase/supabase-js": "^2.49.1",
+    "@veltdev/react": "^4.5.0-beta.61",
+    "html-to-image": "^1.11.13",
+    "json2csv": "^6.0.0-alpha.2",
+    "next13-progressbar": "^1.2.2",
+    "pptxgenjs": "3.12.0",
+    "stripe": "^18.3.0"
+  },
+  "overrides": {
+    "@assistant-ui/react": "0.11.51",
+    "@assistant-ui/react-ai-sdk": "1.1.19",
+    "@assistant-ui/react-hook-form": "0.11.10",
+    "@assistant-ui/react-markdown": "0.11.8",
+    "ai": "5.0.115",
+    "@ai-sdk/openai": "2.0.88"
+  }
+}

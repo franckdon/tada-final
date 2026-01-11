@@ -1,0 +1,122 @@
+[
+  {
+    "respondent_id": 1,
+    "age": 25,
+    "gender": "F",
+    "country": "CI",
+    "segment": "Freemium",
+    "satisfaction_score": 4.2,
+    "nps_score": 30,
+    "monthly_spend": 0.0,
+    "churned": false,
+    "survey_date": "2025-11-01"
+  },
+  {
+    "respondent_id": 2,
+    "age": 32,
+    "gender": "M",
+    "country": "CI",
+    "segment": "Premium",
+    "satisfaction_score": 4.8,
+    "nps_score": 70,
+    "monthly_spend": 12.5,
+    "churned": false,
+    "survey_date": "2025-11-02"
+  },
+  {
+    "respondent_id": 3,
+    "age": 41,
+    "gender": "F",
+    "country": "SN",
+    "segment": "Premium",
+    "satisfaction_score": 3.1,
+    "nps_score": -10,
+    "monthly_spend": 9.9,
+    "churned": true,
+    "survey_date": "2025-11-02"
+  },
+  {
+    "respondent_id": 4,
+    "age": 29,
+    "gender": "M",
+    "country": "CI",
+    "segment": "Freemium",
+    "satisfaction_score": 2.9,
+    "nps_score": -30,
+    "monthly_spend": 0.0,
+    "churned": true,
+    "survey_date": "2025-11-03"
+  },
+  {
+    "respondent_id": 5,
+    "age": 37,
+    "gender": "F",
+    "country": "GH",
+    "segment": "Business",
+    "satisfaction_score": 4.9,
+    "nps_score": 90,
+    "monthly_spend": 49.0,
+    "churned": false,
+    "survey_date": "2025-11-03"
+  },
+  {
+    "respondent_id": 6,
+    "age": 22,
+    "gender": "M",
+    "country": "CI",
+    "segment": "Freemium",
+    "satisfaction_score": 3.7,
+    "nps_score": 10,
+    "monthly_spend": 3.5,
+    "churned": false,
+    "survey_date": "2025-11-04"
+  },
+  {
+    "respondent_id": 7,
+    "age": 45,
+    "gender": "F",
+    "country": "NG",
+    "segment": "Business",
+    "satisfaction_score": 4.1,
+    "nps_score": 20,
+    "monthly_spend": 35.0,
+    "churned": false,
+    "survey_date": "2025-11-04"
+  },
+  {
+    "respondent_id": 8,
+    "age": 31,
+    "gender": "M",
+    "country": "CI",
+    "segment": "Premium",
+    "satisfaction_score": 4.5,
+    "nps_score": 60,
+    "monthly_spend": 15.0,
+    "churned": false,
+    "survey_date": "2025-11-05"
+  },
+  {
+    "respondent_id": 9,
+    "age": 28,
+    "gender": "F",
+    "country": "CI",
+    "segment": "Freemium",
+    "satisfaction_score": 3.3,
+    "nps_score": 0,
+    "monthly_spend": 1.0,
+    "churned": false,
+    "survey_date": "2025-11-05"
+  },
+  {
+    "respondent_id": 10,
+    "age": 39,
+    "gender": "M",
+    "country": "SN",
+    "segment": "Business",
+    "satisfaction_score": 2.4,
+    "nps_score": -50,
+    "monthly_spend": 20.0,
+    "churned": true,
+    "survey_date": "2025-11-06"
+  }
+]

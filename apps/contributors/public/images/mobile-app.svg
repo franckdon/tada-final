@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="104" height="104" viewBox="0 0 104 104" fill="none">
+  <rect width="104" height="104" fill="#F0F0F0"></rect>
+  
+  <!-- Smartphone principal -->
+  <rect x="35" y="15" width="34" height="60" rx="4" fill="white" stroke="black" stroke-width="1.5"/>
+  <rect x="37" y="20" width="30" height="45" fill="#F8F8F8" stroke="black" stroke-width="1"/>
+  
+  <!-- Écran avec interface -->
+  <rect x="39" y="22" width="26" height="8" rx="2" fill="#FF5B4A"/>
+  <rect x="39" y="32" width="12" height="6" rx="1" fill="#C8C8C8"/>
+  <rect x="53" y="32" width="12" height="6" rx="1" fill="#C8C8C8"/>
+  <rect x="39" y="40" width="26" height="3" rx="1" fill="#E0E0E0"/>
+  <rect x="39" y="45" width="26" height="3" rx="1" fill="#E0E0E0"/>
+  <rect x="39" y="50" width="18" height="3" rx="1" fill="#E0E0E0"/>
+  
+  <!-- Boutons -->
+  <circle cx="52" cy="69" r="2" fill="#C8C8C8" stroke="black" stroke-width="1"/>
+  <rect x="48" y="17" width="8" height="1" rx="0.5" fill="black"/>
+  
+  <!-- Smartphone secondaire -->
+  <rect x="15" y="35" width="20" height="35" rx="3" fill="white" stroke="black" stroke-width="1.5"/>
+  <rect x="17" y="38" width="16" height="25" fill="#F8F8F8" stroke="black" stroke-width="1"/>
+  <rect x="18" y="40" width="14" height="4" rx="1" fill="#FF5B4A"/>
+  <rect x="18" y="46" width="6" height="3" rx="0.5" fill="#C8C8C8"/>
+  <rect x="26" y="46" width="6" height="3" rx="0.5" fill="#C8C8C8"/>
+  <circle cx="25" cy="66" r="1.5" fill="#C8C8C8"/>
+  
+  <!-- Smartphone tertiaire -->
+  <rect x="70" y="40" width="18" height="32" rx="2" fill="white" stroke="black" stroke-width="1.5"/>
+  <rect x="72" y="43" width="14" height="22" fill="#F8F8F8" stroke="black" stroke-width="1"/>
+  <rect x="73" y="45" width="12" height="3" rx="1" fill="#FF5B4A"/>
+  <rect x="73" y="50" width="5" height="2" rx="0.5" fill="#C8C8C8"/>
+  <rect x="80" y="50" width="5" height="2" rx="0.5" fill="#C8C8C8"/>
+  <circle cx="79" cy="68" r="1" fill="#C8C8C8"/>
+  
+  <!-- Signaux de connexion -->
+  <path d="M20 28L30 30" stroke="#FF5B4A" stroke-width="1.5" stroke-dasharray="2,2"/>
+  <path d="M35 30L45 25" stroke="#FF5B4A" stroke-width="1.5" stroke-dasharray="2,2"/>
+  <path d="M75 35L65 30" stroke="#FF5B4A" stroke-width="1.5" stroke-dasharray="2,2"/>
+  
+  <!-- Indicateurs de données -->
+  <circle cx="25" cy="25" r="1.5" fill="#FF5B4A"/>
+  <circle cx="50" cy="10" r="1.5" fill="#FF5B4A"/>
+  <circle cx="80" cy="30" r="1.5" fill="#FF5B4A"/>
+  
+  <!-- Nuage de données -->
+  <path d="M45 85C45 83 46.5 81 49 81C50 79 52 78 54 79C56 78 58 79 58 81C60.5 81 62 83 62 85C62 87 60.5 89 58 89H49C46.5 89 45 87 45 85Z" fill="white" stroke="black" stroke-width="1.5"/>
+  <path d="M50 85H57" stroke="black" stroke-width="1"/>
+  <path d="M51 87H56" stroke="black" stroke-width="1"/>
+  
+  <!-- Flèches de synchronisation -->
+  <path d="M52 75L52 78M50 76L52 78L54 76" stroke="black" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M52 83L52 80M50 82L52 80L54 82" stroke="black" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

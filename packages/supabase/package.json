@@ -1,0 +1,32 @@
+{
+  "name": "@tada/supabase",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "clean": "git clean -xdf .turbo node_modules",
+    "lint": "biome lint",
+    "format": "biome format --write .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.1.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "@tada/logger": "workspace:*",
+    "next": "14.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.5.4"
+  },
+  "exports": {
+    "./server": "./src/clients/server.ts",
+    "./client": "./src/clients/client.ts",
+    "./mutations": "./src/mutations/index.ts",
+    "./middleware": "./src/clients/middleware.ts",
+    "./queries": "./src/queries/index.ts",
+    "./types": "./src/types/index.ts",
+    "./storage": "./src/utils/storage.ts"
+  }
+}

@@ -1,0 +1,32 @@
+"use client";
+
+import { useI18n } from "@/locales/client";
+import { Button } from "@tada/ui/components/button";
+import { useState } from "react";
+
+export function ExportOrgMissions({ orgId }: { orgId: string }) {
+  const [loading, setLoading] = useState(false);
+  const t = useI18n();
+
+  const handleDownload = async () => {
+    setLoading(true);
+    const res = await fetch(`/api/export-missions-csv?orgId=${orgId}`);
+    const blob = await res.blob();
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "missions_export.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+    setLoading(false);
+  };
+
+  return (
+    <Button onClick={handleDownload} disabled={loading}>
+      {loading ? t("common.loading") : t("missions.missionSubmission.export")}
+    </Button>
+  );
+}

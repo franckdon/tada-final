@@ -1,0 +1,25 @@
+{
+  "name": "@tada/kv",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "clean": "git clean -xdf .turbo node_modules",
+    "lint": "biome lint",
+    "format": "biome format --write .",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    "./client": "./src/index.ts",
+    "./ratelimit": "./src/ratelimit.ts"
+  },
+  "dependencies": {
+    "@upstash/ratelimit": "^1.0.1",
+    "@upstash/redis": "^1.28.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.5.4"
+  }
+}

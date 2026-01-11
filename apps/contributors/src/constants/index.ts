@@ -1,0 +1,92 @@
+export const testimonials = [
+  {
+    name: "Aminata",
+    role: "common.testimonials.items.0.role",
+    text: "common.testimonials.items.0.text",
+    thumbnail: "/testimonials/Aminata.jpg",
+  },
+  {
+    name: "Mamadou",
+    role: "common.testimonials.items.1.role",
+    text: "common.testimonials.items.1.text",
+    thumbnail: "https://randomuser.me/api/portraits/men/31.jpg",
+  },
+  {
+    name: "Fatou",
+    role: "common.testimonials.items.2.role",
+    text: "common.testimonials.items.2.text",
+    thumbnail: "/testimonials/Fatou.jpg",
+  },
+  {
+    name: "Seydou",
+    role: "common.testimonials.items.3.role",
+    text: "common.testimonials.items.3.text",
+    thumbnail: "https://randomuser.me/api/portraits/men/49.jpg",
+  },
+  {
+    name: "Awa",
+    role: "common.testimonials.items.4.role",
+    text: "common.testimonials.items.4.text",
+    thumbnail: "/testimonials/Awa.jpg",
+  },
+  {
+    name: "Issa",
+    role: "common.testimonials.items.5.role",
+    text: "common.testimonials.items.5.text",
+    thumbnail: "/testimonials/Issa.jpg",
+  },
+  {
+    name: "Mariama",
+    role: "common.testimonials.items.6.role",
+    text: "common.testimonials.items.6.text",
+    thumbnail: "https://randomuser.me/api/portraits/women/38.jpg",
+  },
+  {
+    name: "Ousmane",
+    role: "common.testimonials.items.7.role",
+    text: "common.testimonials.items.7.text",
+    thumbnail: "/testimonials/Ousmane.jpg",
+  },
+  {
+    name: "Aminata",
+    role: "common.testimonials.items.8.role",
+    text: "common.testimonials.items.8.text",
+    thumbnail: "/testimonials/Aminata2.jpg",
+  },
+  {
+    name: "Marie",
+    role: "common.testimonials.items.9.role",
+    text: "common.testimonials.items.9.text",
+    thumbnail: "/testimonials/Marie.jpg",
+  },
+  {
+    name: "Jean",
+    role: "common.testimonials.items.10.role",
+    text: "common.testimonials.items.10.text",
+    thumbnail: "/testimonials/Jean.jpg",
+  },
+  {
+    name: "Fatima",
+    role: "common.testimonials.items.11.role",
+    text: "common.testimonials.items.11.text",
+    thumbnail: "/testimonials/Fatima.jpg",
+  },
+  {
+    name: "Koffi",
+    role: "common.testimonials.items.12.role",
+    text: "common.testimonials.items.12.text",
+    thumbnail: "/testimonials/Koffi.jpg",
+  },
+  {
+    name: "Adama",
+    role: "common.testimonials.items.13.role",
+    text: "common.testimonials.items.13.text",
+    thumbnail: "/testimonials/Adama.jpg",
+  },
+  {
+    name: "Nadia",
+    role: "common.testimonials.items.14.role",
+    text: "common.testimonials.items.14.text",
+    thumbnail: "/testimonials/Nadia.jpg",
+  },
+];
