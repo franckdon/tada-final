@@ -1,8 +1,12 @@
+// apps/api/api/index.ts
 import { openapi } from "../src/openapi";
 
 export default async function handler(req: any, res: any) {
-  // Reconstruire une Request web à partir de req
-  const url = new URL(req.url, `https://${req.headers.host}`);
+  const host = req.headers.host;
+  const proto = req.headers["x-forwarded-proto"] ?? "https";
+  const base = host?.includes("localhost") ? `http://${host}` : `${proto}://${host}`;
+
+  const url = new URL(req.url, base);
 
   const request = new Request(url.toString(), {
     method: req.method,
