@@ -1,15 +1,12 @@
 {
   "version": 2,
-  "builds": [
-    { "src": "apps/api/api/index.js", "use": "@vercel/node" }
-  ],
-  "routes": [
-    { "src": "/(.*)", "dest": "apps/api/api/index.js" }
-  ],
   "functions": {
     "apps/api/api/index.js": {
       "runtime": "nodejs20.x",
       "includeFiles": "apps/api/dist/**"
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/apps/api/api/index.js" }
+  ]
 }
