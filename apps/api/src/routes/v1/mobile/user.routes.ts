@@ -2,13 +2,15 @@
 import { Hono } from "hono";
 import { ZodError } from "zod";
 
+import type { HonoVariables } from "../../../types/hono";
+
 import { requireMobileAuth } from "../../../middleware/requireMobileAuth";
 import { formatZodIssuesFr, jsonError, safeJson } from "./mobile.errors";
 import { changePasswordSchema, userPatchSchema, userPutSchema } from "./mobile.schemas";
 import * as service from "./mobile.service";
 import { mobileUserAvatarRoutes } from "./user.avatar.routes";
 
-export const mobileUserRoutes = new Hono();
+export const mobileUserRoutes = new Hono<{ Variables: HonoVariables }>();
 
 mobileUserRoutes.onError((err, c) => {
   if (err instanceof ZodError) {
