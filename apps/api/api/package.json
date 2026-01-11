@@ -1,0 +1,8 @@
+{
+  "name": "vercel-api-function",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "build": "cd .. && bun run build"
+  }
+}
