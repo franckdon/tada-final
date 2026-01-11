@@ -1,0 +1,27 @@
+# Ignorer tout ce qui est hors du scope API (monorepo)
+
+../apps/app/**
+../apps/admin/**
+../apps/app/.next/**
+../apps/admin/.next/**
+
+# Éviter d'embarquer des builds Next générés
+
+../**/.next/**
+
+# En pratique, on n'a pas besoin de la majorité du repo
+
+../node_modules/**
+../apps/**
+
+# Mais autoriser explicitement le projet API (root directory)
+
+!./**
+!./src/**
+!./api/**
+!./api/index.js
+!./api/dist/**
+!./package.json
+!./bun.lockb
+!./tsconfig.json
+!./vercel.json

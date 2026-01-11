@@ -8,6 +8,7 @@ module.exports = async function handler(req, res) {
 
         const url = new URL(req.url, `${proto}://${host}`);
 
+        // Create a Request object to pass to the app
         const request = new Request(url.toString(), {
             method: req.method,
             headers: req.headers,
