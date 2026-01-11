@@ -1,5 +1,5 @@
 // apps/api/api/index.js
-const app = require("../dist/app").default;
+const app = require("./dist/app").default;
 
 module.exports = async function handler(req, res) {
     try {
