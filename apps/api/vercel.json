@@ -1,11 +1,9 @@
 {
   "version": 2,
   "functions": {
-    "api/index.ts": {
-      "maxDuration": 30
+    "api/index.js": {
+      "includeFiles": "dist/**"
     }
   },
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/api" }
-  ]
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/index.js" }]
 }
