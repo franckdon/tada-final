@@ -6,6 +6,7 @@ module.exports = async function handler(req, res) {
     const proto = req.headers["x-forwarded-proto"] || "https";
     const host = req.headers.host;
 
+    // Construct the full URL
     const url = new URL(req.url, `${proto}://${host}`);
 
     const request = new Request(url.toString(), {
