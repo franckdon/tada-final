@@ -1,12 +1,11 @@
 // apps/api/api/index.js
-const { openapi } = require("./openapi");
+const app = require("../dist/app").default;
 
 module.exports = async function handler(req, res) {
   try {
     const proto = req.headers["x-forwarded-proto"] || "https";
     const host = req.headers.host;
 
-    // Construct the full URL
     const url = new URL(req.url, `${proto}://${host}`);
 
     const request = new Request(url.toString(), {
@@ -15,7 +14,7 @@ module.exports = async function handler(req, res) {
       body: req.method === "GET" || req.method === "HEAD" ? undefined : req,
     });
 
-    const response = await openapi.fetch(request);
+    const response = await app.fetch(request);
 
     res.statusCode = response.status;
     response.headers.forEach((value, key) => res.setHeader(key, value));
