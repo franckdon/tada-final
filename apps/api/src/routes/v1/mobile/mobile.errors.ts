@@ -1,9 +1,12 @@
 // apps/api/src/routes/mobile/mobile.errors.ts
 import type { Context } from "hono";
+import type { StatusCode } from "hono/utils/http-status";
 import { ZodError } from "zod";
 
-export function jsonError(c: Context, status: number, message: string, code?: string) {
-  return c.json({ error: message, code }, status);
+export function jsonError(c: Context, status: StatusCode, message: string, code?: string) {
+  const payload: { error: string; code?: string } = { error: message };
+  if (code) payload.code = code;
+  return c.json(payload, status);
 }
 
 export function formatZodIssuesFr(err: ZodError) {
@@ -19,9 +22,9 @@ export function formatZodIssuesFr(err: ZodError) {
   });
 }
 
-export async function safeJson(c: Context) {
+export async function safeJson(c: Context): Promise<Record<string, unknown>> {
   try {
-    return await c.req.json();
+    return (await c.req.json()) as Record<string, unknown>;
   } catch {
     return {};
   }

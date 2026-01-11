@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const env = z.object({
   API_PORT: z.coerce.number().default(4000),
+
   DATABASE_URL: z.string().min(10),
 
   MOBILE_JWT_SECRET: z.string().min(32),
@@ -17,4 +18,10 @@ export const env = z.object({
 
   APP_URL: z.string().default("http://localhost:3000"),
   NODE_ENV: z.string().optional(),
+
+  SMTP_HOST: z.string().min(1),
+  SMTP_PORT: z.coerce.number().default(465),
+  SMTP_EMAIL: z.string().min(1),
+  SMTP_PASSWORD: z.string().min(1),
+  
 }).parse(process.env);
