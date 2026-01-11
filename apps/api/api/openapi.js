@@ -1,1 +1,1 @@
-module.exports = require("../openapi");
+module.exports = require("../dist/openapi");
