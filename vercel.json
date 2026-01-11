@@ -2,11 +2,10 @@
   "version": 2,
   "functions": {
     "apps/api/api/index.js": {
-      "runtime": "nodejs20.x",
       "includeFiles": "apps/api/dist/**"
     }
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/apps/api/api/index.js" }
+    { "source": "/api/(.*)", "destination": "/api/index.js" }
   ]
 }
