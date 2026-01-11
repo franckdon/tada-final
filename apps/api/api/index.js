@@ -1,7 +1,4 @@
 // apps/api/api/index.js
-// Ce fichier sert de handler pour les fonctions serverless sur Vercel.
-// - si ton build produit dist/src/app.js → laisse tel quel
-// - si ton build produit dist/app.js → remplace par "../dist/app"
 const app = require("../dist/app").default;
 
 module.exports = async function handler(req, res) {
@@ -20,23 +17,14 @@ module.exports = async function handler(req, res) {
         const response = await app.fetch(request);
 
         res.statusCode = response.status;
+        response.headers.forEach((value, key) => res.setHeader(key, value));
 
-        response.headers.forEach((value, key) => {
-            res.setHeader(key, value);
-        });
-
-        const buffer = Buffer.from(await response.arrayBuffer());
-        res.end(buffer);
+        const buf = Buffer.from(await response.arrayBuffer());
+        res.end(buf);
     } catch (err) {
         console.error("[VERCEL API HANDLER ERROR]", err);
-
         res.statusCode = 500;
         res.setHeader("content-type", "application/json");
-        res.end(
-            JSON.stringify({
-                error: "Serverless function crashed",
-                details: String(err),
-            }),
-        );
+        res.end(JSON.stringify({ error: "Serverless function crashed", details: String(err) }));
     }
 };
