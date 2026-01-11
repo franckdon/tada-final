@@ -9,6 +9,7 @@ import { formatZodIssuesFr, jsonError, safeJson } from "./mobile.errors";
 import { changePasswordSchema, userPatchSchema, userPutSchema } from "./mobile.schemas";
 import * as service from "./mobile.service";
 import { mobileUserAvatarRoutes } from "./user.avatar.routes";
+import { ContentfulStatusCode } from "hono/utils/http-status";
 
 export const mobileUserRoutes = new Hono<{ Variables: HonoVariables }>();
 
@@ -25,7 +26,7 @@ mobileUserRoutes.get("/me", requireMobileAuth, async (c) => {
   const userId = c.get("userId") as string;
 
   const r = await service.getMe(userId);
-  if (!r.ok) return jsonError(c, r.status, r.message);
+  if (!r.ok) return jsonError(c, r.status as ContentfulStatusCode, r.message);
 
   return c.json(r.data);
 });
@@ -38,7 +39,7 @@ mobileUserRoutes.put("/me", requireMobileAuth, async (c) => {
   const data = userPutSchema.parse(body);
   const r = await service.updateMeFull(userId, data);
 
-  if (!r.ok) return jsonError(c, r.status, r.message);
+  if (!r.ok) return jsonError(c, r.status as ContentfulStatusCode, r.message);
 
   return c.json(r.data);
 });
@@ -51,7 +52,7 @@ mobileUserRoutes.patch("/me", requireMobileAuth, async (c) => {
   const data = userPatchSchema.parse(body);
   const r = await service.updateMePartial(userId, data);
 
-  if (!r.ok) return jsonError(c, r.status, r.message);
+  if (!r.ok) return jsonError(c, r.status as ContentfulStatusCode, r.message);
 
   return c.json(r.data);
 });
@@ -65,7 +66,7 @@ mobileUserRoutes.put("/me/password", requireMobileAuth, async (c) => {
   const { oldPassword, newPassword } = changePasswordSchema.parse(body);
 
   const r = await service.changePassword(userId, { oldPassword, newPassword });
-  if (!r.ok) return jsonError(c, r.status, r.message);
+  if (!r.ok) return jsonError(c, r.status as ContentfulStatusCode, r.message);
 
   return c.json({ ok: true });
 });

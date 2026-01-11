@@ -1,9 +1,9 @@
 // apps/api/src/routes/mobile/mobile.errors.ts
 import type { Context } from "hono";
-import type { StatusCode } from "hono/utils/http-status";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { ZodError } from "zod";
 
-export function jsonError(c: Context, status: StatusCode, message: string, code?: string) {
+export function jsonError(c: Context, status: ContentfulStatusCode, message: string, code?: string) {
   const payload: { error: string; code?: string } = { error: message };
   if (code) payload.code = code;
   return c.json(payload, status);

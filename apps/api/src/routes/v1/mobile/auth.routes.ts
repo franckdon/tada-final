@@ -15,6 +15,7 @@ import {
 } from "./mobile.schemas";
 
 import * as service from "./mobile.service";
+import { ContentfulStatusCode } from "hono/utils/http-status";
 
 export const mobileAuthRoutes = new Hono();
 
@@ -46,7 +47,7 @@ mobileAuthRoutes.post("/verify", async (c) => {
   const ua = c.req.header("user-agent") ?? null;
 
   const r = await service.verifyEmail({ email, otp }, { ip, ua });
-  if (!r.ok) return jsonError(c, r.status, r.message);
+  if (!r.ok) return jsonError(c, r.status as ContentfulStatusCode, r.message);
   return c.json(r.data);
 });
 
@@ -68,7 +69,7 @@ mobileAuthRoutes.post("/login", async (c) => {
   const ua = c.req.header("user-agent") ?? null;
 
   const r = await service.login({ email, password }, { ip, ua });
-  if (!r.ok) return jsonError(c, r.status, r.message);
+  if (!r.ok) return jsonError(c, r.status as ContentfulStatusCode, r.message);
   return c.json(r.data);
 });
 
@@ -81,7 +82,7 @@ mobileAuthRoutes.post("/refresh", async (c) => {
   const ua = c.req.header("user-agent") ?? null;
 
   const r = await service.refresh({ refreshToken }, { ip, ua });
-  if (!r.ok) return jsonError(c, r.status, r.message);
+  if (!r.ok) return jsonError(c, r.status as ContentfulStatusCode, r.message);
   return c.json(r.data);
 });
 
@@ -110,6 +111,6 @@ mobileAuthRoutes.post("/password/reset", async (c) => {
   const { email, otp, newPassword } = resetPasswordSchema.parse(body);
 
   const r = await service.resetPassword({ email, otp, newPassword });
-  if (!r.ok) return jsonError(c, r.status, r.message);
+  if (!r.ok) return jsonError(c, r.status as ContentfulStatusCode, r.message);
   return c.json(r);
 });
