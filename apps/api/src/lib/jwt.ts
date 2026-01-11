@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT, jwtVerify } from "jose/node/cjs";
 import { env } from "../env";
 
 const secret = new TextEncoder().encode(env.MOBILE_JWT_SECRET);

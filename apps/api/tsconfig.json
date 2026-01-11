@@ -1,12 +1,12 @@
-// apps/api/tsconfig.json
 {
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
     "target": "ES2022",
     "lib": ["ES2022"],
-    "module": "CommonJS",
-    "moduleResolution": "Node",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "verbatimModuleSyntax": true,
     "types": ["node"],
     "strict": true,
     "skipLibCheck": true,
