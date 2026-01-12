@@ -67,43 +67,39 @@ async function deliverOtp(args: {
   });
 }
 
-export async function register(params: {
-  name: string;
-  email: string;
-  password: string;
-}) {
+export async function register(params: { name: string; email: string; password: string }) {
   const { name, email, password } = params;
 
   const existing = await repo.findUserByEmail(email);
-  let userId: string;
 
   if (existing) {
-    userId = existing.id;
-  } else {
-    userId = crypto.randomUUID();
-    await repo.createUser({ id: userId, name, email });
+    const verified = await repo.isUserEmailVerified(existing.id);
+    if (verified) {
+      return { ok: false as const, status: 409, message: "Un compte existe déjà avec cet email. Connectez-vous." };
+    }
+
+    // Compte non vérifié -> on renvoie un OTP, mais on ne change pas le password ici
+    const otp = randomOtp4();
+    await repo.createVerificationOtp(`${VERIFY_IDENTIFIER_PREFIX}${email}`, sha256(otp), VERIFY_OTP_TTL_MINUTES);
+
+    await deliverOtp({ kind: "verify", email, otp, ttlMinutes: VERIFY_OTP_TTL_MINUTES });
+    return { ok: true as const };
   }
+
+  const userId = crypto.randomUUID();
+  await repo.createUser({ id: userId, name, email });
 
   const passwordHash = await bcrypt.hash(password, 12);
   await repo.upsertMobileAccount(userId, email, passwordHash);
 
   const otp = randomOtp4();
-  const otpHash = sha256(otp);
-  await repo.createVerificationOtp(
-    `${VERIFY_IDENTIFIER_PREFIX}${email}`,
-    otpHash,
-    VERIFY_OTP_TTL_MINUTES,
-  );
+  await repo.createVerificationOtp(`${VERIFY_IDENTIFIER_PREFIX}${email}`, sha256(otp), VERIFY_OTP_TTL_MINUTES);
 
-  await deliverOtp({
-    kind: "verify",
-    email,
-    otp,
-    ttlMinutes: VERIFY_OTP_TTL_MINUTES,
-  });
+  await deliverOtp({ kind: "verify", email, otp, ttlMinutes: VERIFY_OTP_TTL_MINUTES });
 
   return { ok: true as const };
 }
+
 
 export async function verifyEmail(
   params: { email: string; otp: string },

@@ -1,3 +1,4 @@
+// apps/api/src/lib/db.ts
 import { Pool } from "pg";
 import { env } from "../env";
 

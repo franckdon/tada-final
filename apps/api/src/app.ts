@@ -6,6 +6,10 @@ import { mobileAuthRoutes } from "./routes/v1/mobile/auth.routes";
 import { mobileUserRoutes } from "./routes/v1/mobile/user.routes";
 
 import { sendMail } from "./lib/mailer/sendMail";
+import { mobileMissionsRoutes } from "./routes/v1/mobile/missions.routes";
+import { mobileMissionDetailsRoutes } from "./routes/v1/mobile/missions.details.routes";
+import { mobileSurveysRoutes } from "./routes/v1/mobile/surveys/surveys.routes";
+import { mobileMissionSurveysRoutes } from "./routes/v1/mobile/missions.surveys.routes";
 
 export const app = openapi;
 
@@ -51,6 +55,10 @@ app.post("/debug/mail", async (c) => {
 // Routes API
 app.route("/v1/mobile/auth", mobileAuthRoutes);
 app.route("/v1/mobile/user", mobileUserRoutes);
+app.route("/v1/mobile/missions", mobileMissionsRoutes);
+app.route("/v1/mobile/missions", mobileMissionDetailsRoutes);
+app.route("/v1/mobile/surveys", mobileSurveysRoutes);
+app.route("/v1/mobile/missions", mobileMissionSurveysRoutes);
 
 // Swagger UI
 app.get(
