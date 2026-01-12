@@ -55,8 +55,37 @@ const sendMail_1 = require("../../../lib/mailer/sendMail");
 const templates_1 = require("../../../lib/mailer/templates");
 const mobile_constants_1 = require("./mobile.constants");
 const repo = __importStar(require("./mobile.repo"));
-function isProd() {
-    return (env_1.env.NODE_ENV ?? "development") === "production";
+/**
+ * Email sending policy:
+ * - If SEND_EMAILS === "true" -> actually send emails
+ * - Otherwise -> log OTPs in server logs (useful for local/dev)
+ *
+ * This avoids relying on NODE_ENV, which is often inconsistent between
+ * local/preview/production deployments (especially on Vercel).
+ */
+function shouldSendEmails() {
+    return env_1.env.SEND_EMAILS === "true";
+}
+async function deliverOtp(args) {
+    const { kind, email, otp, ttlMinutes } = args;
+    if (!shouldSendEmails()) {
+        console.log(`[MOBILE ${kind.toUpperCase()} OTP][EMAILS_DISABLED] ${email} -> ${otp} (${ttlMinutes} min)`);
+        return;
+    }
+    console.log(`[MOBILE ${kind.toUpperCase()} OTP][SENDING] ${email}`);
+    if (kind === "verify") {
+        await (0, sendMail_1.sendMail)({
+            to: email,
+            subject: "[Tada] Code de confirmation",
+            html: (0, templates_1.verifyAccountOtpEmail)({ otp, expiresInMinutes: ttlMinutes }),
+        });
+        return;
+    }
+    await (0, sendMail_1.sendMail)({
+        to: email,
+        subject: "[Tada] Réinitialisation du mot de passe",
+        html: (0, templates_1.resetPasswordOtpEmail)({ otp, expiresInMinutes: ttlMinutes }),
+    });
 }
 async function register(params) {
     const { name, email, password } = params;
@@ -74,16 +103,12 @@ async function register(params) {
     const otp = (0, mobile_constants_1.randomOtp4)();
     const otpHash = (0, crypto_1.sha256)(otp);
     await repo.createVerificationOtp(`${mobile_constants_1.VERIFY_IDENTIFIER_PREFIX}${email}`, otpHash, mobile_constants_1.VERIFY_OTP_TTL_MINUTES);
-    if (!isProd()) {
-        console.log(`[MOBILE VERIFY OTP] ${email} -> ${otp} (${mobile_constants_1.VERIFY_OTP_TTL_MINUTES} min)`);
-    }
-    else {
-        await (0, sendMail_1.sendMail)({
-            to: email,
-            subject: "[Tada] Code de confirmation",
-            html: (0, templates_1.verifyAccountOtpEmail)({ otp, expiresInMinutes: mobile_constants_1.VERIFY_OTP_TTL_MINUTES }),
-        });
-    }
+    await deliverOtp({
+        kind: "verify",
+        email,
+        otp,
+        ttlMinutes: mobile_constants_1.VERIFY_OTP_TTL_MINUTES,
+    });
     return { ok: true };
 }
 async function verifyEmail(params, reqMeta) {
@@ -94,7 +119,11 @@ async function verifyEmail(params, reqMeta) {
         return { ok: false, status: 400, message: "Code de vérification invalide" };
     if (new Date(row.expiresAt) <= new Date()) {
         await repo.deleteVerificationByIdentifier(identifier);
-        return { ok: false, status: 400, message: "Code expiré, veuillez demander un nouveau code" };
+        return {
+            ok: false,
+            status: 400,
+            message: "Code expiré, veuillez demander un nouveau code",
+        };
     }
     if ((0, crypto_1.sha256)(otp) !== row.value) {
         return { ok: false, status: 400, message: "Code de vérification invalide" };
@@ -128,16 +157,12 @@ async function resendVerifyOtp(params) {
     const otp = (0, mobile_constants_1.randomOtp4)();
     const otpHash = (0, crypto_1.sha256)(otp);
     await repo.createVerificationOtp(`${mobile_constants_1.VERIFY_IDENTIFIER_PREFIX}${email}`, otpHash, mobile_constants_1.VERIFY_OTP_TTL_MINUTES);
-    if (!isProd()) {
-        console.log(`[MOBILE VERIFY OTP] ${email} -> ${otp} (${mobile_constants_1.VERIFY_OTP_TTL_MINUTES} min)`);
-    }
-    else {
-        await (0, sendMail_1.sendMail)({
-            to: email,
-            subject: "[Tada] Nouveau code de confirmation",
-            html: (0, templates_1.verifyAccountOtpEmail)({ otp, expiresInMinutes: mobile_constants_1.VERIFY_OTP_TTL_MINUTES }),
-        });
-    }
+    await deliverOtp({
+        kind: "verify",
+        email,
+        otp,
+        ttlMinutes: mobile_constants_1.VERIFY_OTP_TTL_MINUTES,
+    });
     return { ok: true };
 }
 async function login(params, reqMeta) {
@@ -147,7 +172,11 @@ async function login(params, reqMeta) {
         return { ok: false, status: 401, message: "Email ou mot de passe incorrect" };
     const verified = await repo.isUserEmailVerified(user.id);
     if (!verified) {
-        return { ok: false, status: 403, message: "Compte non vérifié. Veuillez confirmer votre email." };
+        return {
+            ok: false,
+            status: 403,
+            message: "Compte non vérifié. Veuillez confirmer votre email.",
+        };
     }
     const acc = await repo.findMobileAccount(user.id);
     if (!acc?.password)
@@ -207,16 +236,12 @@ async function forgotPassword(params) {
     const otpHash = (0, crypto_1.sha256)(otp);
     const identifier = `${mobile_constants_1.RESET_IDENTIFIER_PREFIX}${email}`;
     await repo.createVerificationOtp(identifier, otpHash, mobile_constants_1.RESET_OTP_TTL_MINUTES);
-    if (!isProd()) {
-        console.log(`[MOBILE RESET OTP] ${email} -> ${otp} (${mobile_constants_1.RESET_OTP_TTL_MINUTES} min)`);
-    }
-    else {
-        await (0, sendMail_1.sendMail)({
-            to: email,
-            subject: "[Tada] Réinitialisation du mot de passe",
-            html: (0, templates_1.resetPasswordOtpEmail)({ otp, expiresInMinutes: mobile_constants_1.RESET_OTP_TTL_MINUTES }),
-        });
-    }
+    await deliverOtp({
+        kind: "reset",
+        email,
+        otp,
+        ttlMinutes: mobile_constants_1.RESET_OTP_TTL_MINUTES,
+    });
     return { ok: true };
 }
 async function resetPassword(params) {
@@ -286,7 +311,11 @@ async function changePassword(userId, payload) {
         return { ok: false, status: 404, message: "Utilisateur introuvable" };
     const acc = await repo.findMobileAccount(userId);
     if (!acc?.password) {
-        return { ok: false, status: 400, message: "Aucun mot de passe mobile n'est configuré pour ce compte." };
+        return {
+            ok: false,
+            status: 400,
+            message: "Aucun mot de passe mobile n'est configuré pour ce compte.",
+        };
     }
     const ok = await bcrypt.compare(payload.oldPassword, acc.password);
     if (!ok)

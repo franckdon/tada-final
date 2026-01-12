@@ -23,5 +23,6 @@ export const env = z.object({
   SMTP_PORT: z.coerce.number().default(465),
   SMTP_EMAIL: z.string().min(1),
   SMTP_PASSWORD: z.string().min(1),
+  SEND_EMAILS: z.string().default("true"),
   
 }).parse(process.env);

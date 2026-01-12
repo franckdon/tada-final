@@ -19,4 +19,5 @@ exports.env = zod_1.z.object({
     SMTP_PORT: zod_1.z.coerce.number().default(465),
     SMTP_EMAIL: zod_1.z.string().min(1),
     SMTP_PASSWORD: zod_1.z.string().min(1),
+    SEND_EMAILS: zod_1.z.string().default("true"),
 }).parse(process.env);
