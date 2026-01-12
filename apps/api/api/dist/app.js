@@ -10,6 +10,7 @@ exports.app = openapi_1.openapi; // si openapi est ton OpenAPIHono()
 // Health
 exports.app.get("/health", (c) => c.json({ ok: true }));
 // Routes API
+// Mobile
 exports.app.route("/v1/mobile/auth", auth_routes_1.mobileAuthRoutes);
 exports.app.route("/v1/mobile/user", user_routes_1.mobileUserRoutes);
 // Swagger UI

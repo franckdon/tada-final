@@ -11,6 +11,7 @@ export const app = openapi; // si openapi est ton OpenAPIHono()
 app.get("/health", (c) => c.json({ ok: true }));
 
 // Routes API
+// Mobile
 app.route("/v1/mobile/auth", mobileAuthRoutes);
 app.route("/v1/mobile/user", mobileUserRoutes);
 
