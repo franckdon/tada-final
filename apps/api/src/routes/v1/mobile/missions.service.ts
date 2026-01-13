@@ -2,14 +2,12 @@ import * as repo from "./missions.repo";
 import type { MissionsListQuery } from "./missions.schemas";
 import { ServiceResult } from "./mobile.types";
 
+// Types de données retournées par la fonction listMissions
 export async function listMissions(
   userId: string,
   query: MissionsListQuery,
 ): Promise<ServiceResult<MissionsListData>> {
   // Ici tu peux brancher ta logique d’autorisations (ex: rôle user vs admin)
-  // Exemple standard (optionnel):
-  // - si user "mobile normal" => forcer isPublic=true et isPublish=true
-  // Pour l’instant: pas de restriction supplémentaire.
 
   const { items, total } = await repo.listMissions(query);
 
