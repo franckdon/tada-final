@@ -59,6 +59,8 @@ export const missionsListQuerySchema = z
 
     sortBy: SortByEnum.optional().default("createdAt"),
     sortDir: SortDirEnum.optional().default("desc"),
+
+    zone: z.string().optional().transform((v) => (v ? v.trim() : undefined)),
   })
   .transform((q) => {
     const page = Math.max(1, q.page ?? 1);

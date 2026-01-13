@@ -26,6 +26,8 @@ type MissionRow = {
 
   image: string | null;
   executiveSummary: string | null;
+
+  zone: string | null;
 };
 
 function buildWhere(q: MissionsListQuery) {
@@ -97,6 +99,10 @@ function buildWhere(q: MissionsListQuery) {
     if (q.publishTo) add(`m."publishAt" <= ?::timestamptz`, q.publishTo.toISOString());
   }
 
+  if (q.zone) {
+    add(`m."zone" = ?`, q.zone);
+  }
+
   const whereSql = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   return { whereSql, params };
 }
@@ -152,7 +158,8 @@ export async function listMissions(q: MissionsListQuery) {
       m."organizationId",
       m."workspaceId",
       m."image",
-      m."executiveSummary"
+      m."executiveSummary",
+      m."zone"
     FROM "mission" m
     ${whereSql}
     ${orderBy}
