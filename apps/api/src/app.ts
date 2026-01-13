@@ -11,6 +11,9 @@ import { mobileMissionDetailsRoutes } from "./routes/v1/mobile/missions.details.
 import { mobileSurveysRoutes } from "./routes/v1/mobile/surveys/surveys.routes";
 import { mobileMissionSurveysRoutes } from "./routes/v1/mobile/missions.surveys.routes";
 import { mobileSurveyResponsesRoutes } from "./routes/v1/mobile/surveys/responses.routes";
+import { mobileSupportRoutes } from "./routes/v1/mobile/support/support.routes";
+import { mobileAccountRoutes } from "./routes/v1/mobile/account/account.routes";
+import { mobilePayoutAccountsRoutes } from "./routes/v1/mobile/payout-accounts/payout-accounts.routes";
 
 export const app = openapi;
 
@@ -61,6 +64,11 @@ app.route("/v1/mobile/missions", mobileMissionDetailsRoutes);
 app.route("/v1/mobile/surveys", mobileSurveysRoutes);
 app.route("/v1/mobile/missions", mobileMissionSurveysRoutes);
 app.route("/v1/mobile/surveys", mobileSurveyResponsesRoutes);
+
+//new routes
+app.route("/v1/mobile/support", mobileSupportRoutes);
+app.route("/v1/mobile/account", mobileAccountRoutes);
+app.route("/v1/mobile/payout-accounts", mobilePayoutAccountsRoutes);
 
 // Swagger UI
 app.get(
