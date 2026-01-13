@@ -8,6 +8,7 @@ export async function listMissions(
   query: MissionsListQuery,
 ): Promise<ServiceResult<MissionsListData>> {
   // Ici tu peux brancher ta logique d’autorisations (ex: rôle user vs admin)
+  // et autres règles métier avant d’appeler le repo.
 
   const { items, total } = await repo.listMissions(query);
 
