@@ -41,6 +41,9 @@ model User {
   workspaceInvitationsSent       WorkspaceInvitation[]         @relation("WorkspaceInvitationInvitedBy")
   workspaceMemberInvitationsSent WorkspaceMember[]             @relation("WorkspaceMemberInvitedBy")
   workspaceMemberships           WorkspaceMember[]
+  accounts                       account[]
+  notifications                  Notification[]
+  payoutAccounts                 PayoutAccount[]
 
   @@map("user")
 }
@@ -104,6 +107,7 @@ model Mission {
   organization                 Organization?                 @relation(fields: [organizationId], references: [id])
   workspace                    Workspace?                    @relation(fields: [workspaceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   missionCharts                MissionChart[]
+  zone                         String?                       @db.VarChar(100)
 
   @@map("mission")
 }
@@ -548,6 +552,7 @@ model BillingInfo {
 
 model SupportTicket {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  status    String   @default("open")
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   message   String?
   type      String?  @db.VarChar
@@ -885,6 +890,42 @@ model account {
   password              String?
   createdAt             DateTime  @db.Timestamp(6)
   updatedAt             DateTime  @db.Timestamp(6)
+
+  // Wallet mobile récompenses
+  balance  BigInt @default(0) @db.BigInt
+  currency String @default("XOF") @db.VarChar(3)
+
+  user User @relation(fields: [userId], references: [id])
+
+  rewardTransactions AccountBalanceTransaction[]
+
+  @@unique([providerId, accountId])
+  @@unique([userId, providerId], map: "uniq_account_user_provider")
+  @@index([userId])
+}
+
+model AccountBalanceTransaction {
+  id          String  @id @default(uuid())
+  accountPkId String // référence account.id (PK)
+  account     account @relation(fields: [accountPkId], references: [id], onDelete: Cascade)
+
+  amount   BigInt @db.BigInt // + crédit / - débit
+  currency String @default("XOF") @db.VarChar(3)
+
+  type        String  @db.VarChar(50) // reward, payout, adjustment, mission_reward
+  description String? @db.VarChar(255)
+
+  referenceType String? @db.VarChar(50) // "mission" | "survey_response" ...
+  referenceId   String? @db.Uuid
+
+  idempotencyKey String? @unique @db.VarChar(120)
+
+  balanceAfter BigInt   @db.BigInt
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([accountPkId, createdAt])
+  @@index([referenceType, referenceId])
+  @@map("account_balance_transaction")
 }
 
 model contributor_data {
@@ -1097,6 +1138,75 @@ model verification {
   expiresAt  DateTime  @db.Timestamp(6)
   createdAt  DateTime? @db.Timestamp(6)
   updatedAt  DateTime? @db.Timestamp(6)
+}
+
+model Notification {
+  id     String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String
+  type   NotificationType @default(system)
+
+  title String  @db.Text
+  body  String? @db.Text
+  data  Json?   @db.Json
+
+  // Lien polymorphique (facultatif)
+  entityType String? @db.VarChar(30) // ex: "mission" | "invoice" | "support_ticket"
+  entityId   String? @db.VarChar(80) // uuid/text selon tes tables
+
+  readAt    DateTime? @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId, createdAt(sort: Desc)], map: "idx_notification_user_created")
+  @@index([userId, readAt], map: "idx_notification_user_read")
+  @@index([entityType, entityId], map: "idx_notification_entity")
+  @@map("notification")
+}
+
+model PayoutAccount {
+  id     String            @id @default(uuid())
+  userId String
+  type   PayoutAccountType
+
+  label String @db.VarChar(80)
+
+  // Mobile Money
+  provider String? @db.VarChar(40) // ex: orange, mtn, moov, wave, other
+  country  String? @db.VarChar(2) // ISO2 (optionnel)
+  dialCode String? @db.VarChar(6) // ex: +225
+  phone    String? @db.VarChar(25) // ex: 0700000000
+
+  // Bank
+  bankName String? @db.VarChar(120)
+  rib      String? @db.VarChar(64)
+  iban     String? @db.VarChar(34)
+  bic      String? @db.VarChar(11)
+
+  isDefault Boolean @default(false)
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)], map: "idx_payout_account_user_created")
+  @@index([userId, isDefault], map: "idx_payout_account_user_default")
+  @@map("payout_account")
+}
+
+enum NotificationType {
+  mission
+  payment
+  system
+  support
+  comment
+}
+
+enum PayoutAccountType {
+  mobile_money
+  bank
 }
 
 enum KycSatus {
