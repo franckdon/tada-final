@@ -1,0 +1,281 @@
+### Fichier de test pour l'API de gestion des utilisateurs
+### Utilisez l'extension REST Client dans VS Code pour exécuter ces requêtes
+
+@baseUrl = http://localhost:3000
+@contentType = application/json
+
+### Variables pour les tests
+@testUserId = REPLACE_WITH_ACTUAL_USER_ID
+
+###############################################
+# 1. LISTER LES UTILISATEURS
+###############################################
+
+### Lister tous les utilisateurs (page 1, limite 10)
+GET {{baseUrl}}/api/users
+Content-Type: {{contentType}}
+
+### Lister les utilisateurs avec pagination
+GET {{baseUrl}}/api/users?page=1&limit=20
+Content-Type: {{contentType}}
+
+### Rechercher des utilisateurs par nom/email
+GET {{baseUrl}}/api/users?search=john
+Content-Type: {{contentType}}
+
+### Filtrer par rôle (contributor)
+GET {{baseUrl}}/api/users?role=contributor
+Content-Type: {{contentType}}
+
+### Filtrer par rôle (admin)
+GET {{baseUrl}}/api/users?role=admin
+Content-Type: {{contentType}}
+
+### Filtrer les utilisateurs bannis
+GET {{baseUrl}}/api/users?banned=true
+Content-Type: {{contentType}}
+
+### Filtrer par statut KYC
+GET {{baseUrl}}/api/users?kyc_status=completed
+Content-Type: {{contentType}}
+
+### Combinaison de filtres
+GET {{baseUrl}}/api/users?role=contributor&search=john&page=1&limit=10
+Content-Type: {{contentType}}
+
+###############################################
+# 2. CRÉER UN UTILISATEUR
+###############################################
+
+### Créer un contributeur
+POST {{baseUrl}}/api/users
+Content-Type: {{contentType}}
+
+{
+  "email": "contributor.test@example.com",
+  "name": "Test Contributor",
+  "role": "contributor",
+  "country": "France",
+  "sector": "Technology"
+}
+
+### Créer un client
+POST {{baseUrl}}/api/users
+Content-Type: {{contentType}}
+
+{
+  "email": "client.test@example.com",
+  "name": "Test Client",
+  "role": "client",
+  "position": "Product Manager",
+  "country": "France",
+  "sector": "Marketing"
+}
+
+### Créer un admin
+POST {{baseUrl}}/api/users
+Content-Type: {{contentType}}
+
+{
+  "email": "admin.test@example.com",
+  "name": "Test Admin",
+  "role": "admin",
+  "position": "System Administrator",
+  "country": "France"
+}
+
+### Créer un utilisateur avec tous les champs
+POST {{baseUrl}}/api/users
+Content-Type: {{contentType}}
+
+{
+  "email": "complete.user@example.com",
+  "name": "Complete User",
+  "role": "contributor",
+  "position": "Senior Developer",
+  "country": "France",
+  "sector": "Technology",
+  "job": "Software Engineer",
+  "location": "Paris",
+  "kyc_status": "in_progress"
+}
+
+### Test : Créer un utilisateur sans email (devrait échouer)
+POST {{baseUrl}}/api/users
+Content-Type: {{contentType}}
+
+{
+  "name": "No Email User"
+}
+
+### Test : Créer un utilisateur avec email invalide (devrait échouer)
+POST {{baseUrl}}/api/users
+Content-Type: {{contentType}}
+
+{
+  "email": "invalid-email",
+  "name": "Invalid Email User"
+}
+
+### Test : Créer un utilisateur avec rôle invalide (devrait échouer)
+POST {{baseUrl}}/api/users
+Content-Type: {{contentType}}
+
+{
+  "email": "invalid.role@example.com",
+  "name": "Invalid Role User",
+  "role": "superuser"
+}
+
+###############################################
+# 3. RÉCUPÉRER UN UTILISATEUR
+###############################################
+
+### Récupérer un utilisateur par ID
+GET {{baseUrl}}/api/users/{{testUserId}}
+Content-Type: {{contentType}}
+
+### Test : Récupérer un utilisateur inexistant (devrait échouer)
+GET {{baseUrl}}/api/users/00000000-0000-0000-0000-000000000000
+Content-Type: {{contentType}}
+
+###############################################
+# 4. MODIFIER UN UTILISATEUR
+###############################################
+
+### Modifier le rôle d'un utilisateur (contributor -> admin)
+PATCH {{baseUrl}}/api/users/{{testUserId}}
+Content-Type: {{contentType}}
+
+{
+  "role": "admin"
+}
+
+### Modifier plusieurs champs
+PATCH {{baseUrl}}/api/users/{{testUserId}}
+Content-Type: {{contentType}}
+
+{
+  "name": "Updated Name",
+  "position": "Lead Developer",
+  "country": "Belgium",
+  "sector": "FinTech"
+}
+
+### Modifier le statut KYC
+PATCH {{baseUrl}}/api/users/{{testUserId}}
+Content-Type: {{contentType}}
+
+{
+  "kyc_status": "completed"
+}
+
+### Bannir un utilisateur
+PATCH {{baseUrl}}/api/users/{{testUserId}}
+Content-Type: {{contentType}}
+
+{
+  "banned": true
+}
+
+### Débannir un utilisateur
+PATCH {{baseUrl}}/api/users/{{testUserId}}
+Content-Type: {{contentType}}
+
+{
+  "banned": false
+}
+
+### Test : Modifier avec email invalide (devrait échouer)
+PATCH {{baseUrl}}/api/users/{{testUserId}}
+Content-Type: {{contentType}}
+
+{
+  "email": "invalid-email"
+}
+
+### Test : Modifier avec rôle invalide (devrait échouer)
+PATCH {{baseUrl}}/api/users/{{testUserId}}
+Content-Type: {{contentType}}
+
+{
+  "role": "superadmin"
+}
+
+###############################################
+# 5. SUPPRIMER UN UTILISATEUR
+###############################################
+
+### Supprimer un utilisateur
+DELETE {{baseUrl}}/api/users/{{testUserId}}
+Content-Type: {{contentType}}
+
+### Test : Supprimer un utilisateur inexistant (devrait échouer)
+DELETE {{baseUrl}}/api/users/00000000-0000-0000-0000-000000000000
+Content-Type: {{contentType}}
+
+###############################################
+# SCÉNARIOS DE TEST COMPLETS
+###############################################
+
+### Scénario 1 : Créer, modifier et supprimer un utilisateur
+# 1. Créer
+POST {{baseUrl}}/api/users
+Content-Type: {{contentType}}
+
+{
+  "email": "scenario.test@example.com",
+  "name": "Scenario Test User",
+  "role": "contributor"
+}
+
+# 2. Copier l'ID de la réponse et remplacer {{testUserId}}
+# 3. Récupérer
+GET {{baseUrl}}/api/users/{{testUserId}}
+
+# 4. Modifier
+PATCH {{baseUrl}}/api/users/{{testUserId}}
+Content-Type: {{contentType}}
+
+{
+  "role": "admin",
+  "position": "System Admin"
+}
+
+# 5. Supprimer
+DELETE {{baseUrl}}/api/users/{{testUserId}}
+
+### Scénario 2 : Gestion des rôles
+# Créer un contributeur
+POST {{baseUrl}}/api/users
+Content-Type: {{contentType}}
+
+{
+  "email": "role.test@example.com",
+  "name": "Role Test User",
+  "role": "contributor"
+}
+
+# Promouvoir en client
+PATCH {{baseUrl}}/api/users/{{testUserId}}
+Content-Type: {{contentType}}
+
+{
+  "role": "client"
+}
+
+# Promouvoir en admin
+PATCH {{baseUrl}}/api/users/{{testUserId}}
+Content-Type: {{contentType}}
+
+{
+  "role": "admin"
+}
+
+# Rétrograder en contributeur
+PATCH {{baseUrl}}/api/users/{{testUserId}}
+Content-Type: {{contentType}}
+
+{
+  "role": "contributor"
+}
