@@ -67,8 +67,9 @@ async function deliverOtp(args: {
   });
 }
 
-export async function register(params: { name: string; email: string; password: string }) {
-  const { name, email, password } = params;
+export async function register(params: { name: string; email: string; password: string; role: string }) {
+  // Register a new user with mobile account
+  const { name, email, password, role = "contributor" } = params;
 
   const existing = await repo.findUserByEmail(email);
 
@@ -87,7 +88,7 @@ export async function register(params: { name: string; email: string; password: 
   }
 
   const userId = crypto.randomUUID();
-  await repo.createUser({ id: userId, name, email });
+  await repo.createUser({ id: userId, name, email, role });
 
   const passwordHash = await bcrypt.hash(password, 12);
   await repo.upsertMobileAccount(userId, email, passwordHash);

@@ -66,11 +66,11 @@ export async function isUserEmailVerified(userId: string): Promise<boolean> {
   return Boolean((r.rows[0] as { emailVerified?: boolean } | undefined)?.emailVerified);
 }
 
-export async function createUser(params: { id: string; name: string; email: string }) {
+export async function createUser(params: { id: string; name: string; email: string; role: string }) {
   await db.query(
-    `insert into "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
-     values ($1, $2, $3, false, now(), now())`,
-    [params.id, params.name, params.email],
+    `insert into "user" (id, name, email, role, "emailVerified", "createdAt", "updatedAt")
+     values ($1, $2, $3, $4, false, now(), now())`,
+    [params.id, params.name, params.email, params.role],
   );
 }
 

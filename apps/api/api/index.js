@@ -8,10 +8,13 @@ module.exports = async function handler(req, res) {
 
         const url = new URL(req.url, `${proto}://${host}`);
 
+        const hasBody = req.method !== "GET" && req.method !== "HEAD";
+
         const request = new Request(url.toString(), {
             method: req.method,
             headers: req.headers,
-            body: req.method === "GET" || req.method === "HEAD" ? undefined : req,
+            body: hasBody ? req : undefined,
+            duplex: hasBody ? "half" : undefined,
         });
 
         const response = await app.fetch(request);
