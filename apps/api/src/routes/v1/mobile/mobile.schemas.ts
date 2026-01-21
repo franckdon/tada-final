@@ -13,6 +13,7 @@ export const registerSchema = z
     email: z.string().email("Email invalide"),
     password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères"),
     passwordConfirm: z.string().min(8, "La confirmation du mot de passe est requise"),
+    role: z.string().optional(),
   })
   .refine((v) => v.password === v.passwordConfirm, {
     message: "Les mots de passe ne correspondent pas",

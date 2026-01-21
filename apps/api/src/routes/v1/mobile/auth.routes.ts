@@ -32,9 +32,9 @@ mobileAuthRoutes.get("/health", (c) => c.json({ ok: true }));
 // POST /register
 mobileAuthRoutes.post("/register", async (c) => {
   const body = await safeJson(c);
-  const { name, email, password } = registerSchema.parse(body);
+  const { name, email, password, role="contributor" } = registerSchema.parse(body);
 
-  const r = await service.register({ name, email, password });
+  const r = await service.register({ name, email, password, role });
   return c.json(r);
 });
 

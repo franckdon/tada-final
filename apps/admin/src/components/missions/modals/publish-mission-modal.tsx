@@ -58,7 +58,7 @@ const ResumeStep = ({ mission }: { mission: Mission }) => {
       <div className="col-span-3 md:col-span-2 flex-1 p-6">
         <div className="flex flex-col md:flex-row justify-between gap-4">
           <h2 className="text-2xl font-bold ">Prévisualisation</h2>
-          
+
           <Button className="mb-2">
             <Link href={`/missions/${mission.id}/surveys`} target="_blank">
               {t("missions.publish.updateSurveys")}
@@ -153,7 +153,7 @@ export function PublishMissionModal({
           </DialogTitle>
         </DialogHeader>
         <SurveysBuilderProvider
-          defaultSurvey={(mission as any).survey[0]?.questions}
+          defaultSurvey={(mission as any).surveys[0]?.questions}
         >
           <div className="relative">
             <div className="p-6">

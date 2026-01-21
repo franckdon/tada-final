@@ -22,7 +22,7 @@ export default async function OrganizationsPage() {
         select: {
           members: true,
           missions: true,
-          projects: true,
+          //projects: true,
         },
       },
     },

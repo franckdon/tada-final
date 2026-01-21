@@ -29,19 +29,16 @@ async function getContributorsWithStats() {
       kyc_status: true,
       image: true,
       location: true,
+      country: true,
       job: true,
       banned: true,
       createdAt: true,
-      missionAssignments: {
+      missionAssignmentsAsContributor: {
         select: {
           id: true,
           status: true,
           completedAt: true,
-          mission: {
-            select: {
-              type: true,
-            },
-          },
+          missionId: true,
         },
       },
     },
@@ -50,26 +47,50 @@ async function getContributorsWithStats() {
     },
   });
 
+  const enriched = contributors.map((c) => {
+    const completedMissionsCount = c.missionAssignmentsAsContributor.filter(
+      (m) => m.status === "completed",
+    ).length;
+    const activeMissionsCount = c.missionAssignmentsAsContributor.filter((m) =>
+      ["assigned", "accepted", "in_progress"].includes(m.status),
+    ).length;
+
+    // Exemple de scoring simple (à adapter à tes règles)
+    const score = completedMissionsCount * 10 + activeMissionsCount * 3;
+
+    return {
+      ...c,
+      completedMissionsCount,
+      activeMissionsCount,
+      score,
+      // Pays: préfère `country`, sinon fallback sur location
+      country: c.country ?? c.location ?? null,
+    };
+  });
+
   // Calculer toutes les statistiques côté serveur
   const totalContributors = contributors.length;
   const verifiedContributors = contributors.filter(
-    (c) => c.kyc_status === "completed"
+    (c) => c.kyc_status === "completed",
   ).length;
   const activeContributors = contributors.filter((c) =>
-    c.missionAssignments.some((m) =>
-      ["assigned", "accepted", "in_progress"].includes(m.status)
-    )
+    c.missionAssignmentsAsContributor.some((m) =>
+      ["assigned", "accepted", "in_progress"].includes(m.status),
+    ),
   ).length;
+
   const bannedContributors = contributors.filter((c) => c.banned).length;
 
   const totalMissions = contributors.reduce(
-    (sum, c) => sum + c.missionAssignments.length,
-    0
+    (sum, c) => sum + c.missionAssignmentsAsContributor.length,
+    0,
   );
   const completedMissions = contributors.reduce(
     (sum, c) =>
-      sum + c.missionAssignments.filter((m) => m.status === "completed").length,
-    0
+      sum +
+      c.missionAssignmentsAsContributor.filter((m) => m.status === "completed")
+        .length,
+    0,
   );
 
   // Calculer les données mensuelles
@@ -104,14 +125,15 @@ async function getContributorsWithStats() {
   // Calculer les top performers
   const topPerformers = contributors
     .map((contributor) => {
-      const completedMissions = contributor.missionAssignments.filter(
-        (m) => m.status === "completed"
-      ).length;
-      const totalEarnings = contributor.missionAssignments
+      const completedMissions =
+        contributor.missionAssignmentsAsContributor.filter(
+          (m) => m.status === "completed",
+        ).length;
+      const totalEarnings = contributor.missionAssignmentsAsContributor
         .filter((m) => m.status === "completed")
         .reduce(
           (sum, m) => sum + (m.mission.type === "premium" ? 5000 : 2500),
-          0
+          0,
         );
 
       return {
@@ -124,7 +146,7 @@ async function getContributorsWithStats() {
     .slice(0, 5);
 
   return {
-    contributors,
+    contributors: enriched,
     stats: {
       total: totalContributors,
       verified: verifiedContributors,
@@ -157,7 +179,7 @@ export default async function ContributorsPage() {
             key: "verified-contributors",
             label: t("contributors.stats.verified"),
             value: contributors.filter(
-              (contributor) => contributor.kyc_status === "completed"
+              (contributor) => contributor.kyc_status === "completed",
             ).length,
             icon: <UserCheck className="h-8 w-8 text-green-600" />,
           },

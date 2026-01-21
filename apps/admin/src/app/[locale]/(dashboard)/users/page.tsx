@@ -1,13 +1,9 @@
+// apps/admin/src/app/[locale]/(dashboard)/users/page.tsx
 import { UsersTable } from "@/components/users/users-table";
 import StatCard from "@/components/contributors/stat-card";
 import { prisma } from "@/lib/prisma";
 import { getI18n } from "@/locales/server";
-import {
-  Users,
-  UserCheck,
-  Shield,
-  UserX,
-} from "lucide-react";
+import { Users, UserCheck, Shield, UserX } from "lucide-react";
 
 export const metadata = {
   title: "Gestion des Utilisateurs | Tada",
@@ -43,7 +39,7 @@ async function getUsersWithStats() {
       _count: {
         select: {
           members: true,
-          missionAssignments: true,
+          missionAssignmentsAsContributor: true,
           surveyResponses: true,
         },
       },
@@ -59,7 +55,9 @@ async function getUsersWithStats() {
   // const clients = users.filter((u) => u.role === "client").length;
   // const admins = users.filter((u) => u.role === "admin").length;
   const bannedUsers = users.filter((u) => u.banned).length;
-  const verifiedUsers = users.filter((u) => u.kyc_status === "completed").length;
+  const verifiedUsers = users.filter(
+    (u) => u.kyc_status === "completed",
+  ).length;
 
   return {
     users,

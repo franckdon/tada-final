@@ -45,9 +45,9 @@ function fetchMissions({
     skip,
     take,
     include: {
-      survey: {
+      surveys: {
         include: {
-          response: {
+          responses: {
             where: {
               status: "completed",
             },
@@ -72,7 +72,7 @@ export async function ListMissionServer({
   date?: string;
 }) {
   const hasFilters = Object.values({ query, status, date }).some(
-    (value) => value !== null
+    (value) => value !== null,
   );
   const missions = await fetchMissions({
     query,
@@ -99,7 +99,7 @@ export async function ListMissionServer({
   }
 
   const hasNextPage = Boolean(
-    missions.length && missions.length / (page + 1) > pageSize
+    missions.length && missions.length / (page + 1) > pageSize,
   );
 
   return (

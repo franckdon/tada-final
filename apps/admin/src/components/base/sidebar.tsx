@@ -32,13 +32,15 @@ import {
   Settings,
   Filter,
   LogOut,
-  Globe,
   Layers,
   Building2,
   UserCog,
   Gift,
   CircleDollarSign,
   ClipboardList,
+  Package,
+  Puzzle,
+  Tags,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -60,7 +62,7 @@ function SidebarItem({ icon, text, href, active }: SidebarItemProps) {
         "flex items-center px-4 py-3 text-sm rounded-lg transition-colors",
         active
           ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
-          : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+          : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800",
       )}
     >
       <span className="mr-3">{icon}</span>
@@ -146,6 +148,22 @@ export function Sidebar() {
       ],
     },
     {
+      title: "Billing",
+      items: [
+        {
+          icon: <CircleDollarSign className="h-5 w-5" />,
+          text: "Pricing",
+          href: "/pricing",
+        },
+        {
+          icon: <Package className="h-5 w-5" />,
+          text: "Plans",
+          href: "/pricing/plans",
+        },
+      ],
+    },
+
+    {
       title: t("navigation.settings"),
       items: [
         {
@@ -201,7 +219,9 @@ export function Sidebar() {
                 icon={item.icon}
                 text={item.text}
                 href={item.href}
-                active={pathname === item.href}
+                active={
+                  pathname === item.href || pathname.startsWith(item.href + "/")
+                }
               />
             ))}
           </SidebarGroup>
@@ -243,27 +263,27 @@ export function Sidebar() {
                 </div>
               </Button>
             </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-[200px]">
-            <DropdownMenuLabel>{t("user.menu.title")}</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <Settings className="mr-2 h-4 w-4" />
-              <Link href="/settings/access-control">
-                <span>{t("user.menu.settings")}</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <CircleDollarSign className="mr-2 h-4 w-4" />
-              <Link href="/pricings">
-                <span>{t("user.menu.pricings")}</span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut}>
-              <LogOut className="mr-2 h-4 w-4" />
-              <span>{t("user.menu.signOut")}</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
+            <DropdownMenuContent align="end" className="w-[200px]">
+              <DropdownMenuLabel>{t("user.menu.title")}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>
+                <Settings className="mr-2 h-4 w-4" />
+                <Link href="/settings/access-control">
+                  <span>{t("user.menu.settings")}</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <CircleDollarSign className="mr-2 h-4 w-4" />
+                <Link href="/pricings">
+                  <span>{t("user.menu.pricings")}</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut}>
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>{t("user.menu.signOut")}</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
           </DropdownMenu>
         )}
       </div>

@@ -69,14 +69,15 @@ interface Contributor {
   job: string | null;
   banned: boolean | null;
   createdAt: Date;
-  missionAssignments: Array<{
+  missionAssignmentsAsContributor?: Array<{
     id: string;
     status: string;
     completedAt: Date | null;
-    mission: {
-      type: string | null;
-    };
+    mission?: { type?: string | null };
   }>;
+  completedMissionsCount?: number;
+  activeMissionsCount?: number;
+  score?: number;
 }
 
 // Composants mémorisés avec design amélioré
@@ -98,7 +99,7 @@ const ContributorCell = React.memo(
         <div className="text-sm text-gray-500">{contributor.email}</div>
       </div>
     </div>
-  )
+  ),
 );
 
 ContributorCell.displayName = "ContributorCell";
@@ -112,7 +113,7 @@ const JobCell = React.memo(
         {location || "Localisation inconnue"}
       </div>
     </div>
-  )
+  ),
 );
 
 JobCell.displayName = "JobCell";
@@ -145,23 +146,30 @@ const StatusCell = React.memo(
         Non vérifié
       </Badge>
     );
-  }
+  },
 );
 
 StatusCell.displayName = "StatusCell";
 
 const MissionsCell = React.memo(
-  ({ assignments }: { assignments: Contributor["missionAssignments"] }) => {
+  ({
+    assignments,
+  }: {
+    assignments?: Contributor["missionAssignmentsAsContributor"];
+  }) => {
+    const safe = assignments ?? [];
+
     const completed = useMemo(
-      () => assignments.filter((a) => a.status === "completed").length,
-      [assignments]
+      () => safe.filter((a) => a.status === "completed").length,
+      [safe],
     );
+
     const active = useMemo(
       () =>
-        assignments.filter((a) =>
-          ["assigned", "accepted", "in_progress"].includes(a.status)
+        safe.filter((a) =>
+          ["assigned", "accepted", "in_progress"].includes(a.status),
         ).length,
-      [assignments]
+      [safe],
     );
 
     return (
@@ -178,31 +186,31 @@ const MissionsCell = React.memo(
         </div>
       </div>
     );
-  }
+  },
 );
 
 MissionsCell.displayName = "MissionsCell";
 
-const EarningsCell = React.memo(
-  ({ assignments }: { assignments: Contributor["missionAssignments"] }) => {
-    const earnings = useMemo(
-      () =>
-        assignments
-          .filter((a) => a.status === "completed")
-          .reduce(
-            (sum, a) => sum + (a.mission.type === "premium" ? 5000 : 2500),
-            0
-          ),
-      [assignments]
-    );
+const EarningsCell = React.memo(({ assignments }: { assignments?: any[] }) => {
+  const safe = assignments ?? [];
 
-    return (
-      <div className="font-bold text-transparent bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text">
-        {earnings.toLocaleString()} Fcfa
-      </div>
-    );
-  }
-);
+  const earnings = useMemo(
+    () =>
+      safe
+        .filter((a) => a.status === "completed")
+        .reduce(
+          (sum, a) => sum + (a?.mission?.type === "premium" ? 5000 : 2500),
+          0,
+        ),
+    [safe],
+  );
+
+  return (
+    <div className="font-bold text-transparent bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text">
+      {earnings.toLocaleString()} Fcfa
+    </div>
+  );
+});
 
 EarningsCell.displayName = "EarningsCell";
 
@@ -258,7 +266,7 @@ const ActionsCell = React.memo(
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
-        
+
         <DropdownMenuItem
           onClick={() => onToggleBan(contributor)} // 👈 Appel de la fonction via les props
           className={contributor.banned ? "text-green-600" : "text-orange-600"}
@@ -268,7 +276,7 @@ const ActionsCell = React.memo(
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  ),
 );
 
 ActionsCell.displayName = "ActionsCell";
@@ -282,6 +290,11 @@ export const ContributorsTable = React.memo(
     const router = useRouter();
     const [globalFilter, setGlobalFilter] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
+
+    // Filtres supplémentaires prêts à l'emploi
+    const [countryFilter, setCountryFilter] = useState<string>("all");
+    const [minCompletedFilter, setMinCompletedFilter] = useState<number>(0);
+    const [minScoreFilter, setMinScoreFilter] = useState<number>(0);
 
     // 🆕 DÉFINITION DE LA FONCTION DE BAN AVEC useCallBack
     const handleToggleBan = useCallback(
@@ -300,8 +313,18 @@ export const ContributorsTable = React.memo(
           console.error("Error toggling ban:", error);
         }
       },
-      [router]
+      [router],
     ); // Dépendance à 'router'
+
+    // Mémoriser les pays disponibles pour le filtre
+    const availableCountries = useMemo(() => {
+      const set = new Set<string>();
+      contributors.forEach((c) => {
+        const val = (c as any).country ?? c.location;
+        if (val) set.add(val);
+      });
+      return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [contributors]);
 
     // Mémoriser les colonnes pour éviter les re-créations
     const columns = useMemo(
@@ -339,7 +362,9 @@ export const ContributorsTable = React.memo(
           accessorKey: "missions",
           header: "Missions",
           cell: ({ row }: any) => (
-            <MissionsCell assignments={row.original.missionAssignments} />
+            <MissionsCell
+              assignments={row.original.missionAssignmentsAsContributor ?? []}
+            />
           ),
         },
         // { ... colonne earnings ... },
@@ -364,12 +389,12 @@ export const ContributorsTable = React.memo(
           ),
         },
       ],
-      [handleToggleBan] // 👈 Ajout de handleToggleBan aux dépendances
+      [handleToggleBan], // 👈 Ajout de handleToggleBan aux dépendances
     );
 
     // Mémoriser les données filtrées
     const filteredData = useMemo(() => {
-      return contributors.filter((contributor) => {
+      return contributors.filter((contributor: any) => {
         const matchesSearch =
           contributor.name.toLowerCase().includes(globalFilter.toLowerCase()) ||
           contributor.email.toLowerCase().includes(globalFilter.toLowerCase());
@@ -380,18 +405,43 @@ export const ContributorsTable = React.memo(
             contributor.kyc_status === "completed") ||
           (statusFilter === "unverified" &&
             contributor.kyc_status !== "completed") ||
-          (statusFilter === "banned" && contributor.banned);
+          (statusFilter === "banned" && contributor.banned) ||
+          (statusFilter === "active" &&
+            (contributor.activeMissionsCount ?? 0) > 0);
 
-        return matchesSearch && matchesStatus;
+        const countryValue =
+          contributor.country ?? contributor.location ?? null;
+        const matchesCountry =
+          countryFilter === "all" || countryValue === countryFilter;
+
+        const matchesCompleted =
+          (contributor.completedMissionsCount ?? 0) >= minCompletedFilter;
+
+        const matchesScore = (contributor.score ?? 0) >= minScoreFilter;
+
+        return (
+          matchesSearch &&
+          matchesStatus &&
+          matchesCountry &&
+          matchesCompleted &&
+          matchesScore
+        );
       });
-    }, [contributors, globalFilter, statusFilter]);
+    }, [
+      contributors,
+      globalFilter,
+      statusFilter,
+      countryFilter,
+      minCompletedFilter,
+      minScoreFilter,
+    ]);
 
     // Callbacks mémorisés
     const handleSearchChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
         setGlobalFilter(e.target.value);
       },
-      []
+      [],
     );
 
     const handleStatusChange = useCallback((value: string) => {
@@ -411,43 +461,144 @@ export const ContributorsTable = React.memo(
         },
       },
     });
-    
-    // ⚠️ ANCIEN EMPLACEMENT DE handleToggleBan SUPPRIMÉ
 
     return (
       <Card className="backdrop-blur-sm rounded-none duration-300">
         <CardHeader className="pb-4">
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                Liste des Contributeurs
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full md:w-[200px]">
-                  <SelectValue placeholder="Filtrer par statut" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tous les statuts</SelectItem>
-                  <SelectItem value="active">Actifs</SelectItem>
-                  <SelectItem value="verified">Vérifiés</SelectItem>
-                  <SelectItem value="banned">Bannis</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Rechercher un contributeur..."
-                  value={globalFilter}
-                  onChange={handleSearchChange}
-                  className="w-64 border-0 bg-gray-50 placeholder:text-sm backdrop-blur-sm focus:bg-white/80 transition-colors"
-                />
+          <div className="flex flex-col gap-4">
+            {/* Title + (optional) actions */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                  Liste des Contributeurs
+                </span>
               </div>
-              {/* Le Select est commenté, mais la logique de filtrage est prête */}
+
+              {/* (Optionnel) actions à droite */}
+              {/* <Button size="sm"><Plus className="h-4 w-4 mr-2" />Ajouter</Button> */}
             </div>
-          </CardTitle>
+
+            {/* Filters */}
+            <div className="rounded-2xl border border-gray-100 bg-white/70 backdrop-blur-sm p-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-12">
+                {/* Recherche */}
+                <div className="lg:col-span-4">
+                  <label className="mb-1.5 block text-xs font-semibold text-gray-700">
+                    Recherche
+                  </label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <Input
+                      value={globalFilter}
+                      onChange={handleSearchChange}
+                      placeholder="Nom ou email…"
+                      className="pl-9 border-0 bg-gray-50 focus:bg-white/80 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {/* Statut */}
+                <div className="lg:col-span-3">
+                  <label className="mb-1.5 block text-xs font-semibold text-gray-700">
+                    Statut
+                  </label>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="border-0 bg-gray-50 focus:ring-0">
+                      <SelectValue placeholder="Tous les statuts" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous</SelectItem>
+                      <SelectItem value="active">Actifs</SelectItem>
+                      <SelectItem value="verified">Vérifiés</SelectItem>
+                      <SelectItem value="unverified">Non vérifiés</SelectItem>
+                      <SelectItem value="banned">Bannis</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Pays */}
+                <div className="lg:col-span-3">
+                  <label className="mb-1.5 block text-xs font-semibold text-gray-700">
+                    Pays
+                  </label>
+                  <Select
+                    value={countryFilter}
+                    onValueChange={setCountryFilter}
+                  >
+                    <SelectTrigger className="border-0 bg-gray-50 focus:ring-0">
+                      <SelectValue placeholder="Tous les pays" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous les pays</SelectItem>
+                      {availableCountries.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Min missions complétées */}
+                <div className="lg:col-span-1">
+                  <label className="mb-1.5 block text-xs font-semibold text-gray-700">
+                    Missions
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={minCompletedFilter}
+                    onChange={(e) =>
+                      setMinCompletedFilter(Number(e.target.value || 0))
+                    }
+                    placeholder="0"
+                    className="border-0 bg-gray-50"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-500">
+                    Min complétées
+                  </p>
+                </div>
+
+                {/* Score min */}
+                <div className="lg:col-span-1">
+                  <label className="mb-1.5 block text-xs font-semibold text-gray-700">
+                    Score
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={minScoreFilter}
+                    onChange={(e) =>
+                      setMinScoreFilter(Number(e.target.value || 0))
+                    }
+                    placeholder="0"
+                    className="border-0 bg-gray-50"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-500">Min requis</p>
+                </div>
+
+                {/* Reset */}
+                <div className="lg:col-span-12 flex items-center justify-end gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-0 bg-gray-100/80 hover:bg-gray-200/80"
+                    onClick={() => {
+                      setGlobalFilter("");
+                      setStatusFilter("all");
+                      setCountryFilter("all");
+                      setMinCompletedFilter(0);
+                      setMinScoreFilter(0);
+                    }}
+                  >
+                    Réinitialiser
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
         </CardHeader>
+
         <CardContent>
           <div className="rounded-xl border-0 overflow-hidden bg-white/50 backdrop-blur-sm">
             <Table>
@@ -466,7 +617,7 @@ export const ContributorsTable = React.memo(
                           ? null
                           : flexRender(
                               header.column.columnDef.header,
-                              header.getContext()
+                              header.getContext(),
                             )}
                       </TableHead>
                     ))}
@@ -486,7 +637,7 @@ export const ContributorsTable = React.memo(
                         <TableCell key={cell.id} className="py-4">
                           {flexRender(
                             cell.column.columnDef.cell,
-                            cell.getContext()
+                            cell.getContext(),
                           )}
                         </TableCell>
                       ))}
@@ -519,7 +670,7 @@ export const ContributorsTable = React.memo(
               {Math.min(
                 (table.getState().pagination.pageIndex + 1) *
                   table.getState().pagination.pageSize,
-                table.getFilteredRowModel().rows.length
+                table.getFilteredRowModel().rows.length,
               )}{" "}
               sur {table.getFilteredRowModel().rows.length} contributeurs
             </div>
@@ -549,7 +700,7 @@ export const ContributorsTable = React.memo(
         </CardContent>
       </Card>
     );
-  }
+  },
 );
 
 ContributorsTable.displayName = "ContributorsTable";

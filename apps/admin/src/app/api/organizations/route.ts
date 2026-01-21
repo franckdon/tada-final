@@ -1,3 +1,4 @@
+// apps/admin/src/app/api/organizations/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateCreateOrganization } from "@/lib/validations/organization";
