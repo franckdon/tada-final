@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "prisma generate && next build",
+    "build": "prisma generate --schema=./prisma/schema.prisma && next build",
     "clean": "rm -rf .next .turbo node_modules bun.lockb",
     "lint": "biome lint",
     "format": "biome format --write .",

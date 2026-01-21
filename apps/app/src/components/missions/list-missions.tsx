@@ -8,8 +8,8 @@ import { MissionCard } from "./mission-card";
 import { Mission } from "@prisma/client";
 
 type MissionFull = Mission & {
-  survey: {
-    response: { id: string }[];
+  surveys: {
+    responses: { id: string }[];
   }[];
 };
 
@@ -102,18 +102,18 @@ export function ListMissions({
                 {
                   ...task,
                   submissions:
-                    task.survey.length > 0
-                      ? task.survey[0]!.response.length
+                    task.surveys.length > 0
+                      ? task.surveys[0]!.responses.length
                       : 0 || 0,
                   percentage: Math.min(
                     100,
                     Math.round(
-                      ((task.survey.length > 0
-                        ? task.survey[0]!.response.length
+                      ((task.surveys.length > 0
+                        ? task.surveys[0]!.responses.length
                         : 0) /
                         1000) *
-                        100
-                    )
+                        100,
+                    ),
                   ),
                 } as any
               }

@@ -48,9 +48,9 @@ function fetchMissions({
       missionPermissions: {
         include: { user: true },
       },
-      survey: {
+      surveys: {
         include: {
-          response: {
+          responses: {
             where: { status: "completed" },
           },
         },
@@ -130,8 +130,8 @@ export async function ListMissionServer({
           missions={missions.map((mission) => ({
             ...mission,
             submissions:
-              mission.survey.length > 0
-                ? (mission.survey?.[0]?.response.length ?? 0)
+              mission.surveys.length > 0
+                ? (mission.surveys?.[0]?.responses.length ?? 0)
                 : 0,
           }))}
           hasNextPage={hasNextPage}

@@ -44,6 +44,8 @@ model User {
   accounts                       account[]
   notifications                  Notification[]
   payoutAccounts                 PayoutAccount[]
+  missionPermissions             MissionPermission[]
+  surveyResponses                SurveyResponse[]
 
   @@map("user")
 }
@@ -109,6 +111,9 @@ model Mission {
   missionCharts                MissionChart[]
   zone                         String?                       @db.VarChar(100)
 
+  surveys            Survey[]
+  missionPermissions MissionPermission[]
+
   @@map("mission")
 }
 
@@ -133,15 +138,20 @@ model MissionAssignment {
 }
 
 model Survey {
-  id            String         @id @default(uuid())
-  name          String
-  description   String?
-  createdAt     DateTime       @db.Timestamp(6)
-  updatedAt     DateTime?      @updatedAt @db.Timestamptz(6)
-  missionId     String?
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime  @db.Timestamp(6)
+  updatedAt   DateTime? @updatedAt @db.Timestamptz(6)
+
   questions     Json?
   comments      Comment[]
   missionCharts MissionChart[]
+
+  missionId String?
+  mission   Mission? @relation(fields: [missionId], references: [id])
+
+  responses SurveyResponse[]
 
   @@map("survey")
 }
@@ -162,6 +172,8 @@ model SurveyResponse {
   userId             String?
   comments           Comment[]
   validation_comment validation_comment[]
+  survey             Survey               @relation(fields: [surveyId], references: [id])
+  user               User?                @relation(fields: [userId], references: [id])
 
   @@map("survey_response")
 }
@@ -403,6 +415,8 @@ model MissionPermission {
   userId    String
   grantedBy String
   grantedAt DateTime @default(now()) @db.Timestamp(6)
+  mission   Mission  @relation(fields: [missionId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([missionId, userId])
   @@unique([missionId, userId], map: "mission_permission_missionid_userid_key")

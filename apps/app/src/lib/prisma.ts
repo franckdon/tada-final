@@ -1,7 +1,4 @@
 import { PrismaClient } from "@prisma/client";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -14,6 +11,11 @@ declare global {
 }
 
 console.log("NODE_ENV =", process.env.NODE_ENV);
+console.log("[prisma] cwd:", process.cwd());
+console.log(
+  "[prisma] DATABASE_URL startsWith:",
+  (process.env.DATABASE_URL ?? "").slice(0, 20),
+);
 
 const prismaClient =
   global.prisma ??
@@ -32,14 +34,18 @@ const prismaClient =
   });
 
 if (process.env.NODE_ENV !== "production") {
-    prismaClient.$on("query", (e) => {
-      const q = e.query.toLowerCase();
-      if (q.includes('"mission"') || q.includes('"survey"') || q.includes('"response"')) {
-        console.log("prisma:query", e.query);
-        console.log("prisma:params", e.params);
-        console.log("prisma:duration(ms)", e.duration);
-      }
-    });
+  prismaClient.$on("query", (e) => {
+    const q = e.query.toLowerCase();
+    if (
+      q.includes('"mission"') ||
+      q.includes('"survey"') ||
+      q.includes('"response"')
+    ) {
+      console.log("prisma:query", e.query);
+      console.log("prisma:params", e.params);
+      console.log("prisma:duration(ms)", e.duration);
+    }
+  });
 
   global.prisma = prismaClient;
 }

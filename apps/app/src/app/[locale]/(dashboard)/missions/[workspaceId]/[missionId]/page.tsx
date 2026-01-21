@@ -49,7 +49,7 @@ export default async function Page({
       status: true,
       createdAt: true,
       updatedAt: true,
-      survey: true,
+      surveys: true,
     },
   });
 
@@ -79,7 +79,7 @@ export default async function Page({
 
   const surveyResponses = await prisma.surveyResponse.findMany({
     where: {
-      surveyId: mission?.survey[0]?.id,
+      surveyId: mission?.surveys[0]?.id,
       createdAt: {
         gte: start,
         lte: end,
@@ -136,7 +136,7 @@ export default async function Page({
 
   const mapLocations: MapLocation[] = Array.from(locationMap.values());
 
-  const data = await getMissionSubmissionData(mission?.survey[0]?.id || "");
+  const data = await getMissionSubmissionData(mission?.surveys[0]?.id || "");
 
   return (
     <div className="w-full h-full border border-gray-100 bg-white dark:bg-gray-900 ">
@@ -149,7 +149,7 @@ export default async function Page({
           <ReportView
             barChartData={monthlyCounts || []}
             locations={mapLocations}
-            surveys={mission.survey as unknown as TSurvey[]}
+            surveys={mission.surveys as unknown as TSurvey[]}
             surveyResponses={surveyResponses}
             columns={data.columns}
             workspaceId={resolvedParams.workspaceId}

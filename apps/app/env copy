@@ -1,0 +1,63 @@
+APP_URL=http://localhost:3000
+
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+NEXT_PUBLIC_AI_VERSION=5.0.115
+
+# DATABASE_URL="postgresql://postgres:mQP6zbTcnw-pYY6@db.xqqqoynkayhpezurxbzh.supabase.co:5432/postgres"
+
+DATABASE_URL="postgresql://postgres.xqqqoynkayhpezurxbzh:mQP6zbTcnw-pYY6@aws-1-eu-north-1.pooler.supabase.com:5432/postgres"
+
+# DATABASE_URL="postgresql://postgres:OGo2bxs6qspTVrFW@db.ndnqsylbyeypbsyvkdvq.supabase.co:5432/postgres"
+
+# DATABASE_URL="postgresql://postgres.ndnqsylbyeypbsyvkdvq:OGo2bxs6qspTVrFW@aws-0-eu-central-2.pooler.supabase.com:5432/postgres"
+
+# Dossier physique où Next va écrire les logos de workspaces
+WORKSPACE_LOGO_UPLOAD_DIR=public/uploads/workspaces
+
+# Dossier physique où Next va écrire les thumbnails de missions
+MISSION_THUMBNAIL_UPLOAD_DIR=public/uploads/missions
+
+# Dossier physique où Next va écrire les logos d'organizations
+ORGANIZATION_LOGO_UPLOAD_DIR=public/uploads/organizations
+
+# Dossier physique où Next va écrire les images des surveys
+SURVEY_IMAGE_UPLOAD_DIR=public/uploads/surveys
+
+# Préfixe public utilisé côté front pour construire l'URL de l'image
+NEXT_PUBLIC_WORKSPACE_LOGO_BASE_URL=/uploads/workspaces
+
+# Dossier physique où Next va écrire les datasets AI
+AI_DATASET_UPLOAD_DIR=public/uploads/ai-datasets
+
+NODE_TLS_REJECT_UNAUTHORIZED=0
+
+BETTER_AUTH_SECRET=N6AlTVOhgQlPDxjd4wr6av3Cqdqftn1U
+NEXT_PUBLIC_SUPABASE_URL=https://xqqqoynkayhpezurxbzh.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhxcXFveW5rYXlocGV6dXJ4YnpoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwNzc3MDksImV4cCI6MjA3OTY1MzcwOX0.CLBNz-zAVSEWnbgWz7cGRzYbDhCly72cdcSRz5WQ3DM
+NEXT_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhxcXFveW5rYXlocGV6dXJ4YnpoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDA3NzcwOSwiZXhwIjoyMDc5NjUzNzA5fQ.gEVdiL2s70ymhqk3nFDkgFZn6HPl3HESFkK3fwzFxBk
+
+GOOGLE_CLIENT_ID=967135300927-bvap726jslmki9a9n1kr6hdsrpaad0ij.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=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
+
+SMTP_HOST=mail.monrezo.net
+SMTP_PORT=465
+SMTP_EMAIL=no-reply@monrezo.net
+SMTP_PASSWORD=",b*EX8#=!;1a"
+SMTP_FROM="no-reply@tada.com"
+
+OPENAI_API_KEY=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
+
+STRIPE_API_KEY=sk_test_51N1bX2LJpX6Y2pQ1K3hYt3v3bX5jF6vX9Z0Yz3J4K5L6M7N8O9P0Q1R2S3T4U5V6W7X8Y9Z0a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0
+
+STRIPE_SECRET_KEY=sk_test_51Rj1WKPOeXTeEDVC5U8o3eYOZ2wm44GhUBaexNcW3yreDVuKTVnJW8rg1xmbNTjYfomwtp9YdLgYz00yMCI8rwV500tc7PwQqS
+
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_51Rj1WKPOeXTeEDVCj0vX7kfvtfNH9FTJVAQiqYlleQRyvWzxn6uFmquUGlVbeKd6JtgddJ9inL7WT4EtOz3LtC6c00gpndQo56
+
+STRIPE_ACCOUNT_ID=acct_1Rj1WKPOeXTeEDVC
+
+STRIPE_WEBHOOK_SECRET=whsec_86ef0d53aba0f2e6bb8f000eb899aeae417f2511c0c3e92e8cdec319e24416f0
+
+NEXT_PUBLIC_VELT_API_KEY=1RsQfGdL5VDu1TJqkDWS
+
+NEXT_PUBLIC_MAPBOX=pk.eyJ1Ijoia29rb3Vhc2VyZ2U4OSIsImEiOiJja2x0aThqNTgyNmp4MnFuMWNucnUxdDJhIn0.qv3knVmVo7Y_Nn6PtYNn_w
