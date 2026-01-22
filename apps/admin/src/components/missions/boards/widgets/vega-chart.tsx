@@ -47,7 +47,7 @@ import {
 import { Chart, useBoardBuilder } from "@/context/board-builder-context";
 import { updateChartAction } from "@/actions/boards/update-chart-action";
 import { useAction } from "next-safe-action/hooks";
-import { Vega } from "react-vega";
+import { VegaEmbed } from "react-vega";
 import { MOCK_DATA } from "@/context/chart-builder-context";
 
 export function VegaChart({ chart }: { chart: Chart }) {
@@ -129,7 +129,7 @@ export function VegaChart({ chart }: { chart: Chart }) {
               className="h-full w-full overflow-hidden"
               style={{ padding: "25px" }}
             >
-              <Vega
+              <VegaEmbed
                 data={{ values: MOCK_DATA }}
                 spec={{
                   ...(chart.chartSpec as object),
