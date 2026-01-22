@@ -9,7 +9,7 @@ import {
   useIsMarkdownCodeBlock,
 } from "@assistant-ui/react-markdown";
 import { CheckIcon, CopyIcon } from "lucide-react";
-import { type FC, memo, useState } from "react";
+import React, { type FC, memo, useState } from "react";
 import remarkGfm from "remark-gfm";
 
 import { cn } from "../../utils/cn";
@@ -64,14 +64,39 @@ const useCopyToClipboard = ({
   return { isCopied, copyToClipboard };
 };
 
+/**
+ * Tokens "machine" qu'on veut garder dans la conversation brute (pour les triggers),
+ * mais masquer 100% côté UI.
+ */
 const HIDDEN_TOKENS_RE = /\[\[READY_TO_FILL_FORM\]\]/gi;
+
+/**
+ * Nettoie récursivement children React (string | array | element)
+ * pour retirer les tokens dans tous les cas (p, li, etc.).
+ */
+function stripHiddenTokens(node: any): any {
+  if (typeof node === "string") return node.replace(HIDDEN_TOKENS_RE, "");
+  if (Array.isArray(node)) return node.map(stripHiddenTokens);
+
+  // Si c'est un élément React, on clone en nettoyant ses children
+  if (React.isValidElement(node)) {
+    const props = (node as any).props ?? {};
+    if (!props.children) return node;
+    return React.cloneElement(node as any, {
+      ...props,
+      children: stripHiddenTokens(props.children),
+    });
+  }
+
+  return node;
+}
 
 const defaultComponents = memoizeMarkdownComponents({
   h1: ({ className, ...props }) => (
     <h1
       className={cn(
         "mb-8 scroll-m-20 text-4xl font-extrabold tracking-tight last:mb-0",
-        className
+        className,
       )}
       {...props}
     />
@@ -80,7 +105,7 @@ const defaultComponents = memoizeMarkdownComponents({
     <h2
       className={cn(
         "mb-4 mt-8 scroll-m-20 text-3xl font-semibold tracking-tight first:mt-0 last:mb-0",
-        className
+        className,
       )}
       {...props}
     />
@@ -89,7 +114,7 @@ const defaultComponents = memoizeMarkdownComponents({
     <h3
       className={cn(
         "mb-1 mt-1 scroll-m-20 text-2xl font-semibold tracking-tight first:mt-0 last:mb-0",
-        className
+        className,
       )}
       {...props}
     />
@@ -98,7 +123,7 @@ const defaultComponents = memoizeMarkdownComponents({
     <h4
       className={cn(
         "mb-1 mt-1 scroll-m-20 text-xl font-semibold tracking-tight first:mt-0 last:mb-0",
-        className
+        className,
       )}
       {...props}
     />
@@ -107,7 +132,7 @@ const defaultComponents = memoizeMarkdownComponents({
     <h5
       className={cn(
         "my-4 text-lg font-semibold first:mt-0 last:mb-0",
-        className
+        className,
       )}
       {...props}
     />
@@ -118,17 +143,25 @@ const defaultComponents = memoizeMarkdownComponents({
       {...props}
     />
   ),
-  p: ({ className, ...props }) => (
+
+  /**
+   * Important: on nettoie aussi le contenu de <p> pour éviter
+   * les cas où le token n'arrive pas dans "text" uniquement.
+   */
+  p: ({ className, children, ...props }) => (
     <p
       className={cn("-mb-2 leading-5 first:mt-0 last:mb-0", className)}
       {...props}
-    />
+    >
+      {stripHiddenTokens(children)}
+    </p>
   ),
+
   a: ({ className, ...props }) => (
     <a
       className={cn(
         "text-primary font-medium underline underline-offset-4",
-        className
+        className,
       )}
       {...props}
     />
@@ -145,6 +178,15 @@ const defaultComponents = memoizeMarkdownComponents({
   ol: ({ className, ...props }) => (
     <ol className={cn("my-1 ml-6 list-decimal", className)} {...props} />
   ),
+
+  /**
+   * Nettoyage dans les items de liste (souvent là que le token peut finir
+   * si l'assistant répond sous forme de bullet list).
+   */
+  li: ({ children, ...props }) => (
+    <li {...props}>{stripHiddenTokens(children)}</li>
+  ),
+
   hr: ({ className, ...props }) => (
     <hr className={cn("my-5 border-b", className)} {...props} />
   ),
@@ -152,7 +194,7 @@ const defaultComponents = memoizeMarkdownComponents({
     <table
       className={cn(
         "my-5 w-full border-separate border-spacing-0 overflow-y-auto",
-        className
+        className,
       )}
       {...props}
     />
@@ -161,7 +203,7 @@ const defaultComponents = memoizeMarkdownComponents({
     <th
       className={cn(
         "bg-muted px-4 py-2 text-left font-bold first:rounded-tl-lg last:rounded-tr-lg [&[align=center]]:text-center [&[align=right]]:text-right",
-        className
+        className,
       )}
       {...props}
     />
@@ -170,7 +212,7 @@ const defaultComponents = memoizeMarkdownComponents({
     <td
       className={cn(
         "border-b border-l px-4 py-2 text-left last:border-r [&[align=center]]:text-center [&[align=right]]:text-right",
-        className
+        className,
       )}
       {...props}
     />
@@ -179,7 +221,7 @@ const defaultComponents = memoizeMarkdownComponents({
     <tr
       className={cn(
         "m-0 border-b p-0 first:border-t [&:last-child>td:first-child]:rounded-bl-lg [&:last-child>td:last-child]:rounded-br-lg",
-        className
+        className,
       )}
       {...props}
     />
@@ -194,7 +236,7 @@ const defaultComponents = memoizeMarkdownComponents({
     <pre
       className={cn(
         "overflow-x-auto rounded-b-lg bg-black p-4 text-white",
-        className
+        className,
       )}
       {...props}
     />
@@ -205,16 +247,20 @@ const defaultComponents = memoizeMarkdownComponents({
       <code
         className={cn(
           !isCodeBlock && "bg-muted rounded border font-semibold",
-          className
+          className,
         )}
         {...props}
       />
     );
   },
+
+  /**
+   * On garde aussi le nettoyage dans "text" (utile si le token arrive en pur text node).
+   */
   text: ({ children }: { children?: any }) => {
     if (typeof children !== "string") return <>{children}</>;
-    const cleaned = children.replace(HIDDEN_TOKENS_RE, "");
-    return <>{cleaned}</>;
+    return <>{children.replace(HIDDEN_TOKENS_RE, "")}</>;
   },
+
   CodeHeader,
 });

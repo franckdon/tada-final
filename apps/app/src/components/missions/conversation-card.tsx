@@ -2,7 +2,14 @@
 import { Thread } from "@tada/ui/components/assistant-ui/thread";
 import { useAssistantInstructions } from "@assistant-ui/react";
 
-export function ConversationCard() {
+function getWelcomeMessage(locale: string) {
+  const isFr = (locale ?? "").toLowerCase().startsWith("fr");
+  return isFr
+    ? "Bienvenue sur Tada, je suis Dyna. Comment puis-je vous aider à résoudre votre problème aujourd’hui ?"
+    : "Welcome to Tada, I'm Dyna. How can I help you solve your problem today?";
+}
+
+export function ConversationCard({ locale }: { locale: string }) {
   useAssistantInstructions(`
 You are Jarvis, a Marketing Research Copilot.
 
@@ -26,7 +33,7 @@ When (and only when) you have ALL info:
 
       {/* le Thread prend tout le reste */}
       <div className="flex-1 min-h-0">
-        <Thread />
+        <Thread welcomeMessage={getWelcomeMessage(locale)} />
       </div>
     </div>
   );

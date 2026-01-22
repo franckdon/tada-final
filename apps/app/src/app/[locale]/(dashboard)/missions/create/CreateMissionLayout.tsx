@@ -61,7 +61,7 @@ export function CreateMissionLayout({
         className="h-full min-h-0 flex"
         style={{ width: `${conversationWidth}%` }}
       >
-        <ConversationCard />
+        <ConversationCard locale={locale} />
       </div>
 
       {/* Handle */}

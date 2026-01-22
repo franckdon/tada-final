@@ -19,7 +19,7 @@ export default async function Page({
   const mission = await prisma.mission.findUnique({
     where: { id: missionId },
     select: {
-      survey: true,
+      surveys: true,
       name: true,
       problemSummary: true,
       objectives: true,
@@ -34,10 +34,10 @@ export default async function Page({
 
   return (
     <SurveysBuilderProvider
-      defaultSurvey={mission.survey[0]?.questions as unknown as Survey}
+      defaultSurvey={mission.surveys[0]?.questions as unknown as Survey}
     >
       <HeaderSurveys
-        surveyId={mission.survey[0]?.id as string}
+        surveyId={mission.surveys[0]?.id as string}
         missionId={missionId}
         problemSummary={mission.problemSummary || ""}
         objectives={mission.objectives || ""}
@@ -46,7 +46,7 @@ export default async function Page({
       />
       <div className="flex flex-1 overflow-hidden">
         <div className="w-72 bg-gray-100 dark:bg-gray-800 overflow-y-auto border-r border-gray-200 dark:border-gray-700 max-h-screen">
-          <QuestionsList surveyId={mission.survey[0]?.id as string} />
+          <QuestionsList surveyId={mission.surveys[0]?.id as string} />
         </div>
         <div className="flex-1 overflow-y-auto max-h-screen p-6">
           <SurveyShow />

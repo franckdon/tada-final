@@ -60,6 +60,8 @@ model User {
   missionAssignmentsAsAssigner    MissionAssignment[] @relation("MissionAssignmentAssignedBy")
   members                         Member[]
   surveyResponses                 SurveyResponse[]
+  missionPermissions              MissionPermission[]
+  subDashboards                   SubDashboard[]
 
   @@map("user")
 }
@@ -91,7 +93,7 @@ model Mission {
   name                         String
   problemSummary               String?
   objectives                   String?
-  createdAt                    DateTime                      @db.Timestamp(6)
+  createdAt                    DateTime                      @default(now()) @db.Timestamp(6)
   updatedAt                    DateTime?                     @updatedAt @db.Timestamptz(6)
   status                       String?                       @default("'draft'::character varying") @db.VarChar
   assumptions                  String?
@@ -129,6 +131,7 @@ model Mission {
   contributorData              ContributorData[]
   missionAssignments           MissionAssignment[]
   surveys                      Survey[]
+  missionPermissions           MissionPermission[]
 
   @@index([isPublish], map: "idx_mission_is_publish")
   @@index([validationStatus], map: "idx_mission_validation_status")
@@ -168,7 +171,7 @@ model Survey {
   id          String    @id @default(uuid())
   name        String
   description String?
-  createdAt   DateTime  @db.Timestamp(6)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
   updatedAt   DateTime? @updatedAt @db.Timestamptz(6)
 
   questions     Json?
@@ -398,6 +401,8 @@ model SubDashboard {
   userId    String
   updatedAt DateTime? @updatedAt @db.Timestamptz(6)
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("sub_dashboard")
 }
 
@@ -420,6 +425,8 @@ model MissionPermission {
   userId    String
   grantedBy String
   grantedAt DateTime @default(now()) @db.Timestamp(6)
+  mission   Mission  @relation(fields: [missionId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([missionId, userId])
   @@unique([missionId, userId], map: "mission_permission_missionid_userid_key")

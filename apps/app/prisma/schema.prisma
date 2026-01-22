@@ -46,6 +46,7 @@ model User {
   payoutAccounts                 PayoutAccount[]
   missionPermissions             MissionPermission[]
   surveyResponses                SurveyResponse[]
+  subDashboards                  SubDashboard[]
 
   @@map("user")
 }
@@ -75,7 +76,7 @@ model Mission {
   name                         String
   problemSummary               String?
   objectives                   String?
-  createdAt                    DateTime                      @db.Timestamp(6)
+  createdAt                    DateTime                      @default(now()) @db.Timestamp(6)
   updatedAt                    DateTime?                     @updatedAt @db.Timestamptz(6)
   status                       String?                       @default("'draft'::character varying") @db.VarChar
   assumptions                  String?
@@ -141,7 +142,7 @@ model Survey {
   id          String    @id @default(uuid())
   name        String
   description String?
-  createdAt   DateTime  @db.Timestamp(6)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
   updatedAt   DateTime? @updatedAt @db.Timestamptz(6)
 
   questions     Json?
@@ -380,6 +381,8 @@ model SubDashboard {
   isShared  Boolean   @default(true)
   userId    String
   updatedAt DateTime? @updatedAt @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("sub_dashboard")
 }

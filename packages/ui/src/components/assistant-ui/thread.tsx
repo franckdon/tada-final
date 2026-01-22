@@ -23,11 +23,43 @@ import { Button } from "../button";
 import { MarkdownText } from "./markdown-text";
 import { TooltipIconButton } from "./tooltip-icon-button";
 
-export const Thread: FC = () => {
+type ThreadProps = {
+  welcomeMessage?: string;
+};
+
+const ThreadTopWelcome: FC<{ welcomeMessage: string }> = ({
+  welcomeMessage,
+}) => {
+  return (
+    <div className="w-full bg-inherit">
+      <div className="mx-auto flex w-full max-w-[var(--thread-max-width)] items-start gap-3 px-4 py-5">
+        <Avatar className="flex size-8 flex-shrink-0 items-center justify-center rounded-[24px] border border-white/15 shadow">
+          <AvatarImage
+            src="/avatar.png"
+            alt="Dyna"
+            className="max-w-6 h-full"
+          />
+        </Avatar>
+
+        <div className="min-w-0">
+          <div className="text-foreground text-sm leading-5">
+            {welcomeMessage}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const Thread: FC<ThreadProps> = ({ welcomeMessage }) => {
   return (
     <ThreadPrimitive.Root className="bg-background box-border flex h-full flex-col overflow-hidden">
-      <ThreadPrimitive.Viewport className="flex h-full flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4 pt-8">
-        <ThreadWelcome />
+      <ThreadPrimitive.Viewport className="flex-1 min-h-0 flex flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4">
+        {welcomeMessage ? (
+          <div className="w-full max-w-[var(--thread-max-width)] pt-4">
+            <ThreadTopWelcome welcomeMessage={welcomeMessage} />
+          </div>
+        ) : null}
 
         <ThreadPrimitive.Messages
           components={{
@@ -40,12 +72,17 @@ export const Thread: FC = () => {
         <ThreadPrimitive.If empty={false}>
           <div className="min-h-8 flex-grow" />
         </ThreadPrimitive.If>
+      </ThreadPrimitive.Viewport>
 
-        <div className="sticky bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-4">
-          <ThreadScrollToBottom />
+      {/* ✅ BOTTOM (sticky-like, mais hors scroll => ne bouge jamais) */}
+      <div className="bg-inherit px-4 pb-4 pt-3">
+        <div className="mx-auto flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg">
+          <div className="relative w-full">
+            <ThreadScrollToBottom />
+          </div>
           <Composer />
         </div>
-      </ThreadPrimitive.Viewport>
+      </div>
     </ThreadPrimitive.Root>
   );
 };
@@ -61,46 +98,6 @@ const ThreadScrollToBottom: FC = () => {
         <ArrowDownIcon />
       </TooltipIconButton>
     </ThreadPrimitive.ScrollToBottom>
-  );
-};
-
-const ThreadWelcome: FC = () => {
-  return (
-    <ThreadPrimitive.Empty>
-      <div className="flex w-full max-w-[var(--thread-max-width)] flex-grow flex-col">
-        <div className="flex w-full flex-grow flex-col items-center justify-center">
-          {/*       <p className="mt-4 font-medium">How can I help you today?</p> */}
-        </div>
-        {/*    <ThreadWelcomeSuggestions /> */}
-      </div>
-    </ThreadPrimitive.Empty>
-  );
-};
-
-const ThreadWelcomeSuggestions: FC = () => {
-  return (
-    <div className="mt-3 flex w-full items-stretch justify-center gap-4">
-      <ThreadPrimitive.Suggestion
-        className="hover:bg-muted/80 flex max-w-sm grow basis-0 flex-col items-center justify-center rounded-lg border p-3 transition-colors ease-in"
-        prompt="What is the weather in Tokyo?"
-        method="replace"
-        autoSend
-      >
-        <span className="line-clamp-2 text-ellipsis text-sm font-semibold">
-          What is the weather in Tokyo?
-        </span>
-      </ThreadPrimitive.Suggestion>
-      <ThreadPrimitive.Suggestion
-        className="hover:bg-muted/80 flex max-w-sm grow basis-0 flex-col items-center justify-center rounded-lg border p-3 transition-colors ease-in"
-        prompt="What is assistant-ui?"
-        method="replace"
-        autoSend
-      >
-        <span className="line-clamp-2 text-ellipsis text-sm font-semibold">
-          What is assistant-ui?
-        </span>
-      </ThreadPrimitive.Suggestion>
-    </div>
   );
 };
 
@@ -251,7 +248,7 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
       hideWhenSingleBranch
       className={cn(
         "text-muted-foreground inline-flex items-center text-xs",
-        className
+        className,
       )}
       {...rest}
     >
