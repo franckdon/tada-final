@@ -13,19 +13,19 @@ import {
 } from "@tada/ui/components/dialog";
 import { useScopedI18n } from "@/locales/client";
 import { useWorkspaceCreditsPurchaseStore } from "@/hooks/use-workspace-credits-purchase-store";
+import { usePathname } from "next/navigation";
 
-type Plan = {
+type PlanCode = "starter" | "team" | "business" | "enterprise";
+
+type AppPlan = {
   id: string;
+  code: PlanCode;
   name: string;
   description: string | null;
   price: number;
-  currency: string;
-  interval: string;
-  features: any;
-  maxMissions: number | null;
-  addOn: number;
-  maxUsers: number | null;
-  maxResponses: number | null;
+  currency: "EUR";
+  interval: "year" | "month";
+  features: { text: string; included: boolean }[];
 };
 
 type SubscriptionResponse =
@@ -83,6 +83,15 @@ export function CreditsModal({
   const [plan, setPlan] = React.useState<Plan | null>(null);
   const [notFound, setNotFound] = React.useState<boolean>(false);
 
+  const pathname = usePathname();
+  const locale = React.useMemo(
+    () => pathname.split("/")[1] || "fr",
+    [pathname],
+  );
+
+  const [plans, setPlans] = React.useState<AppPlan[]>([]);
+  const [loadingPlans, setLoadingPlans] = React.useState(false);
+
   React.useEffect(() => {
     if (workspaceId && workspaceId !== storeWorkspaceId) {
       setWorkspaceId(workspaceId);
@@ -131,6 +140,33 @@ export function CreditsModal({
     };
   }, [organizationId, setUnitPrice, setCurrency]);
 
+  React.useEffect(() => {
+    let mounted = true;
+    setLoadingPlans(true);
+
+    fetch(`/api/plans?locale=${encodeURIComponent(locale)}`)
+      .then(async (res) => {
+        const json = await res.json().catch(() => null);
+        if (!mounted) return;
+        if (!res.ok) throw new Error(json?.error || "Failed to fetch plans");
+        setPlans(Array.isArray(json?.data) ? json.data : []);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setPlans([]);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setLoadingPlans(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [locale]);
+
+  console.log("Plans loaded in CreditsModal:", plans);
+
   const handleCreditsChange = (value: string) => {
     const numericValue = Number.parseInt(value || "0");
     setCredits(Number.isNaN(numericValue) ? 0 : numericValue);
@@ -151,7 +187,7 @@ export function CreditsModal({
 
   return (
     <Dialog open={open} onOpenChange={toggleOpen}>
-      <DialogContent className="sm:max-w-5xl p-0 rounded-lg max-h-[90vh] overflow-y-auto flex flex-col">
+      <DialogContent className="sm:max-w-6xl p-0 rounded-lg max-h-[90vh] overflow-y-auto flex flex-col">
         <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between flex-shrink-0">
           <DialogTitle className="text-lg font-semibold">
             {t("title")}
@@ -178,9 +214,9 @@ export function CreditsModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
             {/* Plan "As you go" */}
-            <div className="border rounded-lg p-4">
+            <div className="border rounded-lg p-4 lg:col-span-1">
               <h3 className="font-semibold text-center text-xl mb-1">
                 {t("researchAsYouGo.title")}
               </h3>
@@ -226,25 +262,93 @@ export function CreditsModal({
               </Button>
             </div>
 
-            {/* Right column */}
-            <div className="border rounded-lg p-4 flex flex-col justify-between">
-              {loadingPlan ? (
-                <div className="space-y-2 animate-pulse">
-                  <div className="h-6 w-1/3 bg-gray-200 rounded" />
-                  <div className="h-4 w-1/2 bg-gray-200 rounded" />
-                  <div className="h-4 w-2/3 bg-gray-200 rounded" />
-                  <div className="h-4 w-1/3 bg-gray-200 rounded" />
+            {/* Plans */}
+            <div className="lg:col-span-4">
+              {loadingPlans ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="border rounded-lg p-4 space-y-3 animate-pulse"
+                    >
+                      <div className="h-6 w-1/2 bg-gray-200 rounded" />
+                      <div className="h-4 w-2/3 bg-gray-200 rounded" />
+                      <div className="h-9 w-full bg-gray-200 rounded" />
+                      <div className="h-4 w-3/4 bg-gray-200 rounded" />
+                      <div className="h-4 w-2/4 bg-gray-200 rounded" />
+                    </div>
+                  ))}
                 </div>
-              ) : plan ? (
-                <PlanDetails plan={plan} toggleOpen={toggleOpen} />
+              ) : plans.length ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                  {plans.map((p) => (
+                    <PlanCard key={p.id} plan={p} onAction={toggleOpen} />
+                  ))}
+                </div>
               ) : (
-                <NoPlanFallback toggleOpen={toggleOpen} />
+                <div className="border rounded-lg p-4 text-sm text-gray-600">
+                  Aucun plan actif disponible.
+                </div>
               )}
             </div>
           </div>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function PlanCard({ plan, onAction }: { plan: AppPlan; onAction: () => void }) {
+  const intervalLabel = plan.interval === "month" ? "mois" : "an";
+
+  const displayPrice =
+    plan.price === 0
+      ? "Custom"
+      : new Intl.NumberFormat("fr-FR", {
+          style: "currency",
+          currency: plan.currency || "EUR",
+          maximumFractionDigits: 0,
+        }).format(plan.price);
+
+  const displayInterval = plan.price === 0 ? null : `/ ${intervalLabel}`;
+
+  return (
+    <div className="border rounded-lg p-4 flex flex-col">
+      <div className="text-center">
+        <h3 className="font-semibold text-xl mb-1">{plan.name}</h3>
+
+        {plan.description ? (
+          <p className="text-sm text-gray-500 mb-3">{plan.description}</p>
+        ) : (
+          <div className="h-5" />
+        )}
+
+        <div className="text-center text-2xl font-semibold mb-4">
+          {displayPrice}
+          {displayInterval ? (
+            <span className="text-sm text-gray-500 font-normal">
+              {" "}
+              {displayInterval}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <ul className="text-sm text-gray-600 space-y-2 mb-4">
+        {Array.isArray(plan.features) &&
+          plan.features
+            .filter((f) => f.included)
+            .slice(0, 6)
+            .map((f, i) => <li key={i}>• {f.text}</li>)}
+      </ul>
+
+      {/* Bouton même style que Next */}
+      <Link href="/pricing" className="mt-auto">
+        <Button className="w-full" onClick={onAction}>
+          Talk to us
+        </Button>
+      </Link>
+    </div>
   );
 }
 

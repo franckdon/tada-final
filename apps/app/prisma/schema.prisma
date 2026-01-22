@@ -400,6 +400,24 @@ model SubDashboardItem {
   @@map("sub_dashboard_item")
 }
 
+model account_balance_transaction {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountPkId    String
+  amount         BigInt
+  currency       String   @default("XOF") @db.VarChar(3)
+  type           String   @db.VarChar(50)
+  description    String?  @db.VarChar(255)
+  referenceType  String?  @db.VarChar(50)
+  referenceId    String?  @db.Uuid
+  idempotencyKey String?  @unique @db.VarChar(120)
+  balanceAfter   BigInt
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  account        account  @relation(fields: [accountPkId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([accountPkId, createdAt], map: "idx_abt_account_created")
+  @@index([referenceType, referenceId], map: "idx_abt_reference")
+}
+
 model invitation {
   id             String   @id @default(uuid())
   organizationId String
@@ -914,11 +932,32 @@ model account {
 
   user User @relation(fields: [userId], references: [id])
 
-  rewardTransactions AccountBalanceTransaction[]
+  rewardTransactions         AccountBalanceTransaction[]
+  accountBalanceTransactions account_balance_transaction[]
 
   @@unique([providerId, accountId])
   @@unique([userId, providerId], map: "uniq_account_user_provider")
   @@index([userId])
+}
+
+model Plan {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  code        String  @unique
+  name        String
+  description String?
+  priceCents  Int     @map("price_cents")
+
+  bulletsFr String @map("bullets_fr")
+  bulletsEn String @map("bullets_en")
+
+  sortOrder Int     @default(0) @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("plan")
 }
 
 model AccountBalanceTransaction {
