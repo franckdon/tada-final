@@ -400,24 +400,6 @@ model SubDashboardItem {
   @@map("sub_dashboard_item")
 }
 
-model account_balance_transaction {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  accountPkId    String
-  amount         BigInt
-  currency       String   @default("XOF") @db.VarChar(3)
-  type           String   @db.VarChar(50)
-  description    String?  @db.VarChar(255)
-  referenceType  String?  @db.VarChar(50)
-  referenceId    String?  @db.Uuid
-  idempotencyKey String?  @unique @db.VarChar(120)
-  balanceAfter   BigInt
-  createdAt      DateTime @default(now()) @db.Timestamptz(6)
-  account        account  @relation(fields: [accountPkId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@index([accountPkId, createdAt], map: "idx_abt_account_created")
-  @@index([referenceType, referenceId], map: "idx_abt_reference")
-}
-
 model invitation {
   id             String   @id @default(uuid())
   organizationId String
