@@ -15,6 +15,13 @@ import { Input } from "@tada/ui/components/input";
 import { Textarea } from "@tada/ui/components/textarea";
 import { Label } from "@tada/ui/components/label";
 import { Switch } from "@tada/ui/components/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@tada/ui/components/select";
 
 import {
   ArrowLeft,
@@ -22,16 +29,33 @@ import {
   CircleDollarSign,
   Settings2,
   ListChecks,
+  Hash,
+  Lock,
 } from "lucide-react";
 
+type PlanCode = "starter" | "growth" | "business" | "entreprise";
+
+const ALLOWED_CODES: PlanCode[] = [
+  "starter",
+  "growth",
+  "business",
+  "entreprise",
+];
+
+const PLAN_PRESETS: Record<PlanCode, { name: string; sortOrder: number }> = {
+  starter: { name: "Starter", sortOrder: 1 },
+  growth: { name: "Growth", sortOrder: 2 },
+  business: { name: "Business", sortOrder: 3 },
+  entreprise: { name: "Entreprise", sortOrder: 4 },
+};
+
 type FormState = {
+  code: PlanCode | "";
   name: string;
   description: string;
   priceDisplay: string;
-
-  bulletsFr: string; // multi-lignes
+  bulletsFr: string;
   bulletsEn: string;
-
   sortOrder: number;
   isActive: boolean;
 };
@@ -48,6 +72,10 @@ function parseEuroToCents(input: string) {
 function validate(state: FormState) {
   const errors: string[] = [];
 
+  if (!state.code) errors.push("Le code du plan est requis.");
+  if (state.code && !ALLOWED_CODES.includes(state.code))
+    errors.push("Code invalide.");
+
   if (!state.name.trim()) errors.push("Le nom du plan est requis.");
 
   const priceCents = parseEuroToCents(state.priceDisplay);
@@ -55,11 +83,11 @@ function validate(state: FormState) {
     errors.push("Le prix est invalide.");
   }
 
-  const frCount = state.bulletsFr
+  const frCount = (state.bulletsFr ?? "")
     .split("\n")
     .map((x) => x.trim())
     .filter(Boolean).length;
-  const enCount = state.bulletsEn
+  const enCount = (state.bulletsEn ?? "")
     .split("\n")
     .map((x) => x.trim())
     .filter(Boolean).length;
@@ -77,6 +105,7 @@ function validate(state: FormState) {
 
 function buildPayload(state: FormState) {
   return {
+    code: state.code,
     name: state.name.trim(),
     description: state.description.trim() || null,
     priceCents: parseEuroToCents(state.priceDisplay),
@@ -93,6 +122,7 @@ export function PlanCreateForm() {
   const [error, setError] = React.useState<string | null>(null);
 
   const [state, setState] = React.useState<FormState>(() => ({
+    code: "",
     name: "",
     description: "",
     priceDisplay: "",
@@ -101,6 +131,23 @@ export function PlanCreateForm() {
     sortOrder: 0,
     isActive: true,
   }));
+
+  // Code non modifiable après sélection
+  const codeLocked = state.code !== "";
+
+  const onChooseCode = (value: string) => {
+    const code = value as PlanCode;
+    if (!ALLOWED_CODES.includes(code)) return;
+
+    const preset = PLAN_PRESETS[code];
+
+    setState((p) => ({
+      ...p,
+      code,
+      name: preset.name, // force Appinio naming
+      sortOrder: preset.sortOrder,
+    }));
+  };
 
   const onSubmit = async () => {
     setError(null);
@@ -125,7 +172,10 @@ export function PlanCreateForm() {
 
       if (!res.ok) {
         const msg =
-          json?.message || json?.error || "Erreur lors de la création du plan.";
+          json?.details?.message ||
+          json?.message ||
+          json?.error ||
+          "Erreur lors de la création du plan.";
         setError(msg);
         return;
       }
@@ -149,7 +199,8 @@ export function PlanCreateForm() {
               Créer un plan
             </CardTitle>
             <p className="text-sm text-gray-600">
-              Nom, description, prix (EUR), bullets FR/EN, ordre et activation.
+              Le code est un identifiant fixe
+              (Starter/Growth/Business/Entreprise).
             </p>
           </div>
 
@@ -175,7 +226,6 @@ export function PlanCreateForm() {
       </CardHeader>
 
       <CardContent className="p-6 space-y-8">
-        {/* Infos */}
         <section className="space-y-4">
           <div className="flex items-center gap-2">
             <Settings2 className="h-5 w-5 text-gray-700" />
@@ -185,15 +235,42 @@ export function PlanCreateForm() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            {/* CODE (locked after choice) */}
+            <div className="md:col-span-3 space-y-2">
+              <Label>Code (fixe)</Label>
+              <Select value={state.code} onValueChange={onChooseCode}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choisir..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {ALLOWED_CODES.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      <span className="inline-flex items-center gap-2">
+                        <Hash className="h-4 w-4 text-gray-500" />
+                        {c}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <p className="text-xs text-gray-500">
+                Code fixe après création. Ici tu peux encore le changer avant
+                d’enregistrer.
+              </p>
+            </div>
+
+            {/* NAME (force Appinio naming - non modifiable) */}
             <div className="md:col-span-4 space-y-2">
               <Label>Nom du plan</Label>
               <Input
                 value={state.name}
-                onChange={(e) =>
-                  setState((p) => ({ ...p, name: e.target.value }))
-                }
-                placeholder="Ex: Starter, Growth, Business..."
+                disabled
+                placeholder="Sélectionne un code"
               />
+              <p className="text-xs text-gray-500">
+                Le nom est automatiquement fixé à partir du code (Appinio-like).
+              </p>
             </div>
 
             <div className="md:col-span-5 space-y-2">
@@ -209,17 +286,10 @@ export function PlanCreateForm() {
 
             <div className="md:col-span-3 space-y-2">
               <Label>Ordre</Label>
-              <Input
-                type="number"
-                min={0}
-                value={state.sortOrder}
-                onChange={(e) =>
-                  setState((p) => ({
-                    ...p,
-                    sortOrder: Number(e.target.value || 0),
-                  }))
-                }
-              />
+              <Input value={state.sortOrder} disabled type="number" />
+              <p className="text-xs text-gray-500">
+                L’ordre est prédéfini par plan (1/2/3/4).
+              </p>
             </div>
 
             <div className="md:col-span-3 space-y-2">
@@ -253,7 +323,6 @@ export function PlanCreateForm() {
           </div>
         </section>
 
-        {/* Bullets */}
         <section className="space-y-4">
           <div className="flex items-center gap-2">
             <ListChecks className="h-5 w-5 text-gray-700" />
@@ -293,7 +362,6 @@ export function PlanCreateForm() {
           </div>
         </section>
 
-        {/* Footer actions */}
         <div className="flex items-center justify-end gap-2 pt-2">
           <Button variant="outline" asChild>
             <Link href="/pricing/plans">Annuler</Link>

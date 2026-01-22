@@ -23,10 +23,13 @@ import {
   Settings2,
   ListChecks,
   Power,
+  Hash,
+  Lock,
 } from "lucide-react";
 
 type InitialPlan = {
   id: string;
+  code: "starter" | "growth" | "business" | "entreprise";
   name: string;
   description: string | null;
   priceCents: number;
@@ -70,14 +73,15 @@ function validate(state: FormState) {
   if (!Number.isInteger(priceCents) || priceCents < 0)
     errors.push("Le prix est invalide.");
 
-  const frCount = state.bulletsFr
+  const frCount = (state.bulletsFr ?? "")
     .split("\n")
     .map((x) => x.trim())
     .filter(Boolean).length;
-  const enCount = state.bulletsEn
+  const enCount = (state.bulletsEn ?? "")
     .split("\n")
     .map((x) => x.trim())
     .filter(Boolean).length;
+
   if (frCount === 0 && enCount === 0)
     errors.push("Ajoute au moins un bullet point (FR ou EN).");
 
@@ -116,6 +120,7 @@ export function PlanEditForm({ initialPlan }: { initialPlan: InitialPlan }) {
 
     setIsSaving(true);
     try {
+      // ✅ IMPORTANT: ne pas envoyer code, il est fixe
       const payload = {
         name: state.name.trim(),
         description: state.description.trim() || null,
@@ -133,10 +138,14 @@ export function PlanEditForm({ initialPlan }: { initialPlan: InitialPlan }) {
       });
 
       const json = await res.json().catch(() => null);
-      if (!res.ok)
+      if (!res.ok) {
         throw new Error(
-          json?.message || json?.error || "Erreur lors de la sauvegarde.",
+          json?.details?.message ||
+            json?.message ||
+            json?.error ||
+            "Erreur lors de la sauvegarde.",
         );
+      }
 
       setSuccess("Enregistré ✅");
       router.refresh();
@@ -160,14 +169,15 @@ export function PlanEditForm({ initialPlan }: { initialPlan: InitialPlan }) {
       const res = await fetch(`/api/pricing/plans/${initialPlan.id}/active`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        // body optionnel : si tu veux imposer la valeur -> { isActive: true/false }
-        // body: JSON.stringify({ isActive: !state.isActive }),
       });
 
       const json = await res.json().catch(() => null);
       if (!res.ok)
         throw new Error(
-          json?.message || json?.error || "Erreur lors du toggle.",
+          json?.details?.message ||
+            json?.message ||
+            json?.error ||
+            "Erreur lors du toggle.",
         );
 
       setSuccess("Statut mis à jour ✅");
@@ -245,6 +255,19 @@ export function PlanEditForm({ initialPlan }: { initialPlan: InitialPlan }) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            {/* CODE FIXE */}
+            <div className="md:col-span-3 space-y-2">
+              <Label>Code (fixe)</Label>
+              <div className="relative">
+                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input className="pl-10" value={initialPlan.code} disabled />
+              </div>
+              <p className="text-xs text-gray-500 flex items-center gap-2">
+                <Lock className="h-3.5 w-3.5" />
+                Identifiant non modifiable.
+              </p>
+            </div>
+
             <div className="md:col-span-4 space-y-2">
               <Label>Nom du plan</Label>
               <Input
@@ -306,7 +329,7 @@ export function PlanEditForm({ initialPlan }: { initialPlan: InitialPlan }) {
                 </span>
               </div>
               <p className="text-xs text-gray-500">
-                Le switch ici change l’état dans le payload (PUT). Le bouton
+                Le switch change l’état dans le payload (PUT). Le bouton
                 “Activer/Désactiver” appelle l’endpoint dédié.
               </p>
             </div>

@@ -62,6 +62,7 @@ import {
 
 type PlanRow = {
   id: string;
+  code: string;
   name: string;
   description: string | null;
   priceCents: number;
@@ -104,6 +105,7 @@ export function PlansTable({ plans }: { plans: PlanRow[] }) {
     return plans.filter((p) => {
       const matchesSearch =
         !q ||
+        p.code.toLowerCase().includes(q) ||
         p.name.toLowerCase().includes(q) ||
         (p.description ?? "").toLowerCase().includes(q) ||
         (p.bulletsFr ?? "").toLowerCase().includes(q) ||
@@ -181,6 +183,9 @@ export function PlansTable({ plans }: { plans: PlanRow[] }) {
             <div className="font-semibold text-gray-900">
               {row.original.name}
             </div>
+            <div className="text-xs font-mono text-gray-500">
+              {row.original.code}
+            </div>
             {row.original.description ? (
               <div className="text-xs text-gray-500 line-clamp-1">
                 {row.original.description}
@@ -189,6 +194,22 @@ export function PlansTable({ plans }: { plans: PlanRow[] }) {
               <div className="text-xs text-gray-400">—</div>
             )}
           </div>
+        ),
+      },
+      {
+        accessorKey: "code",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Code <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        cell: ({ row }) => (
+          <span className="text-xs font-mono px-2 py-1 rounded bg-gray-100 text-gray-800 border border-gray-200">
+            {row.original.code}
+          </span>
         ),
       },
       {

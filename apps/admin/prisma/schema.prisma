@@ -1026,6 +1026,7 @@ model MissionConfigContributor {
 model Plan {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
+  code        String  @unique
   name        String
   description String?
   priceCents  Int     @map("price_cents")

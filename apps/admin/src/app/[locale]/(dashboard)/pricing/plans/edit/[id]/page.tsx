@@ -11,6 +11,7 @@ export default async function EditPlanPage({ params }: Params) {
     where: { id: params.id },
     select: {
       id: true,
+      code: true,
       name: true,
       description: true,
       priceCents: true,

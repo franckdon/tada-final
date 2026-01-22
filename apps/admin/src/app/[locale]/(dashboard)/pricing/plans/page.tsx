@@ -18,6 +18,7 @@ export const metadata = { title: "Plans | Tada" };
 
 export type PlanRow = {
   id: string;
+  code: string;
   name: string;
   description: string | null;
   priceCents: number;
@@ -44,6 +45,7 @@ async function getPlansWithStats(): Promise<{
     orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
     select: {
       id: true,
+      code: true,
       name: true,
       description: true,
       priceCents: true,

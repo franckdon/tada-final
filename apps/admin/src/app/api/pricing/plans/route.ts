@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+
 function jsonError(status: number, message: string, details?: unknown) {
   return NextResponse.json({ success: false, error: message, details }, { status });
 }
@@ -13,7 +14,23 @@ function isInt(v: unknown) {
   return typeof v === "number" && Number.isInteger(v);
 }
 
+/**
+ * Codes recommandés:
+ * starter | growth | business | entreprise
+ * (optionnel: as_you_go si tu le stockes aussi comme plan)
+ */
+const ALLOWED_PLAN_CODES = new Set(["starter", "growth", "business", "entreprise"]);
+
+function normalizePlanCode(v: string) {
+  return v.trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+function isAllowedPlanCode(code: string) {
+  return ALLOWED_PLAN_CODES.has(code);
+}
+
 type CreatePlanInput = {
+  code: string; // NEW
   name: string;
   description?: string | null;
   priceCents: number;
@@ -26,10 +43,11 @@ type CreatePlanInput = {
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Partial<CreatePlanInput>;
-
     const errors: Record<string, string> = {};
 
+    if (!isNonEmptyString(body.code, 2)) errors.code = "code requis (min 2 caractères)";
     if (!isNonEmptyString(body.name, 2)) errors.name = "name requis (min 2 caractères)";
+
     if (body.description != null && typeof body.description !== "string")
       errors.description = "description doit être une string ou null";
 
@@ -47,8 +65,16 @@ export async function POST(req: Request) {
 
     if (Object.keys(errors).length) return jsonError(400, "Validation failed", errors);
 
+    const code = normalizePlanCode(body.code!);
+    if (!isAllowedPlanCode(code)) {
+      return jsonError(400, "Validation failed", {
+        code: "code invalide (starter|team|business|enterprise)",
+      });
+    }
+
     const created = await prisma.plan.create({
       data: {
+        code,
         name: body.name!.trim(),
         description: body.description?.trim() || null,
         priceCents: body.priceCents!,
@@ -59,6 +85,7 @@ export async function POST(req: Request) {
       },
       select: {
         id: true,
+        code: true,
         name: true,
         description: true,
         priceCents: true,
@@ -74,6 +101,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, data: created }, { status: 201 });
   } catch (error: any) {
     console.error("POST /api/pricing/plans error:", error);
+
+    if (error?.code === "P2002") {
+      const target = Array.isArray(error?.meta?.target) ? error.meta.target : [];
+      const isCode = target.includes("code");
+      return jsonError(409, "Duplicate value", {
+        message: isCode ? "Un plan avec ce code existe déjà" : "Valeur dupliquée",
+        target,
+      });
+    }
+
     return jsonError(500, "Failed to create plan", error?.message ?? "Unknown error");
   }
 }
@@ -88,13 +125,14 @@ export async function GET(req: Request) {
 
     const search = (searchParams.get("search") || "").trim();
     const isActiveParam = searchParams.get("isActive"); // "true" | "false" | null
-    const sort = (searchParams.get("sort") || "sortOrder").trim(); // sortOrder | createdAt | price
+    const sort = (searchParams.get("sort") || "sortOrder").trim(); // sortOrder | createdAt | price | code | name
     const dir = (searchParams.get("dir") || "asc").trim().toLowerCase(); // asc|desc
 
     const where: any = {};
 
     if (search) {
       where.OR = [
+        { code: { contains: search, mode: "insensitive" } }, // NEW
         { name: { contains: search, mode: "insensitive" } },
         { description: { contains: search, mode: "insensitive" } },
         { bulletsFr: { contains: search, mode: "insensitive" } },
@@ -110,6 +148,8 @@ export async function GET(req: Request) {
 
     if (sort === "createdAt") orderBy.push({ createdAt: direction });
     else if (sort === "price") orderBy.push({ priceCents: direction });
+    else if (sort === "code") orderBy.push({ code: direction });
+    else if (sort === "name") orderBy.push({ name: direction });
     else orderBy.push({ sortOrder: direction });
 
     orderBy.push({ createdAt: "desc" }); // fallback stable
@@ -122,6 +162,7 @@ export async function GET(req: Request) {
         orderBy,
         select: {
           id: true,
+          code: true, // NEW
           name: true,
           description: true,
           priceCents: true,

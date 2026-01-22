@@ -5,12 +5,6 @@ function jsonError(status: number, message: string, details?: unknown) {
   return NextResponse.json({ success: false, error: message, details }, { status });
 }
 
-/**
- * PATCH /api/pricing/plans/:id/active
- * Body optionnel:
- *  - { isActive: true/false } => set explicite
- *  - sinon => toggle automatique
- */
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
     let body: any = null;
@@ -22,18 +16,18 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const current = await prisma.plan.findUnique({
       where: { id: params.id },
-      select: { id: true, isActive: true },
+      select: { id: true, isActive: true, code: true },
     });
     if (!current) return jsonError(404, "Plan not found");
 
-    const nextIsActive =
-      typeof body?.isActive === "boolean" ? body.isActive : !current.isActive;
+    const nextIsActive = typeof body?.isActive === "boolean" ? body.isActive : !current.isActive;
 
     const updated = await prisma.plan.update({
       where: { id: params.id },
       data: { isActive: nextIsActive },
       select: {
         id: true,
+        code: true, // NEW (facultatif mais pratique)
         isActive: true,
         updatedAt: true,
       },
