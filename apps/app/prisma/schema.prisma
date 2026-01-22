@@ -914,8 +914,7 @@ model account {
 
   user User @relation(fields: [userId], references: [id])
 
-  rewardTransactions         AccountBalanceTransaction[]
-  accountBalanceTransactions account_balance_transaction[]
+  transactions AccountBalanceTransaction[]
 
   @@unique([providerId, accountId])
   @@unique([userId, providerId], map: "uniq_account_user_provider")
