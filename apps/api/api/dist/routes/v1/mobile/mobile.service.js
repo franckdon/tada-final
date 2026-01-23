@@ -88,27 +88,27 @@ async function deliverOtp(args) {
     });
 }
 async function register(params) {
-    const { name, email, password } = params;
+    // Register a new user with mobile account
+    const { name, email, password, role = "contributor" } = params;
     const existing = await repo.findUserByEmail(email);
-    let userId;
     if (existing) {
-        userId = existing.id;
+        const verified = await repo.isUserEmailVerified(existing.id);
+        if (verified) {
+            return { ok: false, status: 409, message: "Un compte existe déjà avec cet email. Connectez-vous." };
+        }
+        // Compte non vérifié -> on renvoie un OTP, mais on ne change pas le password ici
+        const otp = (0, mobile_constants_1.randomOtp4)();
+        await repo.createVerificationOtp(`${mobile_constants_1.VERIFY_IDENTIFIER_PREFIX}${email}`, (0, crypto_1.sha256)(otp), mobile_constants_1.VERIFY_OTP_TTL_MINUTES);
+        await deliverOtp({ kind: "verify", email, otp, ttlMinutes: mobile_constants_1.VERIFY_OTP_TTL_MINUTES });
+        return { ok: true };
     }
-    else {
-        userId = crypto.randomUUID();
-        await repo.createUser({ id: userId, name, email });
-    }
+    const userId = crypto.randomUUID();
+    await repo.createUser({ id: userId, name, email, role });
     const passwordHash = await bcrypt.hash(password, 12);
     await repo.upsertMobileAccount(userId, email, passwordHash);
     const otp = (0, mobile_constants_1.randomOtp4)();
-    const otpHash = (0, crypto_1.sha256)(otp);
-    await repo.createVerificationOtp(`${mobile_constants_1.VERIFY_IDENTIFIER_PREFIX}${email}`, otpHash, mobile_constants_1.VERIFY_OTP_TTL_MINUTES);
-    await deliverOtp({
-        kind: "verify",
-        email,
-        otp,
-        ttlMinutes: mobile_constants_1.VERIFY_OTP_TTL_MINUTES,
-    });
+    await repo.createVerificationOtp(`${mobile_constants_1.VERIFY_IDENTIFIER_PREFIX}${email}`, (0, crypto_1.sha256)(otp), mobile_constants_1.VERIFY_OTP_TTL_MINUTES);
+    await deliverOtp({ kind: "verify", email, otp, ttlMinutes: mobile_constants_1.VERIFY_OTP_TTL_MINUTES });
     return { ok: true };
 }
 async function verifyEmail(params, reqMeta) {

@@ -2,13 +2,25 @@ import * as repo from "./missions.repo";
 import type { MissionsListQuery } from "./missions.schemas";
 import { ServiceResult } from "./mobile.types";
 
-// Types de données retournées par la fonction listMissions
+type MissionListItem = Awaited<ReturnType<typeof repo.listMissions>>["items"][number];
+
+// 2) Type du payload de listMissions
+export type MissionsListData = {
+  items: MissionListItem[];
+  meta: {
+    total: number;
+    page: number;
+    pageSize: number;
+    pageCount: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
+};
+
 export async function listMissions(
   userId: string,
   query: MissionsListQuery,
 ): Promise<ServiceResult<MissionsListData>> {
-  // Ici tu peux brancher ta logique d’autorisations (ex: rôle user vs admin)
-  // et autres règles métier avant d’appeler le repo.
 
   const { items, total } = await repo.listMissions(query);
 

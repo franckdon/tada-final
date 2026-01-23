@@ -83,8 +83,8 @@ async function isUserEmailVerified(userId) {
     return Boolean(r.rows[0]?.emailVerified);
 }
 async function createUser(params) {
-    await db_1.db.query(`insert into "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
-     values ($1, $2, $3, false, now(), now())`, [params.id, params.name, params.email]);
+    await db_1.db.query(`insert into "user" (id, name, email, role, "emailVerified", "createdAt", "updatedAt")
+     values ($1, $2, $3, $4, false, now(), now())`, [params.id, params.name, params.email, params.role]);
 }
 async function setUserVerified(userId) {
     await db_1.db.query(`update "user" set "emailVerified" = true, "updatedAt" = now() where id = $1`, [userId]);
