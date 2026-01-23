@@ -1,39 +1,9 @@
-// apps/api/api/index.js
-const fs = require("fs");
-const path = require("path");
-
-console.log("[API] __dirname =", __dirname);
-console.log("[API] dist exists? ", fs.existsSync(path.join(__dirname, "dist")));
-console.log("[API] dist/app.js exists? ", fs.existsSync(path.join(__dirname, "dist", "app.js")));
-
-const app = require("./dist/app").default;
-
-module.exports = async function handler(req, res) {
-    try {
-        const proto = req.headers["x-forwarded-proto"] || "https";
-        const host = req.headers.host;
-        const url = new URL(req.url, `${proto}://${host}`);
-
-        const hasBody = req.method !== "GET" && req.method !== "HEAD";
-
-        const request = new Request(url.toString(), {
-            method: req.method,
-            headers: req.headers,
-            body: hasBody ? req : undefined,
-            duplex: hasBody ? "half" : undefined,
-        });
-
-        const response = await app.fetch(request);
-
-        res.statusCode = response.status;
-        response.headers.forEach((value, key) => res.setHeader(key, value));
-
-        const buf = Buffer.from(await response.arrayBuffer());
-        res.end(buf);
-    } catch (err) {
-        console.error("[VERCEL API HANDLER ERROR]", err);
-        res.statusCode = 500;
-        res.setHeader("content-type", "application/json");
-        res.end(JSON.stringify({ error: "Serverless function crashed", details: String(err) }));
-    }
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
 };
+Object.defineProperty(exports, "__esModule", { value: true });
+// apps/api/src/index.ts
+const app_1 = __importDefault(require("./app"));
+// Rien d’autre à faire.
+exports.default = app_1.default;
