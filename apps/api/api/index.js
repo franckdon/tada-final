@@ -2,6 +2,10 @@
 const app = require("./dist/app").default;
 
 console.log("[API] app module =", require.resolve("../dist/app")); // ou ./dist/app selon option
+const fs = require("fs");
+console.log("[CWD]", process.cwd());
+console.log("[DIR api/dist exists?]", fs.existsSync(__dirname + "/dist"));
+console.log("[FILE api/dist/app.js exists?]", fs.existsSync(__dirname + "/dist/app.js"));
 
 module.exports = async function handler(req, res) {
     try {
