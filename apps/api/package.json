@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev:api": "tsx watch --env-file=.env.local src/dev.ts",
-    "build": "tsc -p tsconfig.json && node -e \"const fs=require('fs'); fs.rmSync('api/dist',{recursive:true,force:true}); fs.cpSync('dist','api/dist',{recursive:true});\"",
+    "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "clean": "git clean -xdf .turbo node_modules",
     "lint": "biome lint",

@@ -1,5 +1,5 @@
 // apps/api/api/index.js
-const app = require("./dist/app").default;
+const app = require("../dist/app").default;
 
 console.log("[API] app module =", require.resolve("../dist/app")); // ou ./dist/app selon option
 
