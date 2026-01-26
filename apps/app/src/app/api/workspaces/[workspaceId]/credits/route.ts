@@ -84,29 +84,29 @@ export async function GET(
     const now = new Date();
 
     const ws = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
+  where: { id: workspaceId },
+  select: {
+    id: true,
+    creditAccount: {
       select: {
         id: true,
-        workspace_credit_account: {
-          select: {
-            id: true,
-            balance: true,
-            currency: true,
-            updated_at: true, // si ton modèle mappe updatedAt -> updated_at
-          },
-        },
-        workspacePlanSubscription: {
-          select: {
-            id: true,
-            planCode: true,
-            status: true,
-            startsAt: true,
-            endsAt: true,
-            overrides: true,
-          },
-        },
+        balance: true,
+        currency: true,
+        updatedAt: true,
       },
-    });
+    },
+    workspacePlanSubscription: {
+      select: {
+        id: true,
+        planCode: true,
+        status: true,
+        startsAt: true,
+        endsAt: true,
+        overrides: true,
+      },
+    },
+  },
+});
 
     if (!ws) {
       return NextResponse.json(
@@ -116,9 +116,9 @@ export async function GET(
     }
 
     // Solde (compte crédits)
-    const balanceRaw = ws.workspace_credit_account?.balance ?? 0;
-    const balance = toNumber(balanceRaw);
-    const currency = ws.workspace_credit_account?.currency ?? "EUR";
+    const balanceRaw = ws.creditAccount?.balance ?? 0;
+const balance = toNumber(balanceRaw);
+const currency = ws.creditAccount?.currency ?? "EUR";
 
     // Subscription
     const sub = ws.workspacePlanSubscription ?? null;
