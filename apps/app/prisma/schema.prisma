@@ -47,6 +47,7 @@ model User {
   missionPermissions             MissionPermission[]
   surveyResponses                SurveyResponse[]
   subDashboards                  SubDashboard[]
+  workspacePlanSubscriptions     WorkspacePlanSubscription[]
 
   @@map("user")
 }
@@ -609,30 +610,31 @@ model MissionChart {
 }
 
 model Workspace {
-  id             String                  @id @default(uuid())
-  name           String
-  slug           String                  @unique
-  description    String?
-  organizationId String?
-  ownerId        String
-  createdAt      DateTime                @default(now()) @db.Timestamp(6)
-  updatedAt      DateTime                @default(now()) @updatedAt @db.Timestamp(6)
-  logo           String?
-  industry       String?
-  companySize    String?
-  street         String?
-  city           String?
-  country        String?
-  website        String?
-  phone          String?
-  aiAnalyses     AiAnalysis[]
-  aiDatasets     AiDataset[]
-  missions       Mission[]
-  organization   Organization?           @relation(fields: [organizationId], references: [id], onUpdate: NoAction)
-  owner          User                    @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  creditAccount  WorkspaceCreditAccount?
-  invitations    WorkspaceInvitation[]
-  members        WorkspaceMember[]
+  id                        String                     @id @default(uuid())
+  name                      String
+  slug                      String                     @unique
+  description               String?
+  organizationId            String?
+  ownerId                   String
+  createdAt                 DateTime                   @default(now()) @db.Timestamp(6)
+  updatedAt                 DateTime                   @default(now()) @updatedAt @db.Timestamp(6)
+  logo                      String?
+  industry                  String?
+  companySize               String?
+  street                    String?
+  city                      String?
+  country                   String?
+  website                   String?
+  phone                     String?
+  aiAnalyses                AiAnalysis[]
+  aiDatasets                AiDataset[]
+  missions                  Mission[]
+  organization              Organization?              @relation(fields: [organizationId], references: [id], onUpdate: NoAction)
+  owner                     User                       @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  creditAccount             WorkspaceCreditAccount?
+  invitations               WorkspaceInvitation[]
+  members                   WorkspaceMember[]
+  workspacePlanSubscription WorkspacePlanSubscription?
 
   @@index([country])
   @@index([industry])
@@ -1231,6 +1233,33 @@ model PayoutAccount {
   @@index([userId, createdAt(sort: Desc)], map: "idx_payout_account_user_created")
   @@index([userId, isDefault], map: "idx_payout_account_user_default")
   @@map("payout_account")
+}
+
+model WorkspacePlanSubscription {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  workspaceId String    @unique @map("workspace_id")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  planCode String @map("plan_code") @db.VarChar(20)
+  status   String @default("active") @db.VarChar(20)
+
+  startsAt DateTime  @default(now()) @map("starts_at") @db.Timestamptz(6)
+  endsAt   DateTime? @map("ends_at") @db.Timestamptz(6)
+
+  source String @default("manual") @db.VarChar(20)
+
+  assignedByUserId String? @map("assigned_by_user_id")
+  assignedByUser   User?   @relation(fields: [assignedByUserId], references: [id], onDelete: SetNull)
+
+  note      String? @db.VarChar(500)
+  overrides Json?
+  metadata  Json?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("workspace_plan_subscription")
 }
 
 enum NotificationType {

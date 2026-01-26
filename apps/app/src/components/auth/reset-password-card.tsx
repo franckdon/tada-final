@@ -30,7 +30,7 @@ const formSchema = z
       .min(8, "Le mot de passe doit contenir au moins 8 caractères")
       .regex(
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        "Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre"
+        "Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre",
       ),
     confirmPassword: z.string(),
   })
@@ -72,7 +72,7 @@ export function ResetPasswordCard() {
       }
 
       toast.success(t("auth.resetPassword.success"));
-      router.push("/signin");
+      router.push("/login");
     } catch (error) {
       toast.error(t("auth.resetPassword.errors.failed"));
     } finally {
@@ -137,7 +137,7 @@ export function ResetPasswordCard() {
                         <Input
                           type="password"
                           placeholder={t(
-                            "auth.resetPassword.passwordPlaceholder"
+                            "auth.resetPassword.passwordPlaceholder",
                           )}
                           {...field}
                         />
@@ -161,7 +161,7 @@ export function ResetPasswordCard() {
                         <Input
                           type="password"
                           placeholder={t(
-                            "auth.resetPassword.confirmPasswordPlaceholder"
+                            "auth.resetPassword.confirmPasswordPlaceholder",
                           )}
                           {...field}
                         />

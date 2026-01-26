@@ -1,5 +1,6 @@
 export default {
   common: {
+    goBack: "Retour",
     generic_error: "Une erreur inattendue est survenue. Veuillez réessayer.",
     no_data: "Aucun",
     not_specified: "Not specified",

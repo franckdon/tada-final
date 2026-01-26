@@ -11,17 +11,14 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     
-    // Paramètres de pagination
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
     const skip = (page - 1) * limit;
     
-    // Paramètres de filtrage
     const search = searchParams.get("search");
     const sector = searchParams.get("sector");
     const status = searchParams.get("status");
     
-    // Construction du filtre
     const where: any = {};
     
     if (sector) {

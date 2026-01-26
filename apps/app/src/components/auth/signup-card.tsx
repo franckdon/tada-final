@@ -72,7 +72,7 @@ const SignUp = () => {
       if (signUpResult.error) {
         setError(
           signUpResult.error.message ||
-            "Une erreur est survenue lors de l'inscription"
+            "Une erreur est survenue lors de l'inscription",
         );
         return;
       }
@@ -103,7 +103,7 @@ const SignUp = () => {
 
       if (result.error) {
         setError(
-          result.error.message || "An error occurred during social sign in"
+          result.error.message || "An error occurred during social sign in",
         );
         return;
       }
@@ -229,7 +229,7 @@ const SignUp = () => {
 
               <p className="text-gray-400 text-center">
                 {t("auth.signup.haveAccount")}{" "}
-                <Link href="/signin" className="text-primary font-semibold">
+                <Link href="/login" className="text-primary font-semibold">
                   {t("auth.signup.signIn")}
                 </Link>
               </p>

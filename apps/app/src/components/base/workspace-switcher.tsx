@@ -4,6 +4,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useI18n, useCurrentLocale } from "@/locales/client";
 import { useWorkspace } from "@/context/workspace-context";
+import { useWorkspaceCreditsStore } from "@/hooks/use-workspace-credit-store"; // ✅ AJOUT
 import { Button } from "@tada/ui/components/button";
 import { Plus, Settings as SettingsIcon, ChevronDown } from "lucide-react";
 import { cn } from "@tada/ui/lib/utils";
@@ -29,10 +30,8 @@ function WorkspaceAvatar({
     });
   }, [logo]);
 
-  // ✅ Cache-busting : si le backend réécrit le même chemin, le navigateur ne gardera pas l'ancien
   const srcWithVersion = useMemo(() => {
     if (!src) return null;
-    // Si logo = string path, on l'encode en "v", sinon fallback sur timestamp
     const v = logo ? encodeURIComponent(logo) : Date.now().toString();
     return `${src}${src.includes("?") ? "&" : "?"}v=${v}`;
   }, [src, logo]);
@@ -41,7 +40,7 @@ function WorkspaceAvatar({
     <div
       className={cn(
         "flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700 overflow-hidden",
-        className
+        className,
       )}
     >
       {srcWithVersion ? (
@@ -74,6 +73,11 @@ export function WorkspaceSwitcher() {
     loading,
   } = useWorkspace();
 
+  // ✅ AJOUT: permet de synchroniser immédiatement le store credits
+  const setCreditsWorkspaceId = useWorkspaceCreditsStore(
+    (s) => s.setWorkspaceId,
+  );
+
   const [openCreate, setOpenCreate] = useState(false);
   const [openList, setOpenList] = useState(false);
 
@@ -93,9 +97,16 @@ export function WorkspaceSwitcher() {
     if (!exists) return;
 
     if (!currentWorkspace || currentWorkspace.id !== workspaceIdFromUrl) {
+      setCreditsWorkspaceId(workspaceIdFromUrl);
       setCurrentWorkspaceId(workspaceIdFromUrl);
     }
-  }, [workspaces, workspaceIdFromUrl, currentWorkspace, setCurrentWorkspaceId]);
+  }, [
+    workspaces,
+    workspaceIdFromUrl,
+    currentWorkspace,
+    setCurrentWorkspaceId,
+    setCreditsWorkspaceId,
+  ]);
 
   const selectedId =
     currentWorkspace?.id ||
@@ -105,7 +116,9 @@ export function WorkspaceSwitcher() {
   const activeWorkspace = workspaces.find((w) => w.id === selectedId);
 
   const handleWorkspaceChange = (id: string) => {
+    setCreditsWorkspaceId(id);
     setCurrentWorkspaceId(id);
+
     router.push(`/${locale}/missions/${id}`);
     setOpenList(false);
   };
@@ -121,7 +134,10 @@ export function WorkspaceSwitcher() {
     slug: string;
   }) => {
     await refresh();
+
+    setCreditsWorkspaceId(workspace.id);
     setCurrentWorkspaceId(workspace.id);
+
     router.push(`/${locale}/missions/${workspace.id}`);
     setOpenCreate(false);
     setOpenList(false);
@@ -133,7 +149,7 @@ export function WorkspaceSwitcher() {
         type="button"
         className={cn(
           "w-full rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/60 px-3 py-2 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors",
-          openList && "ring-1 ring-emerald-500/60"
+          openList && "ring-1 ring-emerald-500/60",
         )}
         onClick={() => setOpenList((o) => !o)}
       >
@@ -158,7 +174,7 @@ export function WorkspaceSwitcher() {
         <ChevronDown
           className={cn(
             "h-4 w-4 text-gray-400 transition-transform",
-            openList && "rotate-180"
+            openList && "rotate-180",
           )}
         />
       </button>
@@ -175,7 +191,7 @@ export function WorkspaceSwitcher() {
                   className={cn(
                     "group flex w-full items-center justify-between rounded-md px-2 py-2 text-xs hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors",
                     selectedId === ws.id &&
-                      "bg-emerald-50 dark:bg-emerald-900/40 border border-emerald-500/60"
+                      "bg-emerald-50 dark:bg-emerald-900/40 border border-emerald-500/60",
                   )}
                 >
                   <div className="flex items-center gap-2 min-w-0">

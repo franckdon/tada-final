@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/current-user";
 import { assertWorkspaceAdmin } from "@/lib/workspaces";
 import { uploadFileToSupabase, deleteFromSupabase } from "@/lib/uploads.server";
 import { slugify } from "@/lib/slugify";
+import { jsonSafe } from "@/lib/json";
 
 export const runtime = "nodejs";
 
@@ -62,7 +63,7 @@ export async function GET(
     );
   }
 
-  return NextResponse.json(workspace);
+  return NextResponse.json(jsonSafe(workspace));
 }
 
 /**

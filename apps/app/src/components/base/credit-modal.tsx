@@ -3,6 +3,8 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+
 import { Button } from "@tada/ui/components/button";
 import { Input } from "@tada/ui/components/input";
 import {
@@ -11,12 +13,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@tada/ui/components/dialog";
+
 import { useScopedI18n } from "@/locales/client";
 import { useWorkspaceCreditsPurchaseStore } from "@/hooks/use-workspace-credits-purchase-store";
-import { usePathname } from "next/navigation";
 
-type PlanCode = "starter" | "team" | "business" | "enterprise";
+import {
+  PLAN_LIMITS,
+  formatLimit,
+  type PlanCode,
+} from "@/lib/plans/plan-limits";
 
+/**
+ * Plans returned by /api/plans (your API returns: id, code, name, description, price, currency, interval, features, bulletsFr, bulletsEn)
+ */
 type AppPlan = {
   id: string;
   code: PlanCode;
@@ -26,8 +35,15 @@ type AppPlan = {
   currency: "EUR";
   interval: "year" | "month";
   features: { text: string; included: boolean }[];
+  bulletsFr?: string | null;
+  bulletsEn?: string | null;
 };
 
+/**
+ * Keep this aligned with your /api/organizations/:id/subscription response.
+ * NOTE: "Plan" type is referenced in your codebase already (likely from Prisma or your domain types).
+ * If it isn't in scope here, import it from the correct module.
+ */
 type SubscriptionResponse =
   | {
       subscription: {
@@ -50,6 +66,15 @@ type SubscriptionResponse =
     }
   | { subscription: null; plan: null };
 
+function isPlanCode(value: string): value is PlanCode {
+  return (
+    value === "starter" ||
+    value === "growth" ||
+    value === "business" ||
+    value === "entreprise"
+  );
+}
+
 export function CreditsModal({
   open = true,
   toggleOpen = () => {},
@@ -60,8 +85,8 @@ export function CreditsModal({
   open?: boolean;
   toggleOpen?: () => void;
   handleAsYouGo?: () => void;
-  organizationId?: string; // optional now
-  workspaceId: string; // REQUIRED
+  organizationId?: string;
+  workspaceId: string;
 }) {
   const commonT = useScopedI18n("common");
   const t = useScopedI18n("creditsModal");
@@ -77,11 +102,14 @@ export function CreditsModal({
     setCurrency,
   } = useWorkspaceCreditsPurchaseStore();
 
-  const total = (credits * unitPrice).toFixed(2);
+  const safeCredits =
+    typeof credits === "number" && Number.isFinite(credits) ? credits : 0;
 
-  const [loadingPlan, setLoadingPlan] = React.useState<boolean>(false);
+  const total = (safeCredits * unitPrice).toFixed(2);
+
+  const [loadingPlan, setLoadingPlan] = React.useState(false);
   const [plan, setPlan] = React.useState<Plan | null>(null);
-  const [notFound, setNotFound] = React.useState<boolean>(false);
+  const [notFound, setNotFound] = React.useState(false);
 
   const pathname = usePathname();
   const locale = React.useMemo(
@@ -117,8 +145,9 @@ export function CreditsModal({
 
         if ("plan" in data && data.plan) {
           setPlan(data.plan);
-          setUnitPrice(data.plan?.addOn ?? 13);
-          setCurrency(data.plan?.currency ?? "EUR");
+          // For "as you go" block only:
+          setUnitPrice((data.plan as any)?.addOn ?? 17);
+          setCurrency((data.plan as any)?.currency ?? "EUR");
           setNotFound(false);
         } else {
           setPlan(null);
@@ -165,16 +194,14 @@ export function CreditsModal({
     };
   }, [locale]);
 
-  console.log("Plans loaded in CreditsModal:", plans);
-
   const handleCreditsChange = (value: string) => {
-    const numericValue = Number.parseInt(value || "0");
-    setCredits(Number.isNaN(numericValue) ? 0 : numericValue);
+    const n = Number(value);
+    setCredits(Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0);
   };
 
   const handleEnhancedAsYouGo = () => {
     const billingData = {
-      credits,
+      credits: safeCredits,
       workspaceId: storeWorkspaceId || workspaceId,
       total: parseFloat(total),
       unitPrice,
@@ -215,7 +242,7 @@ export function CreditsModal({
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            {/* Plan "As you go" */}
+            {/* As-you-go */}
             <div className="border rounded-lg p-4 lg:col-span-1">
               <h3 className="font-semibold text-center text-xl mb-1">
                 {t("researchAsYouGo.title")}
@@ -228,14 +255,16 @@ export function CreditsModal({
                 <label className="text-sm text-gray-600">
                   {t("researchAsYouGo.creditCount")}
                 </label>
+
                 <Input
                   type="number"
-                  value={Number.isNaN(credits) ? 0 : credits}
+                  value={safeCredits}
                   onChange={(e) => handleCreditsChange(e.target.value)}
                   className="h-9"
-                  min="0"
-                  step="1"
+                  min={0}
+                  step={1}
                 />
+
                 <div className="text-sm text-gray-600">
                   {t("researchAsYouGo.totalHT")}{" "}
                   <strong>
@@ -243,11 +272,11 @@ export function CreditsModal({
                   </strong>
                 </div>
 
-                {credits > 0 && (
+                {safeCredits > 0 && (
                   <div className="text-xs text-gray-500 space-y-1">
                     <div>
                       Prix unitaire : {currency === "EUR" ? "€" : currency}{" "}
-                      {unitPrice} / crédit
+                      {unitPrice} / réponses
                     </div>
                   </div>
                 )}
@@ -256,7 +285,7 @@ export function CreditsModal({
               <Button
                 className="mt-4 w-full"
                 onClick={handleEnhancedAsYouGo}
-                disabled={credits <= 0}
+                disabled={safeCredits <= 0}
               >
                 {commonT("next")}
               </Button>
@@ -281,9 +310,26 @@ export function CreditsModal({
                 </div>
               ) : plans.length ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                  {plans.map((p) => (
-                    <PlanCard key={p.id} plan={p} onAction={toggleOpen} />
-                  ))}
+                  {plans.map((p) => {
+                    const code: PlanCode = isPlanCode(p.code)
+                      ? p.code
+                      : "starter";
+                    const limits = PLAN_LIMITS[code];
+
+                    const respondentCompletesLabel = formatLimit(
+                      limits.respondentCompletes,
+                    );
+
+                    return (
+                      <PlanCard
+                        key={p.id}
+                        plan={p}
+                        locale={locale}
+                        onAction={toggleOpen}
+                        respondentCompletesLabel={respondentCompletesLabel}
+                      />
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="border rounded-lg p-4 text-sm text-gray-600">
@@ -298,20 +344,17 @@ export function CreditsModal({
   );
 }
 
-function PlanCard({ plan, onAction }: { plan: AppPlan; onAction: () => void }) {
-  const intervalLabel = plan.interval === "month" ? "mois" : "an";
-
-  const displayPrice =
-    plan.price === 0
-      ? "Custom"
-      : new Intl.NumberFormat("fr-FR", {
-          style: "currency",
-          currency: plan.currency || "EUR",
-          maximumFractionDigits: 0,
-        }).format(plan.price);
-
-  const displayInterval = plan.price === 0 ? null : `/ ${intervalLabel}`;
-
+function PlanCard({
+  plan,
+  locale,
+  onAction,
+  respondentCompletesLabel,
+}: {
+  plan: AppPlan;
+  locale: string;
+  onAction: () => void;
+  respondentCompletesLabel: string;
+}) {
   return (
     <div className="border rounded-lg p-4 flex flex-col">
       <div className="text-center">
@@ -323,106 +366,31 @@ function PlanCard({ plan, onAction }: { plan: AppPlan; onAction: () => void }) {
           <div className="h-5" />
         )}
 
+        {/* Respondent completes (instead of price) */}
         <div className="text-center text-2xl font-semibold mb-4">
-          {displayPrice}
-          {displayInterval ? (
-            <span className="text-sm text-gray-500 font-normal">
-              {" "}
-              {displayInterval}
-            </span>
-          ) : null}
+          {respondentCompletesLabel}
+          <span className="text-sm text-gray-500 font-normal">
+            {" "}
+            {locale === "fr" ? "réponses" : "submissions"}
+          </span>
         </div>
       </div>
 
+      {/* 2 bullets only (already built from your API) */}
       <ul className="text-sm text-gray-600 space-y-2 mb-4">
         {Array.isArray(plan.features) &&
           plan.features
             .filter((f) => f.included)
-            .slice(0, 6)
+            .slice(0, 2)
             .map((f, i) => <li key={i}>• {f.text}</li>)}
       </ul>
 
-      {/* Bouton même style que Next */}
+      {/* CTA */}
       <Link href="/pricing" className="mt-auto">
         <Button className="w-full" onClick={onAction}>
-          Talk to us
+          See details
         </Button>
       </Link>
-    </div>
-  );
-}
-
-function PlanDetails({
-  plan,
-  toggleOpen,
-}: {
-  plan: Plan;
-  toggleOpen: () => void;
-}) {
-  const tPlan = useScopedI18n("creditsModal.plan");
-  const price = new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: plan.currency || "EUR",
-    maximumFractionDigits: 0,
-  }).format(plan.price);
-
-  const features: any = Array.isArray(plan.features) ? plan.features : [];
-
-  return (
-    <div className="flex flex-col h-full">
-      <div>
-        <h3 className="font-semibold text-xl text-center mb-1">{plan.name}</h3>
-        {plan.description ? (
-          <p className="text-sm text-center text-gray-500 mb-4">
-            {plan.description}
-          </p>
-        ) : null}
-        <p className="text-center text-2xl font-semibold mb-4">
-          {price}
-          <span className="text-sm text-gray-500 font-normal">
-            {" "}
-            / {plan.interval}
-          </span>
-        </p>
-
-        <ul className="text-sm text-gray-600 space-y-1 mb-4">
-          {Array.isArray(features) &&
-            features
-              .filter((f) => f.included)
-              .map((f, i) => <li key={i}>• {f.text}</li>)}
-        </ul>
-      </div>
-
-      <Link href="/pricing">
-        <Button
-          variant="outline"
-          className="w-full mt-auto"
-          onClick={toggleOpen}
-        >
-          {tPlan("manageSubscription")}
-        </Button>
-      </Link>
-    </div>
-  );
-}
-
-function NoPlanFallback({ toggleOpen }: { toggleOpen: () => void }) {
-  const tNoPlan = useScopedI18n("creditsModal.noPlan");
-  return (
-    <div className="flex flex-col h-full">
-      <div>
-        <h3 className="font-semibold text-xl text-center mb-2">
-          {tNoPlan("title")}
-        </h3>
-        <p className="text-sm text-center text-gray-600 mb-4">
-          {tNoPlan("description")}
-        </p>
-      </div>
-      <Button asChild variant="outline" className="w-full mt-auto">
-        <Link href="/pricing" onClick={toggleOpen}>
-          {tNoPlan("seePricing")}
-        </Link>
-      </Button>
     </div>
   );
 }

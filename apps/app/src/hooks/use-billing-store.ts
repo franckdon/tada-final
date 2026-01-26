@@ -29,7 +29,7 @@ export const useBillingStore = create<BillingData>((set) => ({
   street: "",
   city: "",
   zip: "",
-  country: "",
+  country: "FR",
   company: "",
   civility: "m",
   firstName: "",

@@ -11,7 +11,7 @@ function getWelcomeMessage(locale: string) {
 
 export function ConversationCard({ locale }: { locale: string }) {
   useAssistantInstructions(`
-You are Jarvis, a Marketing Research Copilot.
+You are Dina, a Marketing Research Copilot.
 
 ABSOLUTE RULES (must follow):
 - You MUST start by asking questions. Do NOT provide a full mission brief in your first messages.

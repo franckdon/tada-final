@@ -50,6 +50,8 @@ export async function GET(req: Request) {
       currency: "EUR",
       interval: "year",
       features: bulletsToFeatures(isEn ? p.bulletsEn : p.bulletsFr),
+      bulletsFr: p.bulletsFr,
+      bulletsEn: p.bulletsEn,
     }));
 
     return NextResponse.json({ success: true, data });

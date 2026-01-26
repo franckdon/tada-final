@@ -19,7 +19,7 @@ export const useWorkspaceCreditsPurchaseStore =
   create<WorkspaceCreditsPurchaseState>((set) => ({
     workspaceId: null,
     credits: 0,
-    unitPrice: 12,
+    unitPrice: 17,
     currency: "EUR",
 
     setWorkspaceId: (workspaceId) => set({ workspaceId }),
@@ -31,7 +31,7 @@ export const useWorkspaceCreditsPurchaseStore =
       set({
         workspaceId: null,
         credits: 0,
-        unitPrice: 12,
+        unitPrice: 17,
         currency: "EUR",
       }),
   }));

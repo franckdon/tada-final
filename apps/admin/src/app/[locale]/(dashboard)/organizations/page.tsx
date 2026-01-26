@@ -1,3 +1,4 @@
+// src/app/[locale]/(dashboard)/organizations/page.tsx
 import { ListOrganizations } from "@/components/organizations/list-organizations";
 import { prisma } from "@/lib/prisma";
 

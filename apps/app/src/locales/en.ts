@@ -255,9 +255,9 @@ export default {
     approvedBy: "Appreciated and approved by over 2000 teams",
     researchAsYouGo: {
       title: "As you go",
-      price: "1.50€/Credit",
+      price: "17€ / submission",
       creditCount: "Amount of credits",
-      totalHT: "Total:",
+      totalHT: "Total: ",
     },
     plan: {
       maxMissions: "Max missions",
@@ -295,8 +295,8 @@ export default {
     summarySection: {
       title: "Summary",
       creditsLabel: "Appinio 'Research as you go' Credits",
-      pricePerCredit: "Price per credit:",
-      totalHT: "Total excl. VAT:",
+      pricePerCredit: "Price per submission:",
+      totalHT: "Total:",
       disclaimer:
         "Acceptance of terms and conditions is mandatory. By clicking 'Buy', you agree to pay the stated amount. Credits are valid for a period of 12 months from the date of purchase. All prices are exclusive of tax.",
       gdpr: "GDPR Compliant",
@@ -1650,6 +1650,19 @@ export default {
         deleteSuccessTitle: "Workspace deleted",
         deleteSuccessDescription:
           "The workspace has been deleted successfully.",
+        billing: {
+          subtitle: "Manage your workspace billing information",
+          buyCredits: "Buy Credits",
+          viewPlans: "View Plans",
+          plan: "Current Plan",
+          planDescription: "You are currently on the {{plan}} plan.",
+          expires: "Expires on",
+          seats: "Seats",
+          seatsHelp: "Number of team members allowed in this workspace.",
+          credits: "Credits",
+          creditsHelp:
+            "Number of survey credits available for this workspace.",
+        }
       },
     },
   analysis:{

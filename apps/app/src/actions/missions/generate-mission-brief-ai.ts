@@ -49,7 +49,7 @@ export const generateMissionBriefAIAction = authActionClient
       model: openai("gpt-4o-mini"),
       schema: MissionBriefSchema,
       system: `
-Tu es Jarvis, expert en études marketing.
+Tu es Dina, expert en études marketing.
 Tu dois produire un brief complet d’étude prêt à être utilisé dans la plateforme Tada.
 La langue de sortie doit suivre la langue dominante de la conversation (ou locale si fournie).`,
       prompt: `

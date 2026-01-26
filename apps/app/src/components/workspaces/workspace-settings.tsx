@@ -1,4 +1,4 @@
-//src/components/workspaces/workspace-settings.tsx
+// src/components/workspaces/workspace-settings.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -44,6 +44,16 @@ import { useWorkspace } from "@/context/workspace-context";
 
 import { countries } from "@/constants/countries";
 import { industries } from "@/constants/industries";
+
+import {
+  getPlanLimits,
+  isUnlimited,
+  isCustom,
+  type PlanCode,
+} from "@/lib/plans/plan-limits";
+import { useWorkspaceCreditsStore } from "@/hooks/use-workspace-credit-store";
+import { WorkspaceBillingTab } from "./workspace-billing-tab";
+import { useWorkspaceCredits } from "@/hooks/use-workspace-credits";
 
 type WorkspaceMember = {
   id: string;
@@ -91,12 +101,31 @@ function withCacheBust(url: string | null | undefined, v?: string | null) {
   return `${url}${url.includes("?") ? "&" : "?"}v=${version}`;
 }
 
+function planLabelToPlanCode(label?: string | null): PlanCode | null {
+  if (!label) return null;
+  const v = label.trim().toLowerCase();
+
+  if (v.includes("starter")) return "starter";
+  if (v.includes("growth")) return "growth";
+  if (v.includes("business")) return "business";
+  if (v.includes("entreprise")) return "entreprise";
+  return null;
+}
+
 export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
   const t = useI18n();
   const locale = useCurrentLocale();
   const router = useRouter();
 
   const { patchWorkspaceInState, refresh } = useWorkspace();
+
+  // Billing/subscription (for seats limits)
+  const subscription = useWorkspaceCreditsStore((s) => s.subscription);
+
+  useWorkspaceCredits(workspaceId);
+
+  const balance = useWorkspaceCreditsStore((s) => s.balance);
+  const creditsLoading = useWorkspaceCreditsStore((s) => s.loading);
 
   const [data, setData] = useState<WorkspaceSettingsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -116,7 +145,7 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [editingMember, setEditingMember] = useState<WorkspaceMember | null>(
-    null
+    null,
   );
   const [editingRole, setEditingRole] = useState("member");
   const [isSavingRole, setIsSavingRole] = useState(false);
@@ -203,7 +232,6 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
         pathOrUrl: ws.logo,
       });
 
-      // ✅ cache bust sur preview
       setLogoPreview(withCacheBust(publicUrl, ws.logo ?? null));
       setNewLogoFile(null);
     } catch (e) {
@@ -214,6 +242,13 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
           name: "Workspace",
           slug: "",
           logo: null,
+          country: null,
+          industry: null,
+          companySize: null,
+          street: null,
+          city: null,
+          website: null,
+          phone: null,
         },
         members: [],
         invitations: [],
@@ -251,12 +286,16 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
     try {
       const formData = new FormData();
       formData.append("name", workspaceNameInput.trim());
+
+      // slug auto: readOnly, but keep it if you want server to accept it
       if (workspaceSlugInput.trim()) {
         formData.append("slug", workspaceSlugInput.trim());
       }
+
       if (newLogoFile) {
         formData.append("logo", newLogoFile);
       }
+
       if (workspaceCountry) formData.append("country", workspaceCountry);
       if (workspaceIndustry) formData.append("industry", workspaceIndustry);
       if (workspaceCompanySize)
@@ -282,7 +321,7 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
 
       const updated = await res.json();
 
-      // ✅ 1) Update local Settings state
+      // 1) Update local Settings state
       setData((prev) =>
         prev
           ? {
@@ -301,26 +340,25 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
                 phone: updated.phone ?? prev.workspace.phone,
               },
             }
-          : prev
+          : prev,
       );
 
-      // ✅ 2) Update context immediately (switcher)
+      // 2) Update context immediately (switcher)
       patchWorkspaceInState(workspaceId, {
         name: updated.name,
         slug: updated.slug,
         logo: updated.logo ?? null,
       });
 
-      // ✅ 3) Update preview (cache bust)
+      // 3) Update preview (cache bust)
       const publicUrl = getPublicUrlForPath({
         category: "workspaceLogo",
         pathOrUrl: updated.logo,
       });
       setLogoPreview(withCacheBust(publicUrl, updated.logo ?? null));
-
       setNewLogoFile(null);
 
-      // ✅ 4) Optional but recommended: resync from API
+      // 4) Optional: resync from API
       await refresh();
     } catch (e) {
       console.error("Error updating workspace", e);
@@ -331,6 +369,7 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
 
   useEffect(() => {
     void loadWorkspace();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
 
   const handleInvite = async () => {
@@ -340,9 +379,7 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/invite`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: inviteEmail.trim(),
           role: inviteRole,
@@ -369,9 +406,7 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/invite`, {
         method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ invitationId: invitationToDelete.id }),
       });
 
@@ -385,10 +420,10 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
           ? {
               ...prev,
               invitations: prev.invitations.filter(
-                (inv) => inv.id !== invitationToDelete.id
+                (inv) => inv.id !== invitationToDelete.id,
               ),
             }
-          : prev
+          : prev,
       );
 
       setInvitationToDelete(null);
@@ -407,9 +442,7 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}`, {
         method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmationName: confirmName }),
       });
 
@@ -440,11 +473,9 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
         `/api/workspaces/${workspaceId}/members/${editingMember.id}`,
         {
           method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role: editingRole }),
-        }
+        },
       );
 
       if (!res.ok) {
@@ -457,10 +488,10 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
           ? {
               ...prev,
               members: prev.members.map((m) =>
-                m.id === editingMember.id ? { ...m, role: editingRole } : m
+                m.id === editingMember.id ? { ...m, role: editingRole } : m,
               ),
             }
-          : prev
+          : prev,
       );
 
       setEditingMember(null);
@@ -478,7 +509,7 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
         `/api/workspaces/${workspaceId}/members/${member.id}`,
         {
           method: "DELETE",
-        }
+        },
       );
 
       if (!res.ok) {
@@ -492,7 +523,7 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
               ...prev,
               members: prev.members.filter((m) => m.id !== member.id),
             }
-          : prev
+          : prev,
       );
     } catch (e) {
       console.error("Error removing member", e);
@@ -516,11 +547,41 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
 
   const workspaceName = data?.workspace.name || "Workspace";
 
+  // Members/invitations derived values (MUST be defined before seats computations)
   const activeMembers =
     data?.members.filter((m) => m.status === "active") ?? [];
-
   const pendingInvitations =
     data?.invitations?.filter((inv) => inv.status === "pending") ?? [];
+
+  // Seats calculations (after activeMembers / pendingInvitations are defined)
+  const planCode = planLabelToPlanCode(subscription?.planLabel ?? null);
+  const seatsLimit = planCode ? getPlanLimits(planCode).userSeats : null;
+
+  const usedSeats = activeMembers.length + pendingInvitations.length;
+  const hasPlan = Boolean(planCode);
+
+  const canInviteByPlan =
+    hasPlan &&
+    seatsLimit !== null &&
+    (isUnlimited(seatsLimit) || isCustom(seatsLimit) || usedSeats < seatsLimit);
+
+  const inviteDisabledReason = !hasPlan
+    ? "Aucun forfait actif. Vous ne pouvez pas inviter de membres."
+    : seatsLimit !== null &&
+        !isUnlimited(seatsLimit) &&
+        !isCustom(seatsLimit) &&
+        usedSeats >= seatsLimit
+      ? `Limite de sièges atteinte (${usedSeats}/${seatsLimit}).`
+      : null;
+
+  const seatsLimitLabel =
+    seatsLimit === null
+      ? "-"
+      : isUnlimited(seatsLimit)
+        ? "∞"
+        : isCustom(seatsLimit)
+          ? "Custom"
+          : String(seatsLimit);
 
   return (
     <div className="space-y-10">
@@ -621,8 +682,8 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
                         "Used in URLs and public links."}
                     </p>
                   </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Country */}
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">
                         {t("workspace.settings.fields.country") || "Country"}
@@ -647,7 +708,6 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
                       </Select>
                     </div>
 
-                    {/* Industry */}
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">
                         {t("workspace.settings.fields.industry") || "Industry"}
@@ -671,7 +731,6 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Company size */}
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">
                         {t("workspace.settings.fields.companySize") ||
@@ -695,7 +754,6 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
                       </Select>
                     </div>
 
-                    {/* Phone */}
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">
                         {t("workspace.settings.fields.phone") || "Phone"}
@@ -709,7 +767,6 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Street */}
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">
                         {t("workspace.settings.fields.street") || "Street"}
@@ -721,7 +778,6 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
                       />
                     </div>
 
-                    {/* City */}
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">
                         {t("workspace.settings.fields.city") || "City"}
@@ -779,40 +835,68 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-6 pb-6 space-y-6">
-                <div className="flex flex-col md:flex-row gap-5 items-start md:items-center">
-                  <div className="flex-1 w-full">
-                    <Input
-                      type="email"
-                      placeholder={
-                        t("workspace.settings.invitePlaceholder") ||
-                        "Invite a member by email"
+                {/* Invite row + help texts underneath */}
+                <div className="space-y-3">
+                  <div className="flex flex-col md:flex-row gap-5 items-start md:items-center">
+                    <div className="flex-1 w-full">
+                      <Input
+                        type="email"
+                        placeholder={
+                          t("workspace.settings.invitePlaceholder") ||
+                          "Invite a member by email"
+                        }
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="w-full md:w-40">
+                      <Select value={inviteRole} onValueChange={setInviteRole}>
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              t("workspace.settings.rolePlaceholder") || "Role"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="owner">Owner</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="member">Member</SelectItem>
+                          <SelectItem value="viewer">Viewer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <Button
+                      onClick={handleInvite}
+                      disabled={
+                        isInviting || !canInviteByPlan || !inviteEmail.trim()
                       }
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                    />
+                      title={inviteDisabledReason ?? undefined}
+                    >
+                      {isInviting
+                        ? t("common.loading") || "Loading..."
+                        : t("workspace.settings.inviteButton") || "Send invite"}
+                    </Button>
                   </div>
-                  <div className="w-full md:w-40">
-                    <Select value={inviteRole} onValueChange={setInviteRole}>
-                      <SelectTrigger>
-                        <SelectValue
-                          placeholder={
-                            t("workspace.settings.rolePlaceholder") || "Role"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="owner">Owner</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="member">Member</SelectItem>
-                        <SelectItem value="viewer">Viewer</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button onClick={handleInvite} disabled={isInviting}>
-                    {isInviting
-                      ? t("common.loading") || "Loading..."
-                      : t("workspace.settings.inviteButton") || "Send invite"}
-                  </Button>
+
+                  {inviteDisabledReason && (
+                    <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                      {inviteDisabledReason}
+                    </div>
+                  )}
+
+                  {hasPlan && seatsLimit !== null && (
+                    <div className="text-xs text-gray-500">
+                      Seats: {usedSeats}/
+                      {isUnlimited(seatsLimit)
+                        ? "∞"
+                        : isCustom(seatsLimit)
+                          ? "Custom"
+                          : seatsLimit}
+                    </div>
+                  )}
                 </div>
 
                 <div className="border border-gray-200 rounded-xl overflow-hidden">
@@ -840,6 +924,7 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
                       {activeMembers.map((member) => {
                         const isOwner = member.role === "owner";
                         const isRemoveDisabled = isOwner;
+
                         return (
                           <div
                             key={member.id}
@@ -868,9 +953,11 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
                                 </div>
                               </div>
                             </div>
+
                             <div className="text-sm text-gray-700">
                               {member.role}
                             </div>
+
                             <div className="flex justify-end gap-2">
                               <Button
                                 variant="outline"
@@ -933,6 +1020,7 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
                                 ? "En attente"
                                 : inv.status}
                             </span>
+
                             <Button
                               variant="outline"
                               size="sm"
@@ -952,23 +1040,21 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
           )}
 
           {activeTab === "billing" && (
-            <Card>
-              <CardHeader className="px-6 pt-6 pb-3">
-                <CardTitle className="text-lg">
-                  {t("workspace.settings.billingTitle") || "Billing & credits"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-6 pb-6 space-y-4">
-                <p className="text-sm text-gray-600">
-                  {t("workspace.settings.billingEmpty") ||
-                    "Billing, invoices and credit usage will appear here soon."}
-                </p>
-              </CardContent>
-            </Card>
+            <WorkspaceBillingTab
+              t={t}
+              balance={balance}
+              loading={creditsLoading}
+              subscription={subscription}
+              usedSeats={usedSeats}
+              seatsLimitLabel={seatsLimitLabel}
+              pricingHref="/pricing"
+              onBuyCredits={undefined /* branche ton modal ici */}
+            />
           )}
         </div>
       </div>
 
+      {/* Danger dialog */}
       <Dialog open={dangerOpen} onOpenChange={setDangerOpen}>
         <DialogContent>
           <DialogHeader>
@@ -978,22 +1064,26 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
               }) || `Supprimer le workspace «${workspaceName}»`}
             </DialogTitle>
           </DialogHeader>
+
           <p className="text-sm text-gray-600 mb-4">
             {t("workspace.settings.deleteDialogDescription", {
               name: workspaceName,
             }) || "Please type the workspace name to confirm this action."}
           </p>
+
           <p className="text-sm mb-2">
             <span className="font-semibold">
               {t("workspace.settings.workspaceNameLabel") || "Workspace name:"}
             </span>{" "}
             {workspaceName}
           </p>
+
           <Input
             value={confirmName}
             onChange={(e) => setConfirmName(e.target.value)}
             placeholder={workspaceName}
           />
+
           <DialogFooter>
             <Button
               variant="outline"
@@ -1018,6 +1108,7 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
         </DialogContent>
       </Dialog>
 
+      {/* Edit member role dialog */}
       <Dialog
         open={!!editingMember}
         onOpenChange={(open) => {
@@ -1045,6 +1136,7 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
                       .slice(0, 2)}
                   </AvatarFallback>
                 </Avatar>
+
                 <div>
                   <div className="font-medium text-sm">
                     {editingMember.user.name}
@@ -1093,6 +1185,7 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
         </DialogContent>
       </Dialog>
 
+      {/* Delete invitation dialog */}
       <Dialog
         open={!!invitationToDelete}
         onOpenChange={(open) => {

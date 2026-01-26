@@ -65,6 +65,9 @@ import { toast } from "@/hooks/use-toast";
 import { Avatar, AvatarImage } from "@tada/ui/components/avatar";
 import { useWorkspace } from "@/context/workspace-context";
 import { useWorkspaceCreditsStore } from "@/hooks/use-workspace-credit-store";
+import { useWorkspaceCredits } from "@/hooks/use-workspace-credits";
+
+import { countries } from "@/constants/countries";
 
 interface HeaderProps {
   title?: string;
@@ -79,12 +82,31 @@ const languages = [
 
 type LanguageCode = (typeof languages)[number]["code"];
 
+type BillingState = {
+  country: string;
+  setField: (key: string, value: any) => void;
+};
+
 const appearance = {
   variables: {
     colorPrimary: "#FF5B4A",
     colorPrimaryForeground: "white",
   },
 };
+
+function formatDateFR(iso?: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(d);
+}
+
+function planBadgeClass(status?: string | null) {
+  if (status === "active") return "bg-green-100 text-green-800";
+  if (status === "expired") return "bg-red-100 text-red-800";
+  if (status === "inactive") return "bg-gray-100 text-gray-800";
+  if (status === "scheduled") return "bg-blue-100 text-blue-800";
+  return "bg-gray-100 text-gray-800";
+}
 
 export function Header({ title = "Dashboard", className, user }: HeaderProps) {
   const t = useI18n();
@@ -109,8 +131,16 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
   const orgId = organizations?.[0]?.id;
 
   const { currentWorkspace } = useWorkspace();
-  const workspaceId = currentWorkspace?.id;
-  const { balance, setCredits } = useWorkspaceCreditsStore();
+  const workspaceId = currentWorkspace?.id ?? null;
+
+  // 1) Hook unique qui gère cache + fetch + anti-race
+  useWorkspaceCredits(workspaceId);
+
+  // 2) Sélecteurs Zustand stables (pas d’objet inline)
+  const balance = useWorkspaceCreditsStore((s) => s.balance);
+  const subscription = useWorkspaceCreditsStore((s) => s.subscription);
+  const loading = useWorkspaceCreditsStore((s) => s.loading);
+
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignOut = async () => {
@@ -161,111 +191,89 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
         //setCredits(billingData?.credits || 0);
 
         setAllFields({
-          credits: billingData.credits,
+          credits:
+            typeof billingData.credits === "number" ? billingData.credits : 0,
           street: billingData.street ?? "",
           city: billingData.city ?? "",
           zip: billingData.zip ?? "",
-          country: billingData.country,
-          company: billingData.company,
-          civility: billingData.civility as any,
-          firstName: billingData.firstName,
-          lastName: billingData.lastName,
-          acceptTerms: billingData.acceptTerms,
+          country: normalizeCountry(billingData.country ?? "FR"),
+          company: billingData.company ?? "",
+          civility: billingData.civility ?? "mr",
+          firstName: billingData.firstName ?? "",
+          lastName: billingData.lastName ?? "",
+          acceptTerms: Boolean(billingData.acceptTerms),
         });
 
         setIsLoading(false);
       } catch (error) {
         setIsLoading(false);
-        /*  toast({
-          title: commonT("error.somethingWentWrong"),
-          variant: "destructive",
-        }); */
       }
     };
 
     fetchBillingInfo();
   }, [orgId, setField, setAllFields]);
 
-  useEffect(() => {
-    const fetchWorkspaceCredits = async () => {
-      if (!workspaceId) return;
-
-      setIsLoading(true);
-      try {
-        const res = await fetch(`/api/workspaces/${workspaceId}/credits`, {
-          cache: "no-store",
-        });
-
-        let json: any = null;
-        try {
-          json = await res.json();
-        } catch {
-          // body non-JSON (ou vide)
-        }
-
-        if (!res.ok) {
-          console.error("[WORKSPACE_CREDITS_FETCH_ERROR]", {
-            status: res.status,
-            workspaceId,
-            json,
-          });
-          return;
-        }
-
-        if (json?.success) {
-          setCredits(json.data.balance, json.data.currency);
-        } else {
-          console.error("[WORKSPACE_CREDITS_BAD_RESPONSE]", {
-            workspaceId,
-            json,
-          });
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchWorkspaceCredits();
-  }, [workspaceId, setCredits]);
-
   const isFormValid = street && zip && city && country && company;
+  const safeZip = typeof zip === "string" ? zip : "";
+  const normalizeCountry = (value: unknown) => {
+    if (typeof value !== "string") return "FR";
+    const v = value.trim();
 
+    // si c’est déjà un code connu
+    if (countries[v as keyof typeof countries]) return v;
+
+    // si c’est un nom (ex: "France")
+    const found = Object.entries(countries).find(
+      ([, c]) => c.name.toLowerCase() === v.toLowerCase(),
+    );
+    return found?.[0] ?? "FR";
+  };
   return (
     <header
       className={cn(
         "bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-4 px-6",
-        className
+        className,
       )}
     >
       <div className="flex items-center justify-end">
         <div className="flex items-center space-x-4">
-          {/*  <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleThemeToggle}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            {theme === "dark" ? (
-              <Sun className="h-5 w-5" />
-            ) : (
-              <Moon className="h-5 w-5" />
-            )}
-          </Button> */}
-
           <Button
             onClick={firstModal.onTrue}
             variant="ghost"
             className="flex items-center space-x-2 text-blue-600 hover:text-blue-700"
           >
             <CreditCard className="h-4 w-4" />
-            {isLoading ? (
+
+            {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <span className="text-sm font-medium">
                 {balance} {headerT("credits")}
               </span>
             )}
+
+            {/* Badge plan */}
+            {subscription?.planLabel ? (
+              <span
+                className={cn(
+                  "ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
+                  planBadgeClass(subscription.status),
+                )}
+                title={
+                  subscription?.endsAt
+                    ? `Expire le ${formatDateFR(subscription.endsAt)}`
+                    : undefined
+                }
+              >
+                {subscription.planLabel.toUpperCase()}
+              </span>
+            ) : (
+              <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-800">
+                FREE
+              </span>
+            )}
           </Button>
+
           <Dialog open={firstModal.value} onOpenChange={firstModal.onFalse}>
             <DialogContent className="sm:max-w-xl">
               <DialogHeader>
@@ -297,7 +305,7 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
                     <Input
                       id="postal"
                       placeholder={headerT("postalCode")}
-                      value={zip}
+                      value={safeZip}
                       onChange={(e) => setField("zip", e.target.value)}
                     />
                   </div>
@@ -315,24 +323,24 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
                   </div>
                   <div className="col-span-1">
                     <Label htmlFor="country">{headerT("country")}</Label>
+
                     <Select
-                      value={country}
+                      value={country || ""} // doit être une string
                       onValueChange={(value) => setField("country", value)}
                     >
-                      <SelectTrigger>
-                        <SelectValue />
+                      <SelectTrigger id="country">
+                        <SelectValue placeholder="Sélectionnez votre pays" />
                       </SelectTrigger>
+
                       <SelectContent>
-                        <SelectItem value="ivoryCoast">
-                          {countriesT("ivoryCoast")}
-                        </SelectItem>
-                        <SelectItem value="france">
-                          {countriesT("france")}
-                        </SelectItem>
-                        <SelectItem value="spain">
-                          {countriesT("spain")}
-                        </SelectItem>
-                        <SelectItem value="uk">{countriesT("uk")}</SelectItem>
+                        {Object.entries(countries).map(([code, c]) => (
+                          <SelectItem key={code} value={code}>
+                            <span className="flex items-center gap-2">
+                              <span>{c.emoji}</span>
+                              <span>{c.name}</span>
+                            </span>
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -522,7 +530,10 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <CircleDollarSign className="mr-2 h-4 w-4" />
-                <Link href={"/pricing/" + orgId}>
+                {/* <Link href={"/pricing/" + orgId}>
+                  <span>{t("user.menu.pricings")}</span>
+                </Link> */}
+                <Link href={"/pricing"}>
                   <span>{t("user.menu.pricings")}</span>
                 </Link>
               </DropdownMenuItem>

@@ -41,6 +41,7 @@ import {
   Package,
   Puzzle,
   Tags,
+  MonitorCloud,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -119,6 +120,11 @@ export function Sidebar() {
           icon: <Building2 className="h-5 w-5" />,
           text: "Organisations",
           href: "/organizations",
+        },
+        {
+          icon: <MonitorCloud className="h-5 w-5" />,
+          text: "Workspaces",
+          href: "/workspaces",
         },
         {
           icon: <UserCog className="h-5 w-5" />,

@@ -246,9 +246,9 @@ export default {
     approvedBy: "Apprécié et approuvé par plus de 2000 équipes",
     researchAsYouGo: {
       title: "Ajouter du crédit supplémentaire",
-      price: "1.50€/Crédit",
+      price: "17€/ Réponse",
       creditCount: "Nombre de crédits",
-      totalHT: "Total HT :",
+      totalHT: "Total: ",
     },
     plan: {
       maxMissions: "Missions max",
@@ -286,8 +286,8 @@ export default {
     summarySection: {
       title: "Résumé",
       creditsLabel: "Crédits Appinio 'Recherche à la demande'",
-      pricePerCredit: "Prix par crédit :",
-      totalHT: "Total HT :",
+      pricePerCredit: "Prix par soumission :",
+      totalHT: "Total:",
       disclaimer:
         "L'acceptation des termes et conditions est obligatoire. En cliquant sur « Acheter », vous vous engagez à régler le montant mentionné. Les crédits sont valables pour une période de 12 mois à compter de la date d'achat. Tous les prix sont indiqués hors taxe.",
       gdpr: "Conforme au RGPD",
@@ -847,6 +847,19 @@ export default {
             deleteSuccessTitle: "Workspace supprimé",
             deleteSuccessDescription:
               "Le workspace a été supprimé avec succès.",
+            billing: {
+              subtitle: "Gérer les informations de facturation et les plans du workspace.",
+              buyCredits: "Acheter des crédits",
+              viewPlans: "Voir les plans",
+              plan: "Plan actuel",
+              planDescription: "Vous êtes actuellement sur le plan {{plan}}.",
+              expires: "Expire le",
+              seats: "Places",
+              seatsHelp: "Nombre de membres de l'équipe autorisés dans ce workspace.",
+              credits: "Crédits",
+              creditsHelp:
+                "Nombre de crédits d'enquête disponibles pour ce workspace.",
+            }
           },
         },
   missions: {

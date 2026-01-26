@@ -1,3 +1,4 @@
+// src/components/organizations/list-organizations.tsx
 "use client";
 import { useI18n } from "@/locales/client";
 import { Badge } from "@tada/ui/components/badge";
@@ -34,7 +35,17 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowLeft, ArrowRight, EyeIcon, MoreHorizontal, Edit, Trash2, Building2, Plus, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  EyeIcon,
+  MoreHorizontal,
+  Edit,
+  Trash2,
+  Building2,
+  Plus,
+  Loader2,
+} from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -69,7 +80,7 @@ const Button = ({
   );
 };
 
-type OrganizationWithMissions = Organization & { 
+type OrganizationWithMissions = Organization & {
   missions: number;
   _count?: {
     members: number;
@@ -87,13 +98,16 @@ export function ListOrganizations({
   const router = useRouter();
   const { toast } = useToast();
   const pageSize = 8;
-  
-  const [organizations, setOrganizations] = useState<OrganizationWithMissions[]>(initialOrganizations);
+
+  const [organizations, setOrganizations] =
+    useState<OrganizationWithMissions[]>(initialOrganizations);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedOrganization, setSelectedOrganization] = useState<OrganizationWithMissions | null>(null);
-  const [organizationToDelete, setOrganizationToDelete] = useState<OrganizationWithMissions | null>(null);
+  const [selectedOrganization, setSelectedOrganization] =
+    useState<OrganizationWithMissions | null>(null);
+  const [organizationToDelete, setOrganizationToDelete] =
+    useState<OrganizationWithMissions | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleEdit = (org: OrganizationWithMissions) => {
@@ -108,22 +122,25 @@ export function ListOrganizations({
 
   const handleDelete = async () => {
     if (!organizationToDelete) return;
-    
+
     setIsDeleting(true);
 
     try {
-      const response = await fetch(`/api/organizations/${organizationToDelete.id}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `/api/organizations/${organizationToDelete.id}`,
+        {
+          method: "DELETE",
+        },
+      );
 
       const result = await response.json();
 
       if (response.ok) {
         // Supprimer l'organisation du state local
-        setOrganizations(prevOrganizations => 
-          prevOrganizations.filter(org => org.id !== organizationToDelete.id)
+        setOrganizations((prevOrganizations) =>
+          prevOrganizations.filter((org) => org.id !== organizationToDelete.id),
         );
-        
+
         toast({
           title: "Organisation supprimée",
           description: `${organizationToDelete.name} a été supprimée avec succès.`,
@@ -148,18 +165,24 @@ export function ListOrganizations({
     }
   };
 
-  const handleSuccess = (organization?: OrganizationWithMissions, isEdit = false) => {
+  const handleSuccess = (
+    organization?: OrganizationWithMissions,
+    isEdit = false,
+  ) => {
     if (organization) {
       if (isEdit) {
         // Mettre à jour l'organisation dans le state local
-        setOrganizations(prevOrganizations => 
-          prevOrganizations.map(org => 
-            org.id === organization.id ? organization : org
-          )
+        setOrganizations((prevOrganizations) =>
+          prevOrganizations.map((org) =>
+            org.id === organization.id ? organization : org,
+          ),
         );
       } else {
         // Ajouter la nouvelle organisation en haut de la liste
-        setOrganizations(prevOrganizations => [organization, ...prevOrganizations]);
+        setOrganizations((prevOrganizations) => [
+          organization,
+          ...prevOrganizations,
+        ]);
       }
     }
   };
@@ -177,22 +200,26 @@ export function ListOrganizations({
           <div className="flex items-center gap-3">
             <div className="flex-shrink-0">
               {org.logo ? (
-                <img 
-                  src={org.logo} 
-                  alt={org.name || 'Logo organisation'}
+                <img
+                  src={org.logo}
+                  alt={org.name || "Logo organisation"}
                   className="h-10 w-10 rounded-lg object-cover border border-gray-200"
                 />
               ) : (
                 <div className="h-10 w-10 rounded-lg bg-orange-100 border-2 border-orange-200 flex items-center justify-center">
                   <span className="text-lg font-bold text-orange-600">
-                    {org.name ? org.name.charAt(0).toUpperCase() : '?'}
+                    {org.name ? org.name.charAt(0).toUpperCase() : "?"}
                   </span>
                 </div>
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="font-medium text-gray-900 truncate">{org.name || 'Sans nom'}</div>
-              <div className="text-sm text-gray-500 truncate">{org.slug || 'sans-slug'}</div>
+              <div className="font-medium text-gray-900 truncate">
+                {org.name || "Sans nom"}
+              </div>
+              <div className="text-sm text-gray-500 truncate">
+                {org.slug || "sans-slug"}
+              </div>
             </div>
           </div>
         );
@@ -230,12 +257,21 @@ export function ListOrganizations({
         const status = row.original.status;
         const statusColors = {
           active: "bg-green-100 text-green-800",
-          inactive: "bg-gray-100 text-gray-800", 
+          inactive: "bg-gray-100 text-gray-800",
           suspended: "bg-red-100 text-red-800",
         };
         return (
-          <Badge className={statusColors[status as keyof typeof statusColors] || statusColors.inactive}>
-            {status === 'active' ? 'Actif' : status === 'inactive' ? 'Inactif' : 'Suspendu'}
+          <Badge
+            className={
+              statusColors[status as keyof typeof statusColors] ||
+              statusColors.inactive
+            }
+          >
+            {status === "active"
+              ? "Actif"
+              : status === "inactive"
+                ? "Inactif"
+                : "Suspendu"}
           </Badge>
         );
       },
@@ -341,31 +377,34 @@ export function ListOrganizations({
               Gérez les organisations et leurs membres
             </p>
           </div>
-          <UIButton onClick={() => setIsCreateDialogOpen(true)} className="bg-orange-600 hover:bg-orange-700">
+          <UIButton
+            onClick={() => setIsCreateDialogOpen(true)}
+            className="bg-orange-600 hover:bg-orange-700"
+          >
             <Plus className="mr-2 h-4 w-4" />
             Nouvelle organisation
           </UIButton>
         </div>
-      <Table>
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <TableHead
-                  key={header.id}
-                  className={cn(header.column.columnDef.meta?.align)}
-                >
-                  {flexRender(
-                    header.column.columnDef.header,
-                    header.getContext()
-                  )}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead
+                    key={header.id}
+                    className={cn(header.column.columnDef.meta?.align)}
+                  >
+                    {flexRender(
+                      header.column.columnDef.header,
+                      header.getContext(),
+                    )}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
 
-        {/* <TableHeader>
+          {/* <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id} className="bg-gray-50/50 dark:bg-inherit">
               {headerGroup.headers.map((header) => (
@@ -381,156 +420,163 @@ export function ListOrganizations({
             </TableRow>
           ))}
         </TableHeader> */}
-        <TableBody>
-          {table.getRowModel().rows.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center py-12">
-                <div className="flex flex-col items-center justify-center space-y-4">
-                  <div className="h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center">
-                    <Building2 className="h-8 w-8 text-gray-400" />
+          <TableBody>
+            {table.getRowModel().rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-12">
+                  <div className="flex flex-col items-center justify-center space-y-4">
+                    <div className="h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center">
+                      <Building2 className="h-8 w-8 text-gray-400" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-lg font-medium text-gray-900">
+                        Aucune organisation
+                      </h3>
+                      <p className="text-sm text-gray-500 max-w-sm">
+                        Commencez par créer votre première organisation pour
+                        gérer vos équipes et projets.
+                      </p>
+                    </div>
+                    <UIButton
+                      onClick={() => setIsCreateDialogOpen(true)}
+                      className="bg-orange-600 hover:bg-orange-700"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Créer une organisation
+                    </UIButton>
                   </div>
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-medium text-gray-900">Aucune organisation</h3>
-                    <p className="text-sm text-gray-500 max-w-sm">
-                      Commencez par créer votre première organisation pour gérer vos équipes et projets.
-                    </p>
-                  </div>
-                  <UIButton 
-                    onClick={() => setIsCreateDialogOpen(true)}
-                    className="bg-orange-600 hover:bg-orange-700"
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Créer une organisation
-                  </UIButton>
-                </div>
-              </TableCell>
-            </TableRow>
-          ) : (
-            table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id}>
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell
-                    key={cell.id}
-                    className={cn(cell.column.columnDef.meta?.align)}
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
+                </TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-      <div className="mt-10 flex items-center justify-between">
-        <p className="text-sm tabular-nums text-gray-500 dark:text-gray-500">
-          {t("contributors.list.pagination.page")}{" "}
-          <span className="font-medium text-gray-900 dark:text-gray-50">{`${
-            table.getState().pagination.pageIndex + 1
-          }`}</span>{" "}
-          {t("contributors.list.pagination.of")}
-          <span className="font-medium text-gray-900 dark:text-gray-50">
-            {" "}
-            {`${table.getPageCount()}`}
-          </span>
-        </p>
-        <div className="inline-flex items-center rounded-full shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-800">
-          <Button
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <span className="sr-only">
-              {t("contributors.list.pagination.previous")}
+            ) : (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell
+                      key={cell.id}
+                      className={cn(cell.column.columnDef.meta?.align)}
+                    >
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+        <div className="mt-10 flex items-center justify-between">
+          <p className="text-sm tabular-nums text-gray-500 dark:text-gray-500">
+            {t("contributors.list.pagination.page")}{" "}
+            <span className="font-medium text-gray-900 dark:text-gray-50">{`${
+              table.getState().pagination.pageIndex + 1
+            }`}</span>{" "}
+            {t("contributors.list.pagination.of")}
+            <span className="font-medium text-gray-900 dark:text-gray-50">
+              {" "}
+              {`${table.getPageCount()}`}
             </span>
-            <ArrowLeft
-              className="size-5 text-gray-700 group-hover:text-gray-900 dark:text-gray-300 group-hover:dark:text-gray-50"
+          </p>
+          <div className="inline-flex items-center rounded-full shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-800">
+            <Button
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              <span className="sr-only">
+                {t("contributors.list.pagination.previous")}
+              </span>
+              <ArrowLeft
+                className="size-5 text-gray-700 group-hover:text-gray-900 dark:text-gray-300 group-hover:dark:text-gray-50"
+                aria-hidden={true}
+              />
+            </Button>
+            <span
+              className="h-5 border-r border-gray-300 dark:border-gray-800"
               aria-hidden={true}
             />
-          </Button>
-          <span
-            className="h-5 border-r border-gray-300 dark:border-gray-800"
-            aria-hidden={true}
-          />
-          <Button
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            <span className="sr-only">
-              {t("contributors.list.pagination.next")}
-            </span>
-            <ArrowRight
-              className="size-5 text-gray-700 group-hover:text-gray-900 dark:text-gray-300 group-hover:dark:text-gray-50"
-              aria-hidden={true}
-            />
-          </Button>
+            <Button
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              <span className="sr-only">
+                {t("contributors.list.pagination.next")}
+              </span>
+              <ArrowRight
+                className="size-5 text-gray-700 group-hover:text-gray-900 dark:text-gray-300 group-hover:dark:text-gray-50"
+                aria-hidden={true}
+              />
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
 
-    <OrganizationManager
-      isOpen={isCreateDialogOpen}
-      onClose={() => setIsCreateDialogOpen(false)}
-      onSuccess={handleSuccess}
-    />
+      <OrganizationManager
+        isOpen={isCreateDialogOpen}
+        onClose={() => setIsCreateDialogOpen(false)}
+        onSuccess={handleSuccess}
+      />
 
-    <OrganizationManager
-      isOpen={isEditDialogOpen}
-      onClose={() => {
-        setIsEditDialogOpen(false);
-        setSelectedOrganization(null);
-      }}
-      organization={selectedOrganization || undefined}
-      onSuccess={(org) => handleSuccess(org, true)}
-    />
+      <OrganizationManager
+        isOpen={isEditDialogOpen}
+        onClose={() => {
+          setIsEditDialogOpen(false);
+          setSelectedOrganization(null);
+        }}
+        organization={selectedOrganization || undefined}
+        onSuccess={(org) => handleSuccess(org, true)}
+      />
 
-    {/* Dialog Suppression */}
-    <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-red-600">
-            <Trash2 className="h-5 w-5" />
-            Supprimer l'organisation
-          </DialogTitle>
-          <DialogDescription>
-            Êtes-vous sûr de vouloir supprimer définitivement l'organisation{" "}
-            <span className="font-semibold text-gray-900">
-              {organizationToDelete?.name}
-            </span>{" "}
-            ? Cette action est irréversible et supprimera toutes les données associées.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter className="gap-2">
-          <UIButton
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setIsDeleteDialogOpen(false);
-              setOrganizationToDelete(null);
-            }}
-            disabled={isDeleting}
-          >
-            Annuler
-          </UIButton>
-          <UIButton
-            type="button"
-            variant="destructive"
-            onClick={handleDelete}
-            disabled={isDeleting}
-          >
-            {isDeleting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Suppression...
-              </>
-            ) : (
-              <>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Supprimer
-              </>
-            )}
-          </UIButton>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {/* Dialog Suppression */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Supprimer l'organisation
+            </DialogTitle>
+            <DialogDescription>
+              Êtes-vous sûr de vouloir supprimer définitivement l'organisation{" "}
+              <span className="font-semibold text-gray-900">
+                {organizationToDelete?.name}
+              </span>{" "}
+              ? Cette action est irréversible et supprimera toutes les données
+              associées.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <UIButton
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setOrganizationToDelete(null);
+              }}
+              disabled={isDeleting}
+            >
+              Annuler
+            </UIButton>
+            <UIButton
+              type="button"
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Suppression...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Supprimer
+                </>
+              )}
+            </UIButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

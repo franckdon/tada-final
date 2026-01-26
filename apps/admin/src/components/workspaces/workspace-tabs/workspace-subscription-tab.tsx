@@ -1,0 +1,610 @@
+"use client";
+
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { Badge } from "@tada/ui/components/badge";
+import { Button } from "@tada/ui/components/button";
+import { Input } from "@tada/ui/components/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@tada/ui/components/select";
+import { useToast } from "@/hooks/use-toast";
+
+import {
+  getPlanLimits,
+  type PlanCode,
+  formatLimit,
+  formatYesNo,
+} from "@/lib/plans/plan-limits";
+import type { PlanOverrides } from "@/lib/plans/plan-overrides";
+import { applyOverrides } from "@/lib/plans/plan-overrides";
+
+const PLAN_CODES = ["starter", "growth", "business", "entreprise"] as const;
+
+const formatDate = (d?: Date | string | null) => {
+  if (!d) return "—";
+  const date = typeof d === "string" ? new Date(d) : d;
+  return date.toLocaleDateString("fr-FR");
+};
+
+export default function WorkspaceSubscriptionTab({
+  workspaceId,
+  subscription,
+  currentCredits,
+}: {
+  workspaceId: string;
+  subscription: any | null;
+  currentCredits?: number | null;
+}) {
+  const router = useRouter();
+  const { toast } = useToast();
+
+  const hasSubscription = Boolean(subscription?.id);
+  const currentPlan = (subscription?.planCode as PlanCode) ?? null;
+
+  const [planCode, setPlanCode] = React.useState<PlanCode>(
+    currentPlan ?? "starter",
+  );
+
+  const [note, setNote] = React.useState<string>(subscription?.note ?? "");
+  const [overrides, setOverrides] = React.useState<PlanOverrides>(
+    (subscription?.overrides ?? {}) as PlanOverrides,
+  );
+
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  // --------- ACTIVE STATE (FIX) ----------
+  // Ne dépend PLUS de subscription.isActive (qui peut être stale / mal calculé).
+  const endsAtDate: Date | null = subscription?.endsAt
+    ? new Date(subscription.endsAt)
+    : null;
+
+  const computedIsActive =
+    hasSubscription &&
+    subscription?.status === "active" &&
+    // endsAt null => actif (open-ended), sinon endsAt doit être dans le futur
+    (endsAtDate ? endsAtDate.getTime() > Date.now() : true);
+
+  const statusBadge = computedIsActive
+    ? { variant: "success" as const, label: "Actif" }
+    : hasSubscription
+      ? { variant: "secondary" as const, label: "Inactif / Expiré" }
+      : { variant: "secondary" as const, label: "Aucun abonnement" };
+
+  // --------- PLAN LIMITS ----------
+  // Limites "sélection à gauche" (utile pour preview avant changement)
+  const selectedDefaults = getPlanLimits(planCode);
+  const selectedEffective = applyOverrides(
+    selectedDefaults,
+    planCode === "entreprise" ? overrides : null,
+  );
+
+  // Limites du plan ACTUEL (celles réellement appliquées au workspace)
+  const currentPlanCodeForLimits = hasSubscription
+    ? (subscription.planCode as PlanCode)
+    : planCode;
+
+  const currentOverridesForLimits =
+    hasSubscription && (subscription.planCode as PlanCode) === "entreprise"
+      ? ((subscription.overrides as PlanOverrides) ?? null)
+      : null;
+
+  const currentEffective = applyOverrides(
+    getPlanLimits(currentPlanCodeForLimits),
+    currentOverridesForLimits,
+  );
+
+  // --------- UI STATES ----------
+  const isPlanChanged = currentPlan ? planCode !== currentPlan : true;
+
+  const canRenew = hasSubscription;
+  const canDisable = hasSubscription && subscription?.status === "active";
+  const canEnable = hasSubscription && subscription?.status !== "active";
+
+  // --------- API CALLS ----------
+  const callAssign = async () => {
+    const res = await fetch(
+      `/api/workspaces/${workspaceId}/subscription/assign`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          planCode,
+          note: note || null,
+          overrides: planCode === "entreprise" ? overrides : null,
+        }),
+      },
+    );
+
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json?.error || "Impossible d’attribuer le plan");
+    }
+    return json;
+  };
+
+  const assignPlan = async () => {
+    setIsSaving(true);
+    try {
+      await callAssign();
+      toast({
+        title: "Plan attribué",
+        description: `Le plan ${planCode.toUpperCase()} a été attribué au workspace.`,
+      });
+      router.refresh();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Une erreur est survenue",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const changePlan = async () => {
+    setIsSaving(true);
+    try {
+      await callAssign();
+      toast({
+        title: "Plan modifié",
+        description: `Le plan ${planCode.toUpperCase()} est maintenant appliqué.`,
+      });
+      router.refresh();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Une erreur est survenue",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const renew = async () => {
+    setIsSaving(true);
+    try {
+      const res = await fetch(
+        `/api/workspaces/${workspaceId}/subscription/renew`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ note: note || null }),
+        },
+      );
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Impossible de renouveler");
+
+      toast({
+        title: "Renouvellement effectué",
+        description: "Le plan a été prolongé d’un mois.",
+      });
+
+      router.refresh();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Une erreur est survenue",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const enable = async () => {
+    setIsSaving(true);
+    try {
+      const res = await fetch(
+        `/api/workspaces/${workspaceId}/subscription/enable`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ note: note || null }),
+        },
+      );
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Impossible d’activer");
+
+      toast({
+        title: "Plan activé",
+        description: "Le plan est actif pour 1 mois.",
+      });
+
+      router.refresh();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Une erreur est survenue",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const disable = async () => {
+    setIsSaving(true);
+    try {
+      const res = await fetch(
+        `/api/workspaces/${workspaceId}/subscription/disable`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ note: note || null }),
+        },
+      );
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Impossible de désactiver");
+
+      toast({
+        title: "Plan désactivé",
+        description: "Le plan a été désactivé.",
+      });
+
+      router.refresh();
+    } catch (e: any) {
+      toast({
+        title: "Erreur",
+        description: e?.message ?? "Une erreur est survenue",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
+      {/* LEFT PANEL */}
+      <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-5 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm text-gray-500">Plan</div>
+              <div className="text-lg font-semibold text-gray-900">
+                Sélection & configuration
+              </div>
+            </div>
+
+            {currentPlan ? (
+              <Badge variant="outline" className="mt-1">
+                Actuel: {currentPlan.toUpperCase()}
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="mt-1">
+                Aucun
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-5 p-5">
+          <div>
+            <div className="mb-2 text-sm text-gray-700">Choisir un plan</div>
+            <Select
+              value={planCode}
+              onValueChange={(v) => setPlanCode(v as PlanCode)}
+            >
+              <SelectTrigger className="h-11">
+                <SelectValue placeholder="Choisir un plan" />
+              </SelectTrigger>
+              <SelectContent>
+                {PLAN_CODES.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {p.toUpperCase()}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Preview du plan sélectionné */}
+            <div className="mt-3 rounded-lg bg-gray-50 p-4">
+              <div className="text-xs text-gray-500">
+                Preview — Soumissions/mois (plan sélectionné)
+              </div>
+              <div className="mt-1 text-2xl font-semibold text-gray-900">
+                {formatLimit(selectedEffective.respondentCompletes, {
+                  locale: "fr",
+                })}
+              </div>
+              <div className="mt-1 text-xs text-gray-500">
+                Quota du plan sélectionné (pas le solde “Points actuels”).
+              </div>
+            </div>
+          </div>
+
+          {/* ENTREPRISE OVERRIDES */}
+          {planCode === "entreprise" && (
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">
+                    Personnalisation ENTREPRISE
+                  </div>
+                  <div className="mt-1 text-xs text-gray-600">
+                    Saisis les limites négociées pour ce workspace.
+                  </div>
+                </div>
+                <Badge variant="outline">Custom</Badge>
+              </div>
+
+              <div className="mt-4">
+                <div className="mb-2 text-sm text-gray-700">
+                  Soumissions / mois
+                </div>
+                <Input
+                  className="h-11"
+                  type="number"
+                  min={0}
+                  value={overrides.respondentCompletes ?? ""}
+                  onChange={(e) =>
+                    setOverrides((prev) => ({
+                      ...prev,
+                      respondentCompletes:
+                        e.target.value === ""
+                          ? undefined
+                          : Number(e.target.value),
+                    }))
+                  }
+                  placeholder="Ex: 5000"
+                />
+                <div className="mt-2 text-xs text-gray-500">
+                  Si vide, on reste sur “Sur devis”.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* PRIMARY ACTION */}
+          {!hasSubscription ? (
+            <Button
+              className="h-11 w-full"
+              onClick={assignPlan}
+              disabled={isSaving}
+            >
+              {isSaving ? "Attribution..." : "Attribuer le plan"}
+            </Button>
+          ) : (
+            <Button
+              className="h-11 w-full"
+              onClick={changePlan}
+              disabled={!isPlanChanged || isSaving}
+            >
+              {isSaving ? "Mise à jour..." : "Changer de plan"}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* RIGHT PANEL */}
+      <div className="rounded-xl border border-gray-100 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-5 py-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <div className="text-sm text-gray-500">Forfait actuel</div>
+                <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
+              </div>
+
+              <div className="mt-1 truncate text-2xl font-semibold text-gray-900">
+                {hasSubscription
+                  ? String(subscription.planCode).toUpperCase()
+                  : "Aucun abonnement"}
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <div className="rounded-full bg-gray-50 px-3 py-1 text-sm text-gray-700">
+                  Points actuels:{" "}
+                  <span className="font-semibold text-gray-900">
+                    {typeof currentCredits === "number"
+                      ? new Intl.NumberFormat("fr-FR").format(currentCredits)
+                      : "—"}
+                  </span>
+                </div>
+
+                <div className="rounded-full bg-gray-50 px-3 py-1 text-sm text-gray-700">
+                  Soumissions/mois (plan actuel):{" "}
+                  <span className="font-semibold text-gray-900">
+                    {formatLimit(currentEffective.respondentCompletes, {
+                      locale: "fr",
+                    })}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* ACTIONS */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="secondary"
+                className="h-10"
+                onClick={renew}
+                disabled={!canRenew || isSaving}
+              >
+                Renouveler (+1 mois)
+              </Button>
+
+              {canEnable ? (
+                <Button
+                  variant="secondary"
+                  className="h-10"
+                  onClick={enable}
+                  disabled={isSaving}
+                >
+                  Activer
+                </Button>
+              ) : null}
+
+              <Button
+                variant="destructive"
+                className="h-10"
+                onClick={disable}
+                disabled={!canDisable || isSaving}
+              >
+                Désactiver
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6 p-5">
+          {/* Dates */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-xl border border-gray-100 p-4">
+              <div className="text-xs text-gray-500">Début</div>
+              <div className="mt-1 text-lg font-semibold text-gray-900">
+                {formatDate(subscription?.startsAt)}
+              </div>
+              <div className="mt-1 text-xs text-gray-500">
+                Date d’activation
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 p-4">
+              <div className="text-xs text-gray-500">Fin</div>
+              <div className="mt-1 text-lg font-semibold text-gray-900">
+                {formatDate(subscription?.endsAt)}
+              </div>
+              <div className="mt-1 text-xs text-gray-500">
+                Date d’expiration
+              </div>
+            </div>
+          </div>
+
+          {/* Meta */}
+          <div className="rounded-xl border border-gray-100 p-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <div className="text-xs text-gray-500">Source</div>
+                <div className="mt-1 font-medium text-gray-900">
+                  {subscription?.source ?? "—"}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Assigné par</div>
+                <div className="mt-1 font-medium text-gray-900">
+                  {subscription?.assignedByUser?.name ?? "—"}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {subscription?.assignedByUser?.email ?? ""}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Limits (plan actuel) */}
+          <div className="rounded-xl border border-gray-100 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold text-gray-900">
+                  Limites appliquées (plan actuel)
+                </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  Basées sur le plan actif du workspace.
+                </div>
+              </div>
+              <Badge variant="outline">
+                {currentPlanCodeForLimits.toUpperCase()}
+              </Badge>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2 text-sm">
+              {[
+                {
+                  label: "Soumissions / mois",
+                  value: formatLimit(currentEffective.respondentCompletes, {
+                    locale: "fr",
+                  }),
+                },
+                {
+                  label: "Zones de déploiement",
+                  value: formatLimit(currentEffective.deploymentLocations, {
+                    locale: "fr",
+                  }),
+                },
+                {
+                  label: "Tours de vérification",
+                  value: formatLimit(
+                    currentEffective.surveyVerificationRounds,
+                    {
+                      locale: "fr",
+                    },
+                  ),
+                },
+                {
+                  label: "Questions / enquête",
+                  value: formatLimit(currentEffective.questionsPerSurvey, {
+                    locale: "fr",
+                  }),
+                },
+                {
+                  label: "Segmentation",
+                  value: formatLimit(currentEffective.segmentationDimensions, {
+                    locale: "fr",
+                  }),
+                },
+                {
+                  label: "Sièges",
+                  value: formatLimit(currentEffective.userSeats, {
+                    locale: "fr",
+                  }),
+                },
+                {
+                  label: "Templates & import",
+                  value: formatYesNo(
+                    currentEffective.surveyTemplateLibraryAndImport,
+                    { locale: "fr" },
+                  ),
+                },
+                {
+                  label: "Dashboards TADA",
+                  value: formatLimit(
+                    currentEffective.proprietaryDashboardsAccess,
+                    {
+                      locale: "fr",
+                    },
+                  ),
+                },
+              ].map((row) => (
+                <div
+                  key={row.label}
+                  className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2"
+                >
+                  <span className="text-gray-600">{row.label}</span>
+                  <span className="font-semibold text-gray-900">
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Note */}
+          <div className="rounded-xl border border-gray-100 p-4">
+            <div className="text-sm font-semibold text-gray-900">Note</div>
+            <div className="mt-1 text-xs text-gray-500">
+              Envoyée lors de l’attribution, du changement, du renouvellement ou
+              de la désactivation.
+            </div>
+            <Input
+              className="mt-3 h-11"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Ex: upgrade manuel, promo, conditions…"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

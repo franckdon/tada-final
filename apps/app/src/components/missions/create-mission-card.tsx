@@ -33,7 +33,7 @@ export function CreateMissionCard({
       : "Can you confirm this is correct so I can fill in the form?";
 
   useAssistantInstructions(`
-You are Jarvis, a Marketing Research Copilot.
+You are Dina, a Marketing Research Copilot.
 
 ABSOLUTE RULES (must follow):
 - You MUST start by asking questions. Do NOT provide a full mission brief in your first messages.

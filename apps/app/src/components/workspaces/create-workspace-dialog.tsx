@@ -75,7 +75,7 @@ export function CreateWorkspaceDialog({
   };
 
   const handleEmailKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (
-    e
+    e,
   ) => {
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
@@ -112,7 +112,7 @@ export function CreateWorkspaceDialog({
       formData.append("slug", slug.trim());
       if (orgId) formData.append("organizationId", orgId);
       invitedEmails.forEach((email) =>
-        formData.append("invitedEmails[]", email)
+        formData.append("invitedEmails[]", email),
       );
       if (logoFile) {
         formData.append("logo", logoFile);
@@ -227,13 +227,13 @@ export function CreateWorkspaceDialog({
           </div>
 
           {/* RIGHT : Invite colleagues */}
-          <div className="space-y-4 rounded-lg bg-gray-50 p-4">
+          {/* <div className="space-y-4 rounded-lg bg-gray-50 p-4">
             <h3 className="text-sm font-semibold">
               {t("workspace.inviteTitle") ||
                 "Invite your colleagues to this workspace"}
             </h3>
 
-            {/* Email input */}
+            
             <div className="space-y-2">
               <label className="text-xs font-medium text-gray-600">Email</label>
               <div className="flex gap-2">
@@ -261,7 +261,7 @@ export function CreateWorkspaceDialog({
               </p>
             </div>
 
-            {/* Pills list */}
+           
             <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg bg-white p-3">
               {invitedEmails.length === 0 && (
                 <p className="text-xs text-gray-400">
@@ -290,7 +290,7 @@ export function CreateWorkspaceDialog({
                 ))}
               </div>
             </div>
-          </div>
+          </div> */}
         </div>
 
         {/* Footer */}

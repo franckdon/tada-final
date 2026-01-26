@@ -39,7 +39,7 @@ export default async function Page({
       status: true,
       createdAt: true,
       updatedAt: true,
-      survey: true,
+      surveys: true,
     },
   });
 
@@ -116,7 +116,7 @@ export default async function Page({
           <ReportView
             barChartData={monthlyCounts || []}
             locations={mapLocations}
-            surveys={mission.survey as unknown as TSurvey[]}
+            surveys={mission.surveys as unknown as TSurvey[]}
             surveyResponses={surveyResponses}
             columns={data.columns}
             subDashboards={subDashboards as unknown as SubDashboard[]}
