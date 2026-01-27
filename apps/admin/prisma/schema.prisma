@@ -1358,6 +1358,34 @@ model WorkspacePlanSubscription {
   @@map("workspace_plan_subscription")
 }
 
+model WorkspaceCreditPurchase {
+  id             String @id @default(uuid())
+  workspaceId    String @db.Uuid
+  organizationId String @db.Uuid
+
+  // Pricing snapshot
+  planCode       String? @db.VarChar(32) // "starter"|"growth"|"business"|"entreprise"|null
+  credits        Int
+  unitPriceUsd   Int // store in cents to avoid float (ex: 15 USD => 1500)
+  totalAmountUsd Int // in cents (credits*unitPriceUsd)
+
+  currency String @default("USD") @db.VarChar(3)
+
+  provider       String @default("paystack") @db.VarChar(32)
+  providerRef    String @unique @db.VarChar(80) // Paystack reference (idempotency key)
+  providerStatus String @default("pending") @db.VarChar(32) // pending|succeeded|failed
+
+  // Arbitrary metadata (pricing tier, debug, etc.)
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId, createdAt])
+  @@index([organizationId, createdAt])
+  @@map("workspace_credit_purchase")
+}
+
 enum BillingInterval {
   month
   year
