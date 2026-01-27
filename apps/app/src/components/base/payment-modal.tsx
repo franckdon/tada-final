@@ -24,8 +24,8 @@ import { useCurrentLocale, useScopedI18n } from "@/locales/client";
 import { Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSession } from "@/lib/auth-client";
-
 import { useWorkspaceCreditsPurchaseStore } from "@/hooks/use-workspace-credits-purchase-store";
+import { countries } from "@/constants/countries";
 
 // --- Types alignés avec ton CreditsModal ---
 type PlanCode = "starter" | "growth" | "business" | "entreprise";
@@ -78,6 +78,7 @@ interface PaymentModalProps {
   onOpenChange: () => void;
   inComingredits: number;
   workspaceId: string;
+  prepared?: any;
 }
 
 export function PaymentModal({
@@ -88,7 +89,6 @@ export function PaymentModal({
 }: PaymentModalProps) {
   const commonT = useScopedI18n("common");
   const paymentModalT = useScopedI18n("paymentModal");
-  const countriesT = useScopedI18n("countries");
   const formT = useScopedI18n("form");
   const { data: session } = useSession();
   const locale = useCurrentLocale();
@@ -98,7 +98,7 @@ export function PaymentModal({
     "paystack",
   );
 
-  // --- Step 3 state ---
+  // --- Paystack state ---
   const [isPreparing, setIsPreparing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [prepared, setPrepared] = useState<PrepareResponse | null>(null);
@@ -126,6 +126,15 @@ export function PaymentModal({
   } = useWorkspaceCreditsPurchaseStore();
 
   const effectiveWorkspaceId = (storeWorkspaceId || workspaceId || "").trim();
+
+  // --- helpers: money formatting + totals (cohérence résumé/bouton) ---
+  const total = credits * unitPrice;
+
+  const money = (value: number) =>
+    new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-US", {
+      style: "currency",
+      currency: currency || "USD",
+    }).format(value);
 
   const isFormValid =
     !!acceptTerms &&
@@ -175,9 +184,6 @@ export function PaymentModal({
       const data = json as PrepareResponse;
       setPrepared(data);
       setPayloadOpen(true);
-
-      console.log("[PAYSTACK PREPARE] purchase:", data.purchase);
-      console.log("[PAYSTACK PREPARE] payload:", data.paystack?.payload);
 
       return data;
     } finally {
@@ -267,7 +273,6 @@ export function PaymentModal({
         reference: preparedData.purchase?.providerRef,
       });
     } catch (err: any) {
-      console.error("[PaymentModal] paystack error", err);
       toast({
         title: commonT("error.somethingWentWrong"),
         description:
@@ -300,47 +305,24 @@ export function PaymentModal({
                 <div className="flex justify-between">
                   <span>
                     {paymentModalT("summarySection.creditsLabel")} {credits}{" "}
-                    Crédits
+                    {credits > 1 ? "crédits" : "crédit"}
                   </span>
                 </div>
 
                 <div className="flex justify-between">
-                  <span>{paymentModalT("summarySection.pricePerCredit")}</span>
-                  <span>
-                    {currency === "USD" ? "$" : ""}
-                    {unitPrice}
-                  </span>
+                  <span>Prix par crédit :</span>
+                  <span>{money(unitPrice)}</span>
                 </div>
 
                 <div className="flex justify-between font-bold text-lg">
-                  <span>{paymentModalT("summarySection.totalHT")}</span>
-                  <span>
-                    {currency === "USD" ? "$" : ""}
-                    {(credits * unitPrice).toFixed(2)}
-                  </span>
+                  <span>Total :</span>
+                  <span>{money(total)}</span>
                 </div>
               </div>
 
               <p className="text-xs text-gray-500 leading-relaxed">
                 {paymentModalT("summarySection.disclaimer")}
               </p>
-
-              {prepared?.purchase ? (
-                <div className="rounded-md border border-gray-200 bg-white p-2 text-xs text-gray-700">
-                  Dernière préparation:{" "}
-                  <strong>{prepared.purchase.providerRef}</strong>
-                  <div className="mt-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-8"
-                      onClick={() => setPayloadOpen(true)}
-                    >
-                      Voir payload Paystack
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
             </div>
 
             {/* Form */}
@@ -416,27 +398,27 @@ export function PaymentModal({
                 </div>
 
                 <div className="space-y-1">
-                  <Label htmlFor="lastName">
+                  <Label htmlFor="firstName">
                     {paymentModalT("form.firstName")}
                   </Label>
                   <Input
-                    id="lastName"
+                    id="firstName"
                     placeholder={paymentModalT("form.firstName")}
-                    value={lastName}
-                    onChange={(e) => setField("lastName", e.target.value)}
+                    value={firstName}
+                    onChange={(e) => setField("firstName", e.target.value)}
                     className="h-9"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <Label htmlFor="firstName">
+                  <Label htmlFor="lastName">
                     {paymentModalT("form.lastName")}
                   </Label>
                   <Input
-                    id="firstName"
+                    id="lastName"
                     placeholder={paymentModalT("form.lastName")}
-                    value={firstName}
-                    onChange={(e) => setField("firstName", e.target.value)}
+                    value={lastName}
+                    onChange={(e) => setField("lastName", e.target.value)}
                     className="h-9"
                   />
                 </div>
@@ -478,12 +460,13 @@ export function PaymentModal({
                   />
                 </div>
 
+                {/* ✅ PAYS : liste complète provenant de countries (comme ton firstModal) */}
                 <div className="space-y-1">
                   <Label htmlFor="country">
                     {paymentModalT("form.country")}
                   </Label>
                   <Select
-                    value={country}
+                    value={country || ""}
                     onValueChange={(value) => setField("country", value)}
                   >
                     <SelectTrigger id="country" className="h-9">
@@ -492,16 +475,14 @@ export function PaymentModal({
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="germany">
-                        {countriesT("germany")}
-                      </SelectItem>
-                      <SelectItem value="france">
-                        {countriesT("france")}
-                      </SelectItem>
-                      <SelectItem value="usa">{countriesT("usa")}</SelectItem>
-                      <SelectItem value="ivoryCoast">
-                        {countriesT("ivoryCoast")}
-                      </SelectItem>
+                      {Object.entries(countries).map(([code, c]) => (
+                        <SelectItem key={code} value={code}>
+                          <span className="flex items-center gap-2">
+                            <span>{c.emoji}</span>
+                            <span>{c.name}</span>
+                          </span>
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -536,6 +517,7 @@ export function PaymentModal({
                 </Label>
               </div>
 
+              {/* ✅ Bouton cohérent avec le résumé */}
               <Button
                 className="w-full h-9"
                 onClick={handleSubmit}
@@ -555,53 +537,16 @@ export function PaymentModal({
                         ? "Redirection Paystack..."
                         : "Chargement..."}
                   </span>
+                ) : paymentMethod === "invoice" ? (
+                  <>Demander une facture — {money(total)}</>
                 ) : (
-                  paymentModalT("buyCreditsButton", { credits })
+                  <>
+                    Acheter {credits} crédits — {money(total)}
+                  </>
                 )}
               </Button>
-
-              <div className="text-xs text-gray-500">
-                Paystack initialize requiert <code>email</code> +{" "}
-                <code>amount</code> (subunit) et renvoie une{" "}
-                <code>authorization_url</code>.
-              </div>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Payload preview dialog */}
-      <Dialog open={payloadOpen} onOpenChange={setPayloadOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Payload Paystack (preview)</DialogTitle>
-          </DialogHeader>
-
-          {prepared ? (
-            <div className="space-y-3">
-              <div className="text-sm text-gray-700">
-                Purchase ID: <strong>{prepared.purchase.id}</strong>
-                <br />
-                Reference: <strong>{prepared.purchase.providerRef}</strong>
-              </div>
-
-              <pre className="max-h-[420px] overflow-auto rounded-md bg-gray-900 p-3 text-xs text-gray-100">
-                {JSON.stringify(
-                  { purchase: prepared.purchase, paystack: prepared.paystack },
-                  null,
-                  2,
-                )}
-              </pre>
-
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setPayloadOpen(false)}>
-                  Fermer
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="text-sm text-gray-600">Aucun payload.</div>
-          )}
         </DialogContent>
       </Dialog>
     </>

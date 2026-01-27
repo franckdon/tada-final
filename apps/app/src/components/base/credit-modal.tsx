@@ -46,7 +46,7 @@ function isPlanCode(value: string): value is PlanCode {
   );
 }
 
-// --- Types returned by Step 4 prepare route ---
+// --- Types returned by prepare route ---
 type PrepareResponse = {
   purchase: {
     id: string;
@@ -81,8 +81,8 @@ export function CreditsModal({
   open = true,
   toggleOpen = () => {},
   handleAsYouGo = () => {},
-  organizationId, // gardé car tu l'as dans la signature (même si on ne l'utilise pas directement ici)
-  workspaceId,
+  organizationId: organizationIdProp,
+  workspaceId: workspaceIdProp,
   workspacePlanCode,
 }: {
   open?: boolean;
@@ -106,6 +106,12 @@ export function CreditsModal({
     setCurrency,
   } = useWorkspaceCreditsPurchaseStore();
 
+  // ✅ workspaceId effectif (store fallback)
+  const effectiveWorkspaceId = String(
+    storeWorkspaceId || workspaceIdProp || "",
+  ).trim();
+
+  // ✅ credits safe
   const safeCredits =
     typeof credits === "number" && Number.isFinite(credits)
       ? Math.max(0, Math.trunc(credits))
@@ -122,21 +128,18 @@ export function CreditsModal({
   const [plans, setPlans] = React.useState<AppPlan[]>([]);
   const [loadingPlans, setLoadingPlans] = React.useState(false);
 
-  // --- Prepare state (Step 4) ---
+  // --- Prepare state ---
   const [isPreparing, setIsPreparing] = React.useState(false);
   const [prepareError, setPrepareError] = React.useState<string | null>(null);
   const [prepared, setPrepared] = React.useState<PrepareResponse | null>(null);
   const [payloadOpen, setPayloadOpen] = React.useState(false);
-  const [preparedPurchase, setPreparedPurchase] = React.useState<any | null>(
-    null,
-  );
 
-  // Keep store workspaceId in sync
+  // Keep store workspaceId in sync (prefer props)
   React.useEffect(() => {
-    if (workspaceId && workspaceId !== storeWorkspaceId) {
-      setWorkspaceId(workspaceId);
+    if (workspaceIdProp && workspaceIdProp !== storeWorkspaceId) {
+      setWorkspaceId(workspaceIdProp);
     }
-  }, [workspaceId, storeWorkspaceId, setWorkspaceId]);
+  }, [workspaceIdProp, storeWorkspaceId, setWorkspaceId]);
 
   // Fetch plans list (display only)
   React.useEffect(() => {
@@ -175,7 +178,6 @@ export function CreditsModal({
       planCode: workspacePlanCode,
       credits: safeCredits,
     });
-
     setUnitPrice(unit);
     setCurrency("USD");
   }, [workspacePlanCode, safeCredits, setUnitPrice, setCurrency]);
@@ -191,42 +193,51 @@ export function CreditsModal({
         : "Volume-based pricing"
       : "";
 
-  // --- Step 4: call prepare route ---
+  // --- PREPARE ---
   const preparePurchase = async () => {
     setIsPreparing(true);
     setPrepareError(null);
 
+    const url = `/api/workspaces/${encodeURIComponent(
+      effectiveWorkspaceId,
+    )}/credits/purchase/prepare`;
+
+    // ✅ on envoie un payload minimal ET stable
+    const payload: Record<string, any> = {
+      credits: safeCredits,
+    };
+
+    // ✅ si tu as un orgId “prop”, on l’envoie (utile si ws.organizationId est “non uuid”)
+    // (ça permet de tester plus vite et de bypass la résolution serveur)
+    if (organizationIdProp) payload.organizationId = organizationIdProp;
+
     try {
-      const res = await fetch(
-        `/api/workspaces/${workspaceId}/credits/purchase/prepare`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            credits: safeCredits,
-            // optionnel: customerEmail si tu veux forcer une adresse
-            // customerEmail: "test@example.com"
-            // organizationId: organizationId (optionnel)
-          }),
-        },
-      );
+      console.log("[prepare/client] url", url);
+      console.log("[prepare/client] payload", payload);
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       const json = (await res.json().catch(() => ({}))) as any;
 
+      console.log("[prepare/client] status", res.status);
+      console.log("[prepare/client] response body", json);
+
       if (!res.ok) {
-        throw new Error(json?.error || "Failed to prepare purchase");
+        const msg =
+          json?.error || json?.message || `Prepare failed (HTTP ${res.status})`;
+        setPrepareError(String(msg));
+        throw new Error(String(msg));
       }
 
       const preparedData = json as PrepareResponse;
       setPrepared(preparedData);
-
-      // show preview dialog
       setPayloadOpen(true);
 
-      // log for dev
-      // eslint-disable-next-line no-console
       console.log("[PAYSTACK PREPARE] purchase:", preparedData.purchase);
-      // eslint-disable-next-line no-console
       console.log(
         "[PAYSTACK PREPARE] payload:",
         preparedData.paystack?.payload,
@@ -236,36 +247,6 @@ export function CreditsModal({
     } finally {
       setIsPreparing(false);
     }
-  };
-
-  const handleEnhancedAsYouGo = async () => {
-    const payload = {
-      credits: safeCredits,
-      unitPriceUsd: Math.round(unitPrice * 100), // unitPrice est en USD (ex: 15) => 1500
-      planCode: workspacePlanCode, // null ou starter/growth/business/entreprise
-      email: /* idéalement */ undefined, // tu peux laisser, session.user.email sera fallback
-    };
-
-    const res = await fetch(
-      `/api/workspaces/${workspaceId}/credits/purchase/initialize`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      },
-    );
-
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      console.error("initialize error", json);
-      return;
-    }
-
-    console.log("PAYSTACK INITIALIZE READY:", json.paystack?.payload);
-
-    // Tu peux aussi l’envoyer au PaymentModal pour preview
-    // ex: setPurchaseInit(json)
-    handleAsYouGo();
   };
 
   return (
@@ -347,6 +328,7 @@ export function CreditsModal({
                     </div>
                   )}
 
+                  {/* ✅ error visible */}
                   {prepareError ? (
                     <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
                       {prepareError}
@@ -359,15 +341,26 @@ export function CreditsModal({
                       <strong>{prepared.purchase.providerRef}</strong>
                     </div>
                   ) : null}
+
+                  {/* ✅ debug quick */}
+                  <div className="text-[11px] text-gray-500">
+                    wsId: <code>{effectiveWorkspaceId || "∅"}</code>
+                  </div>
                 </div>
 
                 <Button
                   className="mt-4 w-full"
                   onClick={async () => {
-                    const prepared = await preparePurchase();
-                    handleAsYouGo(prepared);
+                    try {
+                      const prepared = await preparePurchase();
+                      handleAsYouGo(prepared);
+                    } catch (e) {
+                      // already handled + displayed
+                    }
                   }}
-                  disabled={safeCredits <= 0 || isPreparing}
+                  disabled={
+                    safeCredits <= 0 || isPreparing || !effectiveWorkspaceId
+                  }
                 >
                   {isPreparing ? "Préparation..." : commonT("next")}
                 </Button>
@@ -408,7 +401,6 @@ export function CreditsModal({
                         ? p.code
                         : "starter";
                       const limits = PLAN_LIMITS[code];
-
                       const respondentCompletesLabel = formatLimit(
                         limits.respondentCompletes,
                       );

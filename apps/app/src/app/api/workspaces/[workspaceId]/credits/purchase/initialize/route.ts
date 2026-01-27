@@ -1,7 +1,9 @@
+// src/app/api/workspaces/[workspaceId]/credits/purchase/initialize/route.ts
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getUnitPriceUSD, type PlanCode } from "@/lib/plans/plan-limits";
+import { buildPaystackReference } from "@/lib/payments/paystack/reference";
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status });
@@ -51,16 +53,17 @@ export async function POST(
 
   if (!workspace?.organizationId) return jsonError("Workspace not found", 404);
 
-  // 2) Pricing snapshot (en cents)
+  // 2) Pricing snapshot (USD -> cents)
   const unitPriceUsdCents = getUnitPriceUSD({ planCode, credits }) * 100;
   const unit = Math.round(unitPriceUsdCents);
   const total = unit * Math.trunc(credits);
 
-  // 3) Generate providerRef (idempotency ref)
-  const providerRef =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `psk_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  // 3) Generate providerRef (idempotency ref) - use your canonical builder
+  const providerRef = buildPaystackReference({
+    workspaceId,
+    organizationId: workspace.organizationId,
+    purpose: "workspace_credits",
+  });
 
   // 4) Create purchase in DB (historique ✅)
   const purchase = await prisma.workspaceCreditPurchase.create({
@@ -98,14 +101,20 @@ export async function POST(
     },
   });
 
-  // 5) Build Paystack payload (UI-only for now)
-  const callbackUrl =
-    process.env.PAYSTACK_CALLBACK_URL ??
-    `${process.env.NEXT_PUBLIC_APP_URL}/api/paystack/callback`;
+  // 5) Build Paystack payload
+  // ✅ Important: callback must point to your real callback route
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "http://localhost:3000";
+
+  const callbackUrl = `${appUrl}/api/payments/paystack/callback?reference=${encodeURIComponent(
+    purchase.providerRef,
+  )}`;
 
   const paystackPayload = {
     email: customerEmail,
-    amount: purchase.totalAmountUsd,
+    amount: purchase.totalAmountUsd, // cents
     currency: "USD",
     reference: purchase.providerRef,
     callback_url: callbackUrl,
@@ -122,6 +131,8 @@ export async function POST(
     ok: true,
     purchase: {
       ...purchase,
+      unitPriceUsdCents: purchase.unitPriceUsd,
+      totalAmountUsdCents: purchase.totalAmountUsd,
       createdAt: purchase.createdAt.toISOString(),
       updatedAt: purchase.updatedAt.toISOString(),
     },
