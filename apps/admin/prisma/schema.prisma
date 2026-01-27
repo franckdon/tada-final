@@ -1359,23 +1359,21 @@ model WorkspacePlanSubscription {
 }
 
 model WorkspaceCreditPurchase {
-  id             String @id @default(uuid())
+  id             String @id @default(uuid()) @db.Uuid
   workspaceId    String @db.Uuid
-  organizationId String @db.Uuid
+  organizationId String @db.Text
 
-  // Pricing snapshot
-  planCode       String? @db.VarChar(32) // "starter"|"growth"|"business"|"entreprise"|null
+  planCode       String? @db.VarChar(32)
   credits        Int
-  unitPriceUsd   Int // store in cents to avoid float (ex: 15 USD => 1500)
-  totalAmountUsd Int // in cents (credits*unitPriceUsd)
+  unitPriceUsd   Int
+  totalAmountUsd Int
 
   currency String @default("USD") @db.VarChar(3)
 
   provider       String @default("paystack") @db.VarChar(32)
-  providerRef    String @unique @db.VarChar(80) // Paystack reference (idempotency key)
-  providerStatus String @default("pending") @db.VarChar(32) // pending|succeeded|failed
+  providerRef    String @unique @db.VarChar(80)
+  providerStatus String @default("pending") @db.VarChar(32)
 
-  // Arbitrary metadata (pricing tier, debug, etc.)
   metadata Json?
 
   createdAt DateTime @default(now())

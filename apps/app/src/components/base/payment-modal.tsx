@@ -18,17 +18,17 @@ import {
   SelectValue,
 } from "@tada/ui/components/select";
 import { Checkbox } from "@tada/ui/components/checkbox";
-
-import * as React from "react";
-import { Loader2 } from "lucide-react";
-
+import { useState } from "react";
 import { useBillingStore } from "@/hooks/use-billing-store";
-import { useScopedI18n, useCurrentLocale } from "@/locales/client";
+import { useCurrentLocale, useScopedI18n } from "@/locales/client";
+import { Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useSession } from "@/lib/auth-client";
 
 import { useWorkspaceCreditsPurchaseStore } from "@/hooks/use-workspace-credits-purchase-store";
-import type { PlanCode } from "@/lib/plans/plan-limits";
+
+// --- Types alignés avec ton CreditsModal ---
+type PlanCode = "starter" | "growth" | "business" | "entreprise";
 
 type PrepareResponse = {
   purchase: {
@@ -51,54 +51,33 @@ type PrepareResponse = {
     payload: {
       email: string;
       reference: string;
-      amount: number; // cents
+      amount: number; // subunit (cents)
       currency?: string;
       callback_url?: string;
       metadata?: any;
       channels?: string[];
     };
-    // plus tard tu pourras ajouter:
-    // authorization_url?: string;
-    // access_code?: string;
   };
 };
+
+type InitializeResponse =
+  | {
+      authorization_url: string;
+      reference?: string;
+      purchaseId?: string;
+    }
+  | {
+      data: {
+        authorization_url: string;
+        reference?: string;
+      };
+    };
 
 interface PaymentModalProps {
   open: boolean;
   onOpenChange: () => void;
   inComingredits: number;
   workspaceId: string;
-
-  // ✅ nouveau
-  prepared?: PrepareResponse | null;
-}
-
-function validateBilling(fields: {
-  acceptTerms: boolean;
-  firstName: string;
-  lastName: string;
-  street: string;
-  zip: string;
-  city: string;
-  country: string;
-  company: string;
-}) {
-  const {
-    acceptTerms,
-    firstName,
-    lastName,
-    street,
-    zip,
-    city,
-    country,
-    company,
-  } = fields;
-
-  if (!acceptTerms) return "Veuillez accepter les CGU.";
-  if (!firstName || !lastName) return "Nom et prénom requis.";
-  if (!street || !zip || !city || !country) return "Adresse incomplète.";
-  if (!company) return "Entreprise requise.";
-  return null;
 }
 
 export function PaymentModal({
@@ -106,31 +85,24 @@ export function PaymentModal({
   onOpenChange,
   inComingredits,
   workspaceId,
-  prepared,
 }: PaymentModalProps) {
   const commonT = useScopedI18n("common");
   const paymentModalT = useScopedI18n("paymentModal");
   const countriesT = useScopedI18n("countries");
   const formT = useScopedI18n("form");
-  const locale = useCurrentLocale();
   const { data: session } = useSession();
+  const locale = useCurrentLocale();
 
-  const [submitting, setSubmitting] = React.useState(false);
+  const [loadingCheckout, setLoadingCheckout] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"invoice" | "paystack">(
+    "paystack",
+  );
 
-  // invoice | paystack
-  const [paymentMethod, setPaymentMethod] = React.useState<
-    "invoice" | "paystack"
-  >("paystack");
-
-  // payload preview
-  const [paystackPreviewOpen, setPaystackPreviewOpen] = React.useState(false);
-  const [paystackPrepared, setPaystackPrepared] =
-    React.useState<PrepareResponse | null>(prepared ?? null);
-
-  React.useEffect(() => {
-    // keep latest prepared snapshot when modal opens again
-    setPaystackPrepared(prepared ?? null);
-  }, [prepared]);
+  // --- Step 3 state ---
+  const [isPreparing, setIsPreparing] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
+  const [prepared, setPrepared] = useState<PrepareResponse | null>(null);
+  const [payloadOpen, setPayloadOpen] = useState(false);
 
   const {
     street,
@@ -153,206 +125,158 @@ export function PaymentModal({
     workspaceId: storeWorkspaceId,
   } = useWorkspaceCreditsPurchaseStore();
 
-  const effectiveWorkspaceId = storeWorkspaceId || workspaceId;
+  const effectiveWorkspaceId = (storeWorkspaceId || workspaceId || "").trim();
 
-  const totalUi = (credits * unitPrice).toFixed(2);
+  const isFormValid =
+    !!acceptTerms &&
+    !!firstName &&
+    !!lastName &&
+    !!street &&
+    !!zip &&
+    !!city &&
+    !!country &&
+    !!effectiveWorkspaceId &&
+    credits > 0;
 
-  // ---------- Paystack (Step 2: initialize READY) ----------
-  const ensurePaystackPrepared = async (): Promise<PrepareResponse> => {
-    // Prefer prepared passed from CreditsModal
-    if (paystackPrepared?.purchase?.providerRef) return paystackPrepared;
+  const preparePurchase = async () => {
+    setIsPreparing(true);
 
-    // Fallback: call initialize to create pending + payload
-    const email = String(session?.user?.email ?? "").trim();
-    if (!email) throw new Error("Email utilisateur manquant pour Paystack.");
+    try {
+      const res = await fetch(
+        `/api/workspaces/${effectiveWorkspaceId}/credits/purchase/prepare`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            credits,
+            customerEmail: session?.user?.email ?? undefined,
+            organizationId: organizationId || undefined,
+            billing: {
+              street,
+              city,
+              zip,
+              country,
+              company,
+              civility,
+              firstName,
+              lastName,
+              acceptTerms,
+              locale,
+            },
+          }),
+        },
+      );
 
-    const unitPriceUsdCents = Math.round(unitPrice * 100);
+      const json = (await res.json().catch(() => ({}))) as any;
+      if (!res.ok) {
+        throw new Error(json?.error || "Failed to prepare purchase");
+      }
 
-    const res = await fetch(
-      `/api/workspaces/${effectiveWorkspaceId}/credits/purchase/initialize`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          credits,
-          unitPriceUsd: unitPriceUsdCents,
-          planCode: null, // si tu veux, passe planCode ici depuis header/store
-          email,
-        }),
-      },
-    );
+      const data = json as PrepareResponse;
+      setPrepared(data);
+      setPayloadOpen(true);
 
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(json?.error || "Impossible de préparer Paystack.");
+      console.log("[PAYSTACK PREPARE] purchase:", data.purchase);
+      console.log("[PAYSTACK PREPARE] payload:", data.paystack?.payload);
+
+      return data;
+    } finally {
+      setIsPreparing(false);
     }
-
-    // IMPORTANT: ton route.ts renvoie { ok, purchase, paystack: { payload } }
-    // On le remappe au type PrepareResponse
-    const mapped: PrepareResponse = {
-      purchase: {
-        id: json.purchase.id,
-        workspaceId: json.purchase.workspaceId,
-        organizationId: json.purchase.organizationId,
-        planCode: json.purchase.planCode ?? null,
-        credits: json.purchase.credits,
-        unitPriceUsdCents: json.purchase.unitPriceUsd,
-        totalAmountUsdCents: json.purchase.totalAmountUsd,
-        currency: "USD",
-        provider: "paystack",
-        providerRef: json.purchase.providerRef,
-        providerStatus: json.purchase.providerStatus,
-        metadata: json.purchase.metadata,
-        createdAt: json.purchase.createdAt,
-        updatedAt: json.purchase.createdAt,
-      },
-      paystack: {
-        payload: json.paystack.payload,
-      },
-    };
-
-    setPaystackPrepared(mapped);
-    return mapped;
   };
 
-  const handlePaystackCheckout = async () => {
-    setSubmitting(true);
+  const initializePaystack = async (purchaseIdOrRef?: {
+    purchaseId?: string;
+    reference?: string;
+  }) => {
+    setIsInitializing(true);
+
     try {
-      // validate billing
-      const errMsg = validateBilling({
-        acceptTerms: Boolean(acceptTerms),
-        firstName,
-        lastName,
-        street,
-        zip,
-        city,
-        country,
-        company,
-      });
-      if (errMsg) throw new Error(errMsg);
+      const res = await fetch(
+        `/api/workspaces/${effectiveWorkspaceId}/credits/purchase/initialize`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            purchaseId: purchaseIdOrRef?.purchaseId,
+            reference: purchaseIdOrRef?.reference,
+          }),
+        },
+      );
 
-      if (!effectiveWorkspaceId) {
-        throw new Error("Workspace introuvable. Veuillez réessayer.");
-      }
-      if (credits <= 0) {
-        throw new Error("Veuillez sélectionner un nombre de crédits valide.");
+      const json = (await res.json().catch(() => ({}))) as any;
+      if (!res.ok) {
+        throw new Error(json?.error || "Failed to initialize Paystack");
       }
 
-      const prepared = await ensurePaystackPrepared();
+      const data = json as InitializeResponse;
 
-      // show payload preview (UI-only)
-      setPaystackPreviewOpen(true);
+      const url =
+        "authorization_url" in data
+          ? data.authorization_url
+          : data?.data?.authorization_url;
 
-      // Si plus tard tu renvoies authorization_url depuis ton API,
-      // tu pourras faire:
-      // if ((prepared.paystack as any).authorization_url) window.location.href = ...
-    } catch (e: any) {
+      if (!url) {
+        throw new Error("Paystack authorization_url missing");
+      }
+
+      window.location.href = url;
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    console.log("[PaymentModal] submit clicked", {
+      credits,
+      unitPrice,
+      currency,
+      storeWorkspaceId,
+      propWorkspaceId: workspaceId,
+      effectiveWorkspaceId,
+      organizationId,
+      sessionUserId: session?.user?.id,
+      paymentMethod,
+    });
+
+    if (!isFormValid) {
       toast({
         title: commonT("error.somethingWentWrong"),
-        description: e?.message ?? "Erreur lors de la préparation Paystack",
+        description: "Veuillez remplir tous les champs requis.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (paymentMethod === "invoice") {
+      toast({
+        title: "Facture",
+        description:
+          "Mode facture sélectionné. (Tu peux garder ton flow existant ici.)",
+      });
+      return;
+    }
+
+    setLoadingCheckout(true);
+
+    try {
+      const preparedData = await preparePurchase();
+
+      await initializePaystack({
+        purchaseId: preparedData.purchase?.id,
+        reference: preparedData.purchase?.providerRef,
+      });
+    } catch (err: any) {
+      console.error("[PaymentModal] paystack error", err);
+      toast({
+        title: commonT("error.somethingWentWrong"),
+        description:
+          err?.message || "Erreur lors de l'initialisation Paystack.",
         variant: "destructive",
       });
     } finally {
-      setSubmitting(false);
+      setLoadingCheckout(false);
     }
-  };
-
-  // ---------- Invoice (existing) ----------
-  const handleInvoiceRequest = async () => {
-    setSubmitting(true);
-    try {
-      const errMsg = validateBilling({
-        acceptTerms: Boolean(acceptTerms),
-        firstName,
-        lastName,
-        street,
-        zip,
-        city,
-        country,
-        company,
-      });
-      if (errMsg) throw new Error(errMsg);
-
-      if (!effectiveWorkspaceId) {
-        throw new Error("Workspace introuvable. Veuillez réessayer.");
-      }
-      if (credits <= 0) {
-        throw new Error("Veuillez sélectionner un nombre de crédits valide.");
-      }
-
-      // Garde ta logique existante si tu veux créer une "invoice request"
-      // Ici je conserve ton endpoint (mais tu peux le renommer)
-      const requestId =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-      const payload = {
-        credits,
-        unitPrice,
-        currency: (currency || "usd").toLowerCase(),
-        workspaceId: effectiveWorkspaceId,
-        organizationId: organizationId || undefined,
-        user: {
-          id: session?.user?.id,
-          email: session?.user?.email,
-          name: session?.user?.name,
-        },
-        metadata: {
-          requestId,
-          balanceBefore: inComingredits,
-          creditsPurchased: credits,
-          balanceAfter: inComingredits + credits,
-          street,
-          city,
-          zip,
-          country,
-          company,
-          civility,
-          firstName,
-          lastName,
-          acceptTerms,
-          organizationId,
-          workspaceId: effectiveWorkspaceId,
-        },
-      };
-
-      const response = await fetch("/api/custom-checkout-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(
-          data?.error || "Erreur lors de la création de la demande.",
-        );
-      }
-
-      // ton endpoint retourne une url stripe dans ton ancien code.
-      // Ici tu peux adapter selon ton "invoice flow".
-      if (data?.url) window.location.href = data.url;
-
-      toast({
-        title: paymentModalT("title"),
-        description: "Demande envoyée.",
-      });
-    } catch (e: any) {
-      toast({
-        title: commonT("error.somethingWentWrong"),
-        description: e?.message ?? "Erreur serveur, veuillez réessayer.",
-        variant: "destructive",
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const primaryAction = async () => {
-    if (paymentMethod === "paystack") return handlePaystackCheckout();
-    return handleInvoiceRequest();
   };
 
   return (
@@ -383,28 +307,40 @@ export function PaymentModal({
                 <div className="flex justify-between">
                   <span>{paymentModalT("summarySection.pricePerCredit")}</span>
                   <span>
-                    {currency === "USD" ? "$" : currency} {unitPrice}
+                    {currency === "USD" ? "$" : ""}
+                    {unitPrice}
                   </span>
                 </div>
 
                 <div className="flex justify-between font-bold text-lg">
                   <span>{paymentModalT("summarySection.totalHT")}</span>
                   <span>
-                    {currency === "USD" ? "$" : currency} {totalUi}
+                    {currency === "USD" ? "$" : ""}
+                    {(credits * unitPrice).toFixed(2)}
                   </span>
                 </div>
-
-                {paystackPrepared?.purchase?.providerRef ? (
-                  <div className="rounded-md border border-gray-200 bg-white p-2 text-xs text-gray-700 mt-3">
-                    Reference:{" "}
-                    <strong>{paystackPrepared.purchase.providerRef}</strong>
-                  </div>
-                ) : null}
               </div>
 
               <p className="text-xs text-gray-500 leading-relaxed">
                 {paymentModalT("summarySection.disclaimer")}
               </p>
+
+              {prepared?.purchase ? (
+                <div className="rounded-md border border-gray-200 bg-white p-2 text-xs text-gray-700">
+                  Dernière préparation:{" "}
+                  <strong>{prepared.purchase.providerRef}</strong>
+                  <div className="mt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-8"
+                      onClick={() => setPayloadOpen(true)}
+                    >
+                      Voir payload Paystack
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {/* Form */}
@@ -453,7 +389,7 @@ export function PaymentModal({
                 </div>
               </RadioGroup>
 
-              {/* billing form (inchangé) */}
+              {/* ---- FORM ---- */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label htmlFor="civility">
@@ -602,64 +538,63 @@ export function PaymentModal({
 
               <Button
                 className="w-full h-9"
-                onClick={primaryAction}
+                onClick={handleSubmit}
                 disabled={
-                  !acceptTerms ||
-                  !firstName ||
-                  !lastName ||
-                  !street ||
-                  !zip ||
-                  !city ||
-                  !country ||
-                  !company ||
-                  submitting
+                  !isFormValid ||
+                  loadingCheckout ||
+                  isPreparing ||
+                  isInitializing
                 }
               >
-                {submitting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : paymentMethod === "paystack" ? (
-                  `Payer avec Paystack`
+                {loadingCheckout || isPreparing || isInitializing ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {isPreparing
+                      ? "Préparation..."
+                      : isInitializing
+                        ? "Redirection Paystack..."
+                        : "Chargement..."}
+                  </span>
                 ) : (
                   paymentModalT("buyCreditsButton", { credits })
                 )}
               </Button>
 
-              {paymentMethod === "paystack" ? (
-                <div className="text-xs text-gray-500">
-                  Paystack: on prépare la transaction et on affiche le payload
-                  (step 2).
-                </div>
-              ) : null}
+              <div className="text-xs text-gray-500">
+                Paystack initialize requiert <code>email</code> +{" "}
+                <code>amount</code> (subunit) et renvoie une{" "}
+                <code>authorization_url</code>.
+              </div>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Paystack payload preview */}
-      <Dialog open={paystackPreviewOpen} onOpenChange={setPaystackPreviewOpen}>
+      {/* Payload preview dialog */}
+      <Dialog open={payloadOpen} onOpenChange={setPayloadOpen}>
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Paystack — Payload (preview)</DialogTitle>
+            <DialogTitle>Payload Paystack (preview)</DialogTitle>
           </DialogHeader>
 
-          {paystackPrepared ? (
+          {prepared ? (
             <div className="space-y-3">
               <div className="text-sm text-gray-700">
-                Purchase ID: <strong>{paystackPrepared.purchase.id}</strong>
+                Purchase ID: <strong>{prepared.purchase.id}</strong>
                 <br />
-                Reference:{" "}
-                <strong>{paystackPrepared.purchase.providerRef}</strong>
+                Reference: <strong>{prepared.purchase.providerRef}</strong>
               </div>
 
               <pre className="max-h-[420px] overflow-auto rounded-md bg-gray-900 p-3 text-xs text-gray-100">
-                {JSON.stringify(paystackPrepared.paystack.payload, null, 2)}
+                {JSON.stringify(
+                  { purchase: prepared.purchase, paystack: prepared.paystack },
+                  null,
+                  2,
+                )}
               </pre>
 
               <div className="flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setPaystackPreviewOpen(false)}
-                >
+                <Button variant="outline" onClick={() => setPayloadOpen(false)}>
                   Fermer
                 </Button>
               </div>
