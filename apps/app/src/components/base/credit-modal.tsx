@@ -127,6 +127,9 @@ export function CreditsModal({
   const [prepareError, setPrepareError] = React.useState<string | null>(null);
   const [prepared, setPrepared] = React.useState<PrepareResponse | null>(null);
   const [payloadOpen, setPayloadOpen] = React.useState(false);
+  const [preparedPurchase, setPreparedPurchase] = React.useState<any | null>(
+    null,
+  );
 
   // Keep store workspaceId in sync
   React.useEffect(() => {
@@ -236,17 +239,33 @@ export function CreditsModal({
   };
 
   const handleEnhancedAsYouGo = async () => {
-    if (safeCredits <= 0) return;
+    const payload = {
+      credits: safeCredits,
+      unitPriceUsd: Math.round(unitPrice * 100), // unitPrice est en USD (ex: 15) => 1500
+      planCode: workspacePlanCode, // null ou starter/growth/business/entreprise
+      email: /* idéalement */ undefined, // tu peux laisser, session.user.email sera fallback
+    };
 
-    try {
-      const preparedData = await preparePurchase();
+    const res = await fetch(
+      `/api/workspaces/${workspaceId}/credits/purchase/initialize`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
 
-      // keep existing behavior hook if you want to open PaymentModal next
-      // we pass preparedData so PaymentModal can display it too
-      handleAsYouGo(preparedData);
-    } catch (e: any) {
-      setPrepareError(e?.message ?? "Une erreur est survenue");
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error("initialize error", json);
+      return;
     }
+
+    console.log("PAYSTACK INITIALIZE READY:", json.paystack?.payload);
+
+    // Tu peux aussi l’envoyer au PaymentModal pour preview
+    // ex: setPurchaseInit(json)
+    handleAsYouGo();
   };
 
   return (
@@ -344,7 +363,10 @@ export function CreditsModal({
 
                 <Button
                   className="mt-4 w-full"
-                  onClick={handleEnhancedAsYouGo}
+                  onClick={async () => {
+                    const prepared = await preparePurchase();
+                    handleAsYouGo(prepared);
+                  }}
                   disabled={safeCredits <= 0 || isPreparing}
                 >
                   {isPreparing ? "Préparation..." : commonT("next")}

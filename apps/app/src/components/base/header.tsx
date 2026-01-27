@@ -133,6 +133,8 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
   const { currentWorkspace } = useWorkspace();
   const workspaceId = currentWorkspace?.id ?? null;
 
+  const [preparedPurchase, setPreparedPurchase] = useState<any | null>(null);
+
   // 1) Hook unique qui gère cache + fetch + anti-race
   useWorkspaceCredits(workspaceId);
 
@@ -148,7 +150,8 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
     router.push("/login");
   };
 
-  const handleAsYouGo = () => {
+  const handleAsYouGo = (prepared?: any) => {
+    if (prepared) setPreparedPurchase(prepared);
     creditModal.onFalse();
     paymentModal.onTrue();
   };
@@ -558,6 +561,7 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
           </DropdownMenu>
         </div>
       </div>
+
       <CreditsModal
         open={creditModal.value}
         toggleOpen={creditModal.onToggle}
@@ -572,6 +576,7 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
         onOpenChange={paymentModal.onFalse}
         inComingredits={balance}
         workspaceId={workspaceId!}
+        prepared={preparedPurchase}
       />
     </header>
   );
