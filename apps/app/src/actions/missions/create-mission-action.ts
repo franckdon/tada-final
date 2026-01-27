@@ -9,6 +9,9 @@ import { authActionClient } from "../safe-action";
 import { promptSystem } from "./constant";
 import { SurveyQuestionSchema, createMissionSchema } from "./schema";
 
+import type { PlanCode } from "@/lib/plans/plan-limits";
+import { resolveQuestionsLimit } from "@/lib/plans/resolve-questions-limit";
+
 /**
  * Business coverage requirements.
  * These MUST NOT be embedded into the schema passed to generateObject(),
@@ -27,8 +30,7 @@ type ScaleType = (typeof SCALE_TYPES)[number];
 
 const hasScale = (t: string) => (SCALE_TYPES as readonly string[]).includes(t);
 
-const MAX_TOTAL_QUESTIONS = 25;
-const MIN_TOTAL_QUESTIONS = 10;
+const DEFAULT_QUESTIONS_LIMIT = 10;
 const PAGE_SIZE = 10;
 
 /**
@@ -53,7 +55,7 @@ const SurveyResultSchemaBase = z
     {
       message: "Model must return either `elements` or `questions`.",
       path: ["elements"],
-    }
+    },
   );
 
 type SurveyResultBase = z.infer<typeof SurveyResultSchemaBase>;
@@ -82,22 +84,28 @@ function coverageIssues(qs: Array<any>) {
   const count = countByType(qs);
 
   for (const [k, min] of Object.entries(REQUIRED_MIN)) {
-    if ((count.get(k) ?? 0) < min) issues.push(`need at least ${min} "${k}" questions`);
+    if ((count.get(k) ?? 0) < min)
+      issues.push(`need at least ${min} "${k}" questions`);
   }
 
   const scaleCount = qs.filter((q) => hasScale(q?.type)).length;
   if (scaleCount < 2) {
-    issues.push('need at least 2 scale questions among "likert|rating|numeric_scale|slider"');
+    issues.push(
+      'need at least 2 scale questions among "likert|rating|numeric_scale|slider"',
+    );
   }
 
-  const hasRanking = qs.some((q) => q?.type === "ranking" || q?.type === "image_ranking");
-  if (!hasRanking) issues.push('need at least 1 "ranking" or "image_ranking" question');
+  const hasRanking = qs.some(
+    (q) => q?.type === "ranking" || q?.type === "image_ranking",
+  );
+  if (!hasRanking)
+    issues.push('need at least 1 "ranking" or "image_ranking" question');
 
   return issues;
 }
 
-function clampQuestions(qs: Array<any>) {
-  if (qs.length > MAX_TOTAL_QUESTIONS) return qs.slice(0, MAX_TOTAL_QUESTIONS);
+function clampQuestions(qs: Array<any>, max: number) {
+  if (qs.length > max) return qs.slice(0, max);
   return qs;
 }
 
@@ -120,7 +128,13 @@ function ensureMinSingleChoice(qs: Array<any>, min = 2) {
       isRequired: true,
       choices:
         i === 0
-          ? ["Très satisfait", "Satisfait", "Neutre", "Insatisfait", "Très insatisfait"]
+          ? [
+              "Très satisfait",
+              "Satisfait",
+              "Neutre",
+              "Insatisfait",
+              "Très insatisfait",
+            ]
           : [
               "Recommandations peu pertinentes",
               "Je ne comprends pas pourquoi ces contenus sont proposés",
@@ -175,7 +189,8 @@ function ensureMinOpen(qs: Array<any>, min = 1) {
       type: "open",
       category: "open",
       name: uniqueName("open_auto"),
-      title: "Si vous pouviez changer une seule chose dans les recommandations, que changeriez-vous ?",
+      title:
+        "Si vous pouviez changer une seule chose dans les recommandations, que changeriez-vous ?",
       isRequired: false,
       placeholder: "Votre réponse…",
     });
@@ -190,7 +205,8 @@ function ensureMinBoolean(qs: Array<any>, min = 1) {
       type: "boolean",
       category: "boolean",
       name: uniqueName("bool_auto"),
-      title: "Souhaitez-vous recevoir des recommandations plus personnalisées, même si cela implique de partager plus de préférences ?",
+      title:
+        "Souhaitez-vous recevoir des recommandations plus personnalisées, même si cela implique de partager plus de préférences ?",
       isRequired: true,
     });
   }
@@ -227,13 +243,13 @@ function ensureMinScale(qs: Array<any>, min = 2) {
   const count = qs.filter((q) => hasScale(q?.type)).length;
   const missing = Math.max(0, min - count);
   for (let i = 0; i < missing; i++) {
-    // Alternate numeric_scale and rating for variety
     if (i % 2 === 0) {
       qs.push({
         type: "numeric_scale",
         category: "numeric_scale",
         name: uniqueName("scale_auto"),
-        title: "Sur une échelle de 0 à 10, à quel point les recommandations sont-elles utiles ?",
+        title:
+          "Sur une échelle de 0 à 10, à quel point les recommandations sont-elles utiles ?",
         isRequired: true,
         rateMin: 0,
         rateMax: 10,
@@ -245,7 +261,8 @@ function ensureMinScale(qs: Array<any>, min = 2) {
         type: "rating",
         category: "rating",
         name: uniqueName("rating_auto"),
-        title: "Notez votre satisfaction générale concernant la fonctionnalité de recommandations",
+        title:
+          "Notez votre satisfaction générale concernant la fonctionnalité de recommandations",
         isRequired: true,
         rateMin: 1,
         rateMax: 5,
@@ -255,14 +272,17 @@ function ensureMinScale(qs: Array<any>, min = 2) {
 }
 
 function ensureRanking(qs: Array<any>) {
-  const hasRanking = qs.some((q) => q?.type === "ranking" || q?.type === "image_ranking");
+  const hasRanking = qs.some(
+    (q) => q?.type === "ranking" || q?.type === "image_ranking",
+  );
   if (hasRanking) return;
 
   qs.push({
     type: "ranking",
     category: "ranking",
     name: uniqueName("rank_auto"),
-    title: "Classez les éléments suivants par ordre d’importance pour de bonnes recommandations",
+    title:
+      "Classez les éléments suivants par ordre d’importance pour de bonnes recommandations",
     isRequired: true,
     choices: [
       "Pertinence",
@@ -301,8 +321,20 @@ async function generateSurveyWithRepair(args: {
   objectives: string;
   assumptions: string;
   audiences: unknown;
+  questionsLimit: number;
 }) {
-  const { name, problemSummary, objectives, assumptions, audiences } = args;
+  const {
+    name,
+    problemSummary,
+    objectives,
+    assumptions,
+    audiences,
+    questionsLimit,
+  } = args;
+
+  // plage cible IA (qualité), puis clamp au max plan à la fin
+  const targetMin = Math.max(10, Math.min(15, questionsLimit));
+  const targetMax = Math.max(targetMin, Math.min(20, questionsLimit));
 
   const basePrompt = `
 Mission title: ${name}
@@ -325,7 +357,7 @@ single_choice, multiple_choice, likert, numeric_scale, slider, rating, open, mat
 ranking, image_ranking, media, heatmap, gps, boolean, section.
 
 Coverage requirements (VERY IMPORTANT):
-- Generate 15–20 questions.
+- Generate ${targetMin}–${targetMax} questions.
 - MUST include at least:
   - 2 single_choice
   - 2 multiple_choice
@@ -346,7 +378,6 @@ Field rules:
 - For image_ranking: provide imageChoices with placeholder imageUrl if needed.
 `;
 
-  // Attempt 1: base generation (structure only schema)
   const attempt1 = await generateObject({
     model: openai("gpt-4o-mini"),
     schema: SurveyResultSchemaBase,
@@ -355,12 +386,11 @@ Field rules:
   });
 
   let normalized = normalizeQuestions(attempt1.object);
-  let questions = clampQuestions(normalized.questions ?? []);
+  let questions = normalized.questions ?? [];
   ensureCategoryMatchesType(questions);
 
   let issues = coverageIssues(questions);
 
-  // Attempt 2: guided repair if coverage missing
   if (issues.length > 0) {
     const repairPrompt = `
 You previously generated a draft questionnaire JSON that does not meet coverage requirements.
@@ -373,7 +403,7 @@ ${JSON.stringify(attempt1.object)}
 
 Fix the draft with MINIMAL changes:
 - Add or modify questions to satisfy all coverage requirements.
-- Keep the output within 15–20 questions.
+- Keep the output within ${targetMin}–${targetMax} questions.
 - Return valid JSON ONLY, same schema as before. No markdown.
 `;
 
@@ -385,12 +415,11 @@ Fix the draft with MINIMAL changes:
     });
 
     normalized = normalizeQuestions(attempt2.object);
-    questions = clampQuestions(normalized.questions ?? []);
+    questions = normalized.questions ?? [];
     ensureCategoryMatchesType(questions);
     issues = coverageIssues(questions);
   }
 
-  // Final fallback: deterministic auto-completion
   if (issues.length > 0) {
     ensureMinSingleChoice(questions, REQUIRED_MIN.single_choice);
     ensureMinMultipleChoice(questions, REQUIRED_MIN.multiple_choice);
@@ -404,11 +433,14 @@ Fix the draft with MINIMAL changes:
     issues = coverageIssues(questions);
   }
 
+  // ✅ Plan enforcement
+  questions = clampQuestions(questions, questionsLimit);
+
   return {
     title: normalized.title ?? name,
     description: normalized.description ?? "",
     questions,
-    issues, // if any remain, caller can decide to fail
+    issues,
   };
 }
 
@@ -437,6 +469,35 @@ export const createMissionAction = authActionClient
       let surveyQuestions: any = null;
 
       try {
+        // ✅ 0) Resolve questionsLimit from plan (server-side)
+        let questionsLimit = DEFAULT_QUESTIONS_LIMIT;
+
+        if (workspaceId) {
+          const workspace = await prisma.workspace.findUnique({
+            where: { id: workspaceId },
+            include: {
+              // ✅ ton schéma: Workspace.workspacePlanSubscription?
+              workspacePlanSubscription: true,
+            },
+          });
+
+          const planCode = (workspace?.workspacePlanSubscription?.planCode ??
+            "starter") as PlanCode;
+
+          const overrideQ =
+            (workspace?.workspacePlanSubscription as any)?.overrides
+              ?.questionsPerSurvey ?? null;
+
+          questionsLimit = resolveQuestionsLimit({
+            planCode,
+            overrideQuestionsPerSurvey: overrideQ,
+            fallback: DEFAULT_QUESTIONS_LIMIT,
+          });
+        }
+
+        const MIN_TOTAL_QUESTIONS = Math.max(1, Math.min(questionsLimit, 10));
+        const MAX_TOTAL_QUESTIONS = questionsLimit;
+
         // 1) Create mission
         const mission = await prisma.mission.create({
           data: {
@@ -466,14 +527,47 @@ export const createMissionAction = authActionClient
           if (templateId) {
             template = await prisma.template.findUnique({
               where: { id: templateId },
-              include: { organization: true },
+              // ⚠️ Ton modèle Template n'a PAS de relation `organization`,
+              // donc on ne fait pas `include: { organization: true }`.
             });
 
             if (!template) {
-              return { success: false, data: null, message: "Template not found" };
+              return {
+                success: false,
+                data: null,
+                message: "Template not found",
+              };
             }
 
-            surveyQuestions = template.questions;
+            const tpl = template.questions as any;
+
+            if (tpl && Array.isArray(tpl.pages)) {
+              const flat = tpl.pages.flatMap((p: any) =>
+                Array.isArray(p?.elements) ? p.elements : [],
+              );
+              const capped = clampQuestions(flat, MAX_TOTAL_QUESTIONS);
+              surveyQuestions = {
+                ...tpl,
+                pages: paginateSurveyJs(capped),
+              };
+            } else if (tpl && Array.isArray(tpl.elements)) {
+              const capped = clampQuestions(tpl.elements, MAX_TOTAL_QUESTIONS);
+              surveyQuestions = {
+                ...tpl,
+                pages: paginateSurveyJs(capped),
+              };
+              delete (surveyQuestions as any).elements;
+            } else if (tpl && Array.isArray(tpl.questions)) {
+              const capped = clampQuestions(tpl.questions, MAX_TOTAL_QUESTIONS);
+              surveyQuestions = {
+                title: tpl.title ?? name,
+                description: tpl.description ?? "",
+                pages: paginateSurveyJs(capped),
+              };
+            } else {
+              // fallback: stocker tel quel (mais risque de ne pas respecter le plan)
+              surveyQuestions = tpl;
+            }
           } else {
             const generated = await generateSurveyWithRepair({
               name,
@@ -481,13 +575,16 @@ export const createMissionAction = authActionClient
               objectives,
               assumptions,
               audiences,
+              questionsLimit: MAX_TOTAL_QUESTIONS,
             });
 
             const questions = generated.questions ?? [];
 
-            // Final guardrails
             if (!questions.length || questions.length < MIN_TOTAL_QUESTIONS) {
-              console.error("[CREATE_MISSION_ACTION] Not enough questions generated:", questions.length);
+              console.error(
+                "[CREATE_MISSION_ACTION] Not enough questions generated:",
+                questions.length,
+              );
               return {
                 success: false,
                 error: `L'IA n'a généré que ${questions.length} questions, il en faut au moins ${MIN_TOTAL_QUESTIONS}.`,
@@ -495,14 +592,18 @@ export const createMissionAction = authActionClient
             }
 
             if (generated.issues.length > 0) {
-              console.error("[CREATE_MISSION_ACTION] Survey coverage still invalid after repair:", generated.issues);
+              console.error(
+                "[CREATE_MISSION_ACTION] Survey coverage still invalid after repair:",
+                generated.issues,
+              );
               return {
                 success: false,
-                error: `Questionnaire invalide après correction: ${generated.issues.join("; ")}`,
+                error: `Questionnaire invalide après correction: ${generated.issues.join(
+                  "; ",
+                )}`,
               };
             }
 
-            // Paginate in SurveyJS pages (10 per page)
             const pages = paginateSurveyJs(questions);
 
             surveyQuestions = {
@@ -535,14 +636,15 @@ export const createMissionAction = authActionClient
               meta: error?.meta,
             },
             null,
-            2
-          )
+            2,
+          ),
         );
 
         return {
           success: false,
-          error: error instanceof Error ? error.message : "Une erreur est survenue",
+          error:
+            error instanceof Error ? error.message : "Une erreur est survenue",
         };
       }
-    }
+    },
   );

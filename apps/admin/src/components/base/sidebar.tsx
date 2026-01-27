@@ -42,6 +42,7 @@ import {
   Puzzle,
   Tags,
   MonitorCloud,
+  FolderKanban,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -122,7 +123,7 @@ export function Sidebar() {
           href: "/organizations",
         },
         {
-          icon: <MonitorCloud className="h-5 w-5" />,
+          icon: <FolderKanban className="h-5 w-5" />,
           text: "Workspaces",
           href: "/workspaces",
         },

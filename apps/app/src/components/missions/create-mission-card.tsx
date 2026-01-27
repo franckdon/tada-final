@@ -73,6 +73,7 @@ When (and only when) you have ALL info above:
       objectives: "",
       assumptions: "",
       audiences: "",
+      targetSampleSize: "",
     },
     assistant: {
       tools: {

@@ -114,12 +114,8 @@ export async function ListMissionServer({
     const hasNext = rawNext.length > pageSize;
     const items = hasNext ? rawNext.slice(0, pageSize) : rawNext;
 
-    // ✅ return shape you can adapt in ListMissions if needed
     return { missions: items, hasNextPage: hasNext };
   }
-
-  // Note: hasFilters is still useful if you want to change UI behaviour,
-  // but it no longer changes how much you fetch (stability)
   void hasFilters;
 
   return (

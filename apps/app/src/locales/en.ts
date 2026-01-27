@@ -255,7 +255,7 @@ export default {
     approvedBy: "Appreciated and approved by over 2000 teams",
     researchAsYouGo: {
       title: "As you go",
-      price: "17€ / submission",
+      price: "17 $ / submission",
       creditCount: "Amount of credits",
       totalHT: "Total: ",
     },
@@ -294,7 +294,7 @@ export default {
     title: "Order Summary",
     summarySection: {
       title: "Summary",
-      creditsLabel: "Appinio 'Research as you go' Credits",
+      creditsLabel: "Tada 'Research as you go' Credits",
       pricePerCredit: "Price per submission:",
       totalHT: "Total:",
       disclaimer:
@@ -1123,8 +1123,8 @@ export default {
         problemSummary: "Problem statement",
         strategicGoal: "Strategic goals",
         assumptions:
-          "Potential hypotheses to investigate- select those you think are most relevant",
-        audiences: "Target audiences/markets",
+          "hypotheses",
+        audiences: "Target audiences",
         name: "Name of the mission",
         placeholder: "Answer questions in the chat to generate this section",
         targetPlaceholder: "Choose who and where to target—reach the right respondents with +2500 traits",
@@ -1149,13 +1149,14 @@ export default {
         audienceSuggestionSentTitle: "Suggestion sent",
         audienceSuggestionSentDescription:
           "Your audience suggestion has been sent to the Tada team for review.",
-        sampleSizeTitle: "Sample Size Recommendation",
+        sampleSizeTitle: "Sample Size",
         sampleSizeDescription:
           "Based on your target audience and research objectives, we recommend the following sample size:",
         iWantToSurvey: "I want to survey",
         participants: "participants",
         sampleSizeHint:
           "The recommended sample size ensures statistically significant results for your study.",
+        targetSampleSize: "Target sample size",
       },
     },
     missionSubmission: {

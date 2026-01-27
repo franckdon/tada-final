@@ -304,7 +304,7 @@ export function PlanEditForm({ initialPlan }: { initialPlan: InitialPlan }) {
             </div>
 
             <div className="md:col-span-3 space-y-2">
-              <Label>Prix (EUR)</Label>
+              <Label>Prix (USD)</Label>
               <Input
                 value={state.priceDisplay}
                 onChange={(e) =>

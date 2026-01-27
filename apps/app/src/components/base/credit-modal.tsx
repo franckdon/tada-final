@@ -21,11 +21,9 @@ import {
   PLAN_LIMITS,
   formatLimit,
   type PlanCode,
+  getUnitPriceUSD,
 } from "@/lib/plans/plan-limits";
 
-/**
- * Plans returned by /api/plans (your API returns: id, code, name, description, price, currency, interval, features, bulletsFr, bulletsEn)
- */
 type AppPlan = {
   id: string;
   code: PlanCode;
@@ -39,33 +37,6 @@ type AppPlan = {
   bulletsEn?: string | null;
 };
 
-/**
- * Keep this aligned with your /api/organizations/:id/subscription response.
- * NOTE: "Plan" type is referenced in your codebase already (likely from Prisma or your domain types).
- * If it isn't in scope here, import it from the correct module.
- */
-type SubscriptionResponse =
-  | {
-      subscription: {
-        id: string;
-        status: string;
-        organizationId: string;
-        planId: string;
-        stripeCustomerId: string | null;
-        stripeSubscriptionId: string | null;
-        stripePriceId: string | null;
-        currentPeriodStart: string;
-        currentPeriodEnd: string;
-        cancelAtPeriodEnd: boolean;
-        trialEnd: string | null;
-        metadata: unknown | null;
-        createdAt: string;
-        updatedAt: string;
-      };
-      plan: Plan;
-    }
-  | { subscription: null; plan: null };
-
 function isPlanCode(value: string): value is PlanCode {
   return (
     value === "starter" ||
@@ -75,18 +46,51 @@ function isPlanCode(value: string): value is PlanCode {
   );
 }
 
+// --- Types returned by Step 4 prepare route ---
+type PrepareResponse = {
+  purchase: {
+    id: string;
+    workspaceId: string;
+    organizationId: string;
+    planCode: PlanCode | null;
+    credits: number;
+    unitPriceUsdCents: number;
+    totalAmountUsdCents: number;
+    currency: "USD";
+    provider: "paystack";
+    providerRef: string;
+    providerStatus: "pending";
+    metadata: any;
+    createdAt: string;
+    updatedAt: string;
+  };
+  paystack: {
+    payload: {
+      email: string;
+      reference: string;
+      amount: number; // cents
+      currency?: string;
+      callback_url?: string;
+      metadata?: any;
+      channels?: string[];
+    };
+  };
+};
+
 export function CreditsModal({
   open = true,
   toggleOpen = () => {},
   handleAsYouGo = () => {},
-  organizationId,
+  organizationId, // gardé car tu l'as dans la signature (même si on ne l'utilise pas directement ici)
   workspaceId,
+  workspacePlanCode,
 }: {
   open?: boolean;
   toggleOpen?: () => void;
-  handleAsYouGo?: () => void;
+  handleAsYouGo?: (prepared?: PrepareResponse) => void;
   organizationId?: string;
   workspaceId: string;
+  workspacePlanCode: PlanCode | null;
 }) {
   const commonT = useScopedI18n("common");
   const t = useScopedI18n("creditsModal");
@@ -103,13 +107,11 @@ export function CreditsModal({
   } = useWorkspaceCreditsPurchaseStore();
 
   const safeCredits =
-    typeof credits === "number" && Number.isFinite(credits) ? credits : 0;
+    typeof credits === "number" && Number.isFinite(credits)
+      ? Math.max(0, Math.trunc(credits))
+      : 0;
 
   const total = (safeCredits * unitPrice).toFixed(2);
-
-  const [loadingPlan, setLoadingPlan] = React.useState(false);
-  const [plan, setPlan] = React.useState<Plan | null>(null);
-  const [notFound, setNotFound] = React.useState(false);
 
   const pathname = usePathname();
   const locale = React.useMemo(
@@ -120,55 +122,20 @@ export function CreditsModal({
   const [plans, setPlans] = React.useState<AppPlan[]>([]);
   const [loadingPlans, setLoadingPlans] = React.useState(false);
 
+  // --- Prepare state (Step 4) ---
+  const [isPreparing, setIsPreparing] = React.useState(false);
+  const [prepareError, setPrepareError] = React.useState<string | null>(null);
+  const [prepared, setPrepared] = React.useState<PrepareResponse | null>(null);
+  const [payloadOpen, setPayloadOpen] = React.useState(false);
+
+  // Keep store workspaceId in sync
   React.useEffect(() => {
     if (workspaceId && workspaceId !== storeWorkspaceId) {
       setWorkspaceId(workspaceId);
     }
   }, [workspaceId, storeWorkspaceId, setWorkspaceId]);
 
-  React.useEffect(() => {
-    if (!organizationId) {
-      setPlan(null);
-      setNotFound(true);
-      return;
-    }
-
-    let isMounted = true;
-    setLoadingPlan(true);
-    setNotFound(false);
-
-    fetch(`/api/organizations/${organizationId}/subscription`)
-      .then(async (res) => {
-        if (!isMounted) return;
-
-        const data: SubscriptionResponse = await res.json();
-
-        if ("plan" in data && data.plan) {
-          setPlan(data.plan);
-          // For "as you go" block only:
-          setUnitPrice((data.plan as any)?.addOn ?? 17);
-          setCurrency((data.plan as any)?.currency ?? "EUR");
-          setNotFound(false);
-        } else {
-          setPlan(null);
-          setNotFound(true);
-        }
-      })
-      .catch(() => {
-        if (!isMounted) return;
-        setPlan(null);
-        setNotFound(true);
-      })
-      .finally(() => {
-        if (!isMounted) return;
-        setLoadingPlan(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [organizationId, setUnitPrice, setCurrency]);
-
+  // Fetch plans list (display only)
   React.useEffect(() => {
     let mounted = true;
     setLoadingPlans(true);
@@ -199,148 +166,291 @@ export function CreditsModal({
     setCredits(Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0);
   };
 
-  const handleEnhancedAsYouGo = () => {
-    const billingData = {
+  // UI pricing (client-only preview)
+  React.useEffect(() => {
+    const unit = getUnitPriceUSD({
+      planCode: workspacePlanCode,
       credits: safeCredits,
-      workspaceId: storeWorkspaceId || workspaceId,
-      total: parseFloat(total),
-      unitPrice,
-      currency,
-    };
+    });
 
-    console.log("Workspace credits purchase:", billingData);
-    handleAsYouGo();
+    setUnitPrice(unit);
+    setCurrency("USD");
+  }, [workspacePlanCode, safeCredits, setUnitPrice, setCurrency]);
+
+  const planLabel = workspacePlanCode
+    ? workspacePlanCode.toUpperCase()
+    : "SANS FORFAIT";
+
+  const planHint =
+    workspacePlanCode === "entreprise"
+      ? locale === "fr"
+        ? "Prix dégressif selon volume"
+        : "Volume-based pricing"
+      : "";
+
+  // --- Step 4: call prepare route ---
+  const preparePurchase = async () => {
+    setIsPreparing(true);
+    setPrepareError(null);
+
+    try {
+      const res = await fetch(
+        `/api/workspaces/${workspaceId}/credits/purchase/prepare`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            credits: safeCredits,
+            // optionnel: customerEmail si tu veux forcer une adresse
+            // customerEmail: "test@example.com"
+            // organizationId: organizationId (optionnel)
+          }),
+        },
+      );
+
+      const json = (await res.json().catch(() => ({}))) as any;
+
+      if (!res.ok) {
+        throw new Error(json?.error || "Failed to prepare purchase");
+      }
+
+      const preparedData = json as PrepareResponse;
+      setPrepared(preparedData);
+
+      // show preview dialog
+      setPayloadOpen(true);
+
+      // log for dev
+      // eslint-disable-next-line no-console
+      console.log("[PAYSTACK PREPARE] purchase:", preparedData.purchase);
+      // eslint-disable-next-line no-console
+      console.log(
+        "[PAYSTACK PREPARE] payload:",
+        preparedData.paystack?.payload,
+      );
+
+      return preparedData;
+    } finally {
+      setIsPreparing(false);
+    }
+  };
+
+  const handleEnhancedAsYouGo = async () => {
+    if (safeCredits <= 0) return;
+
+    try {
+      const preparedData = await preparePurchase();
+
+      // keep existing behavior hook if you want to open PaymentModal next
+      // we pass preparedData so PaymentModal can display it too
+      handleAsYouGo(preparedData);
+    } catch (e: any) {
+      setPrepareError(e?.message ?? "Une erreur est survenue");
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={toggleOpen}>
-      <DialogContent className="sm:max-w-6xl p-0 rounded-lg max-h-[90vh] overflow-y-auto flex flex-col">
-        <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between flex-shrink-0">
-          <DialogTitle className="text-lg font-semibold">
-            {t("title")}
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={toggleOpen}>
+        <DialogContent className="sm:max-w-6xl p-0 rounded-lg max-h-[90vh] overflow-y-auto flex flex-col">
+          <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between flex-shrink-0">
+            <DialogTitle className="text-lg font-semibold">
+              {t("title")}
+            </DialogTitle>
+          </DialogHeader>
 
-        <div className="p-6 space-y-6 flex-grow">
-          {/* Brands */}
-          <div className="bg-[#F5F5F5] py-5 rounded-xl">
-            <div className="mb-6 text-center text-gray-500 text-sm">
-              {t("approvedBy")}
+          <div className="p-6 space-y-6 flex-grow">
+            {/* Brands */}
+            <div className="bg-[#F5F5F5] py-5 rounded-xl">
+              <div className="mb-6 text-center text-gray-500 text-sm">
+                {t("approvedBy")}
+              </div>
+              <div className="flex justify-center gap-6 mb-8 flex-wrap items-center">
+                {["cocacola", "pepsico", "unicef", "toyota"].map((brand, i) => (
+                  <Image
+                    key={i}
+                    src={`/images/${brand}.png`}
+                    alt={brand}
+                    width={120}
+                    height={60}
+                    className="h-8 w-auto"
+                  />
+                ))}
+              </div>
             </div>
-            <div className="flex justify-center gap-6 mb-8 flex-wrap items-center">
-              {["cocacola", "pepsico", "unicef", "toyota"].map((brand, i) => (
-                <Image
-                  key={i}
-                  src={`/images/${brand}.png`}
-                  alt={brand}
-                  width={120}
-                  height={60}
-                  className="h-8 w-auto"
-                />
-              ))}
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            {/* As-you-go */}
-            <div className="border rounded-lg p-4 lg:col-span-1">
-              <h3 className="font-semibold text-center text-xl mb-1">
-                {t("researchAsYouGo.title")}
-              </h3>
-              <p className="text-sm text-center text-gray-500 mb-4">
-                {t("researchAsYouGo.price")}
-              </p>
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+              {/* As-you-go */}
+              <div className="border rounded-lg p-4 lg:col-span-1">
+                <h3 className="font-semibold text-center text-xl mb-1">
+                  {t("researchAsYouGo.title")}
+                </h3>
 
-              <div className="space-y-2">
-                <label className="text-sm text-gray-600">
-                  {t("researchAsYouGo.creditCount")}
-                </label>
+                <div className="space-y-2">
+                  <label className="text-sm text-gray-600">
+                    {t("researchAsYouGo.creditCount")}
+                  </label>
 
-                <Input
-                  type="number"
-                  value={safeCredits}
-                  onChange={(e) => handleCreditsChange(e.target.value)}
-                  className="h-9"
-                  min={0}
-                  step={1}
-                />
+                  <Input
+                    type="number"
+                    value={safeCredits}
+                    onChange={(e) => handleCreditsChange(e.target.value)}
+                    className="h-9"
+                    min={0}
+                    step={1}
+                  />
 
-                <div className="text-sm text-gray-600">
-                  {t("researchAsYouGo.totalHT")}{" "}
-                  <strong>
-                    {currency === "EUR" ? "€" : currency} {total}
-                  </strong>
+                  <div className="text-xs text-gray-500">
+                    Tarif: <strong>{planLabel}</strong>
+                    {planHint ? (
+                      <span className="ml-1">— {planHint}</span>
+                    ) : null}
+                  </div>
+
+                  <div className="text-sm text-gray-600">
+                    {t("researchAsYouGo.totalHT")}{" "}
+                    <strong>
+                      {currency === "EUR"
+                        ? "€"
+                        : currency === "USD"
+                          ? "$"
+                          : currency}{" "}
+                      {total}
+                    </strong>
+                  </div>
+
+                  {safeCredits > 0 && (
+                    <div className="text-xs text-gray-500 space-y-1">
+                      <div>
+                        Prix unitaire : {currency === "USD" ? "$" : currency}{" "}
+                        {unitPrice} / réponses
+                      </div>
+                    </div>
+                  )}
+
+                  {prepareError ? (
+                    <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                      {prepareError}
+                    </div>
+                  ) : null}
+
+                  {prepared?.purchase ? (
+                    <div className="rounded-md border border-gray-200 bg-gray-50 p-2 text-xs text-gray-700">
+                      Dernière préparation:{" "}
+                      <strong>{prepared.purchase.providerRef}</strong>
+                    </div>
+                  ) : null}
                 </div>
 
-                {safeCredits > 0 && (
-                  <div className="text-xs text-gray-500 space-y-1">
-                    <div>
-                      Prix unitaire : {currency === "EUR" ? "€" : currency}{" "}
-                      {unitPrice} / réponses
-                    </div>
+                <Button
+                  className="mt-4 w-full"
+                  onClick={handleEnhancedAsYouGo}
+                  disabled={safeCredits <= 0 || isPreparing}
+                >
+                  {isPreparing ? "Préparation..." : commonT("next")}
+                </Button>
+
+                {prepared ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mt-2 w-full"
+                    onClick={() => setPayloadOpen(true)}
+                  >
+                    Voir le payload Paystack
+                  </Button>
+                ) : null}
+              </div>
+
+              {/* Plans */}
+              <div className="lg:col-span-4">
+                {loadingPlans ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="border rounded-lg p-4 space-y-3 animate-pulse"
+                      >
+                        <div className="h-6 w-1/2 bg-gray-200 rounded" />
+                        <div className="h-4 w-2/3 bg-gray-200 rounded" />
+                        <div className="h-9 w-full bg-gray-200 rounded" />
+                        <div className="h-4 w-3/4 bg-gray-200 rounded" />
+                        <div className="h-4 w-2/4 bg-gray-200 rounded" />
+                      </div>
+                    ))}
+                  </div>
+                ) : plans.length ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                    {plans.map((p) => {
+                      const code: PlanCode = isPlanCode(p.code)
+                        ? p.code
+                        : "starter";
+                      const limits = PLAN_LIMITS[code];
+
+                      const respondentCompletesLabel = formatLimit(
+                        limits.respondentCompletes,
+                      );
+
+                      return (
+                        <PlanCard
+                          key={p.id}
+                          plan={p}
+                          locale={locale}
+                          onAction={toggleOpen}
+                          respondentCompletesLabel={respondentCompletesLabel}
+                        />
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="border rounded-lg p-4 text-sm text-gray-600">
+                    Aucun plan actif disponible.
                   </div>
                 )}
               </div>
-
-              <Button
-                className="mt-4 w-full"
-                onClick={handleEnhancedAsYouGo}
-                disabled={safeCredits <= 0}
-              >
-                {commonT("next")}
-              </Button>
-            </div>
-
-            {/* Plans */}
-            <div className="lg:col-span-4">
-              {loadingPlans ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="border rounded-lg p-4 space-y-3 animate-pulse"
-                    >
-                      <div className="h-6 w-1/2 bg-gray-200 rounded" />
-                      <div className="h-4 w-2/3 bg-gray-200 rounded" />
-                      <div className="h-9 w-full bg-gray-200 rounded" />
-                      <div className="h-4 w-3/4 bg-gray-200 rounded" />
-                      <div className="h-4 w-2/4 bg-gray-200 rounded" />
-                    </div>
-                  ))}
-                </div>
-              ) : plans.length ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                  {plans.map((p) => {
-                    const code: PlanCode = isPlanCode(p.code)
-                      ? p.code
-                      : "starter";
-                    const limits = PLAN_LIMITS[code];
-
-                    const respondentCompletesLabel = formatLimit(
-                      limits.respondentCompletes,
-                    );
-
-                    return (
-                      <PlanCard
-                        key={p.id}
-                        plan={p}
-                        locale={locale}
-                        onAction={toggleOpen}
-                        respondentCompletesLabel={respondentCompletesLabel}
-                      />
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="border rounded-lg p-4 text-sm text-gray-600">
-                  Aucun plan actif disponible.
-                </div>
-              )}
             </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payload preview dialog */}
+      <Dialog open={payloadOpen} onOpenChange={setPayloadOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Payload Paystack (preview)</DialogTitle>
+          </DialogHeader>
+
+          {prepared ? (
+            <div className="space-y-3">
+              <div className="text-sm text-gray-700">
+                Purchase ID: <strong>{prepared.purchase.id}</strong>
+                <br />
+                Reference: <strong>{prepared.purchase.providerRef}</strong>
+              </div>
+
+              <pre className="max-h-[420px] overflow-auto rounded-md bg-gray-900 p-3 text-xs text-gray-100">
+                {JSON.stringify(
+                  {
+                    purchase: prepared.purchase,
+                    paystack: prepared.paystack,
+                  },
+                  null,
+                  2,
+                )}
+              </pre>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setPayloadOpen(false)}>
+                  Fermer
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-600">Aucun payload.</div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -366,7 +476,6 @@ function PlanCard({
           <div className="h-5" />
         )}
 
-        {/* Respondent completes (instead of price) */}
         <div className="text-center text-2xl font-semibold mb-4">
           {respondentCompletesLabel}
           <span className="text-sm text-gray-500 font-normal">
@@ -376,7 +485,6 @@ function PlanCard({
         </div>
       </div>
 
-      {/* 2 bullets only (already built from your API) */}
       <ul className="text-sm text-gray-600 space-y-2 mb-4">
         {Array.isArray(plan.features) &&
           plan.features
@@ -385,7 +493,6 @@ function PlanCard({
             .map((f, i) => <li key={i}>• {f.text}</li>)}
       </ul>
 
-      {/* CTA */}
       <Link href="/pricing" className="mt-auto">
         <Button className="w-full" onClick={onAction}>
           See details

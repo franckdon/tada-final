@@ -293,7 +293,7 @@ export function PlanCreateForm() {
             </div>
 
             <div className="md:col-span-3 space-y-2">
-              <Label>Prix (EUR)</Label>
+              <Label>Prix (USD)</Label>
               <Input
                 value={state.priceDisplay}
                 onChange={(e) =>
@@ -302,7 +302,7 @@ export function PlanCreateForm() {
                 placeholder="Ex: 19.99"
               />
               <p className="text-xs text-gray-500">
-                Montant en EUR (décimales autorisées). Stocké en cents.
+                Montant en USD (décimales autorisées). Stocké en cents.
               </p>
             </div>
 

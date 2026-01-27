@@ -253,7 +253,7 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
             )}
 
             {/* Badge plan */}
-            {subscription?.planLabel ? (
+            {/* {subscription?.planLabel ? (
               <span
                 className={cn(
                   "ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
@@ -271,7 +271,7 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
               <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-800">
                 FREE
               </span>
-            )}
+            )} */}
           </Button>
 
           <Dialog open={firstModal.value} onOpenChange={firstModal.onFalse}>
@@ -564,6 +564,7 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
         handleAsYouGo={handleAsYouGo}
         organizationId={organizations?.[0]?.id}
         workspaceId={workspaceId!}
+        workspacePlanCode={(subscription?.planCode as any) ?? null}
       />
 
       <PaymentModal

@@ -61,6 +61,8 @@ interface Props {
   addQuestionAI: (userPrompt: string) => Promise<void>;
   isLoadingAddQuestionAI: boolean;
   isAiMode: boolean;
+  questionsLimit: number;
+  currentQuestionsCount: number;
 }
 
 interface QuestionType {
@@ -92,6 +94,8 @@ export function AddNewQuestionModal({
   addQuestionAI,
   isLoadingAddQuestionAI,
   isAiMode,
+  questionsLimit,
+  currentQuestionsCount,
 }: Props) {
   const t = useI18n();
   const { surveys, setSurveys } = useSurveysBuilder();
@@ -185,7 +189,7 @@ export function AddNewQuestionModal({
   ]);
 
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
-    null
+    null,
   );
 
   const sectionOptions: SectionOption[] = useMemo(() => {
@@ -199,7 +203,7 @@ export function AddNewQuestionModal({
         (el) =>
           el.type === "section" ||
           el.category === "section" ||
-          el.isSectionTitle
+          el.isSectionTitle,
       )
       .map((el) => ({
         id: el.sectionId ?? el.name,
@@ -216,7 +220,7 @@ export function AddNewQuestionModal({
           icon: <Radio size={20} />,
           title: t("missions.surveys.questionTypes.singleChoice.title"),
           description: t(
-            "missions.surveys.questionTypes.singleChoice.description"
+            "missions.surveys.questionTypes.singleChoice.description",
           ),
         },
         {
@@ -224,7 +228,7 @@ export function AddNewQuestionModal({
           icon: <CheckSquare size={20} />,
           title: t("missions.surveys.questionTypes.multipleChoice.title"),
           description: t(
-            "missions.surveys.questionTypes.multipleChoice.description"
+            "missions.surveys.questionTypes.multipleChoice.description",
           ),
         },
         {
@@ -238,7 +242,7 @@ export function AddNewQuestionModal({
           icon: <Hash size={20} />,
           title: t("missions.surveys.questionTypes.numericScale.title"),
           description: t(
-            "missions.surveys.questionTypes.numericScale.description"
+            "missions.surveys.questionTypes.numericScale.description",
           ),
         },
         {
@@ -278,7 +282,7 @@ export function AddNewQuestionModal({
           icon: <Image size={20} />,
           title: t("missions.surveys.questionTypes.imageRanking.title"),
           description: t(
-            "missions.surveys.questionTypes.imageRanking.description"
+            "missions.surveys.questionTypes.imageRanking.description",
           ),
         },
         {
@@ -292,7 +296,7 @@ export function AddNewQuestionModal({
             {
               defaultValue:
                 "Permet au répondant de classer des éléments textuels par ordre de préférence.",
-            }
+            },
           ),
         },
         {
@@ -322,7 +326,7 @@ export function AddNewQuestionModal({
       ],
       ai: [],
     }),
-    [t]
+    [t],
   );
 
   // ----- Helpers -----
@@ -394,7 +398,7 @@ export function AddNewQuestionModal({
     return allTypes.filter(
       (type) =>
         type.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        type.description.toLowerCase().includes(searchTerm.toLowerCase())
+        type.description.toLowerCase().includes(searchTerm.toLowerCase()),
     );
   };
 
@@ -685,7 +689,7 @@ export function AddNewQuestionModal({
                 <input
                   type="text"
                   placeholder={t(
-                    "missions.surveys.addNewQuestion.searchPlaceholder"
+                    "missions.surveys.addNewQuestion.searchPlaceholder",
                   )}
                   className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   value={searchTerm}
@@ -708,7 +712,7 @@ export function AddNewQuestionModal({
                       onClick={() => setSelectedCategory(category)}
                     >
                       {t(
-                        `missions.surveys.questionCategories.${category}` as any
+                        `missions.surveys.questionCategories.${category}` as any,
                       )}
                     </button>
                   ))}
@@ -753,7 +757,7 @@ export function AddNewQuestionModal({
                     <input
                       type="text"
                       placeholder={t(
-                        "missions.surveys.addNewQuestion.searchPlaceholderAi"
+                        "missions.surveys.addNewQuestion.searchPlaceholderAi",
                       )}
                       className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                       value={searchTermAi}
@@ -779,7 +783,7 @@ export function AddNewQuestionModal({
                         <>
                           <Bot size={16} />
                           {t(
-                            "missions.surveys.addNewQuestion.generateQuestion"
+                            "missions.surveys.addNewQuestion.generateQuestion",
                           )}
                         </>
                       )}
@@ -850,7 +854,7 @@ export function AddNewQuestionModal({
                   value={questionTitle}
                   onChange={(e) => setQuestionTitle(e.target.value)}
                   placeholder={t(
-                    "missions.surveys.addNewQuestion.questionPlaceholder"
+                    "missions.surveys.addNewQuestion.questionPlaceholder",
                   )}
                   className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 />
@@ -886,8 +890,8 @@ export function AddNewQuestionModal({
                           onChange={(e) =>
                             setOptions(
                               options.map((o, i) =>
-                                i === index ? e.target.value : o
-                              )
+                                i === index ? e.target.value : o,
+                              ),
                             )
                           }
                         />
@@ -1126,7 +1130,7 @@ export function AddNewQuestionModal({
                     <div>
                       <label className="block text-sm mb-1">
                         {t(
-                          "missions.surveys.addNewQuestion.minTimeOnSiteSeconds"
+                          "missions.surveys.addNewQuestion.minTimeOnSiteSeconds",
                         )}
                       </label>
                       <input
@@ -1162,7 +1166,7 @@ export function AddNewQuestionModal({
                     />
                     <label htmlFor="requiresPathTracking">
                       {t(
-                        "missions.surveys.addNewQuestion.requiresPathTracking"
+                        "missions.surveys.addNewQuestion.requiresPathTracking",
                       )}
                     </label>
                   </div>

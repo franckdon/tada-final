@@ -246,7 +246,7 @@ export default {
     approvedBy: "Apprécié et approuvé par plus de 2000 équipes",
     researchAsYouGo: {
       title: "Ajouter du crédit supplémentaire",
-      price: "17€/ Réponse",
+      price: "17 $ / Réponse",
       creditCount: "Nombre de crédits",
       totalHT: "Total: ",
     },
@@ -285,7 +285,7 @@ export default {
     title: "Résumé de la commande",
     summarySection: {
       title: "Résumé",
-      creditsLabel: "Crédits Appinio 'Recherche à la demande'",
+      creditsLabel: "Crédits Tada 'Recherche à la demande'",
       pricePerCredit: "Prix par soumission :",
       totalHT: "Total:",
       disclaimer:
@@ -1215,11 +1215,11 @@ export default {
         researchMarket: "Analyse de marché",
         aiUpdateFromConversations: "Mettre à jour avec l'IA à partir des conversations",
         filterAudiences: "Filtrer les audiences",
-        problemSummary: "Enoncé du problème",
+        problemSummary: "Énoncé",
         strategicGoal: "Objectifs stratégiques",
         assumptions:
-          "Hypothèses potentielles à explorer - sélectionnez celles que vous pensez être les plus pertinentes",
-        audiences: "Publics ciblés/marchés",
+          "Hypothèses",
+        audiences: "Publics ciblés",
         name: "Nom de la mission",
         placeholder:
           "Répondez aux questions dans le chat pour générer cette section",
@@ -1245,13 +1245,14 @@ export default {
         audienceSuggestionSentTitle: "Suggestion envoyée",
         audienceSuggestionSentDescription:
           "Votre suggestion d'audience a été envoyée à l'équipe Tada pour examen.",
-        sampleSizeTitle: "Recommandation de taille d'échantillon",
+        sampleSizeTitle: "Taille d'échantillon",
         sampleSizeDescription:
           "En fonction de votre public cible et de vos objectifs de recherche, nous recommandons la taille d'échantillon suivante :",
         iWantToSurvey: "Je veux interroger",
         participants: "participants",
         sampleSizeHint:
           "La taille d'échantillon recommandée garantit des résultats statistiquement significatifs pour votre étude.",
+        targetSampleSize: "Taille d'échantillon cible",
       },
     },
     missionSubmission: {

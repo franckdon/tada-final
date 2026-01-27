@@ -74,25 +74,6 @@ export function ListMissions({
   return (
     <div className="flex flex-col space-y-4 items-end">
       <div className="w-full rounded-lg border border-gray-100 bg-white dark:bg-gray-900 shadow-sm">
-        {/* Header de la liste */}
-        {/* <div className="grid grid-cols-[4fr,3fr,3fr,3fr,auto] items-center px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-800">
-          <div className="text-left">
-            {t("missions.list.columns.name") || "Mission"}
-          </div>
-          <div className="text-center">
-            {t("missions.list.columns.progress") || "Progress"}
-          </div>
-          <div className="text-center">
-            {t("missions.list.columns.submissions") || "Submissions"}
-          </div>
-          <div className="text-center">
-            {t("missions.list.columns.updated") || "Last update"}
-          </div>
-          <div className="text-center">
-            {t("missions.list.columns.actions") || "Actions"}
-          </div>
-        </div> */}
-
         {/* Lignes */}
         <div className="divide-y divide-gray-100 dark:divide-gray-800">
           {missions.map((task) => (

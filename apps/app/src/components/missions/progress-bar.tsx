@@ -44,6 +44,11 @@ export function ProgressSidebar() {
       name: t("missions.createMission.form.audiences"),
       completed: false,
     },
+    {
+      id: "targetSampleSize",
+      name: t("missions.createMission.form.targetSampleSize"),
+      completed: false,
+    },
   ]);
 
   // Met à jour completed=true si la section a des valeurs
@@ -61,9 +66,14 @@ export function ProgressSidebar() {
             return { ...section, completed: v.trim().length > 0 };
           }
 
+          if (section.id === "targetSampleSize") {
+            const n = values?.targetSampleSize;
+            return { ...section, completed: typeof n === "number" && n > 0 };
+          }
+
           // autres types (si jamais)
           return { ...section, completed: Boolean(v) };
-        })
+        }),
       );
     });
 
@@ -74,8 +84,8 @@ export function ProgressSidebar() {
   useEffect(() => {
     setSections((prev) =>
       prev.map((s) =>
-        s.id === "audiences" ? { ...s, completed: activeFiltersCount > 0 } : s
-      )
+        s.id === "audiences" ? { ...s, completed: activeFiltersCount > 0 } : s,
+      ),
     );
   }, [activeFiltersCount]);
 
@@ -87,15 +97,26 @@ export function ProgressSidebar() {
       if (score >= 4) return t("missions.progress.fair");
       return t("missions.progress.empty");
     },
-    [t]
+    [t],
   );
 
   const { briefScore, briefRating, scorePercentage } = useMemo(() => {
-    const completedSections = sections.filter(
-      (section) => section.completed === true
-    ).length;
-    const totalSections = sections.length;
-    const score = Number(((completedSections / totalSections) * 10).toFixed(1));
+    const weights: Record<string, number> = {
+      problemSummary: 2,
+      objectives: 2,
+      assumptions: 2,
+      audiences: 2,
+      targetSampleSize: 2,
+    };
+
+    const total = Object.values(weights).reduce((a, b) => a + b, 0);
+
+    const earned = sections.reduce((acc, s) => {
+      const w = weights[s.id] ?? 0;
+      return acc + (s.completed === true ? w : 0);
+    }, 0);
+
+    const score = Number(((earned / total) * 10).toFixed(1));
 
     return {
       briefScore: score,
@@ -104,18 +125,17 @@ export function ProgressSidebar() {
     };
   }, [sections, getBriefRating]);
 
-  // Helper pour les petits segments de progression
   const getFilledSegments = (completed: boolean | number) => {
-    if (completed === true) return 3; // terminé
-    if (completed === 0.5) return 2; // à moitié (si tu veux gérer ça plus tard)
-    return 0; // non commencé
+    if (completed === true) return 3;
+    if (completed === 0.5) return 2;
+    return 0;
   };
 
   return (
     <aside
       className={cn(
         "h-full flex flex-col bg-slate-50 border-l border-slate-200 py-6 px-4 w-80",
-        (templateId || mode) && "w-96"
+        (templateId || mode) && "w-96",
       )}
     >
       {/* HEADER */}
@@ -158,23 +178,11 @@ export function ProgressSidebar() {
                         ? "text-emerald-600 font-medium"
                         : section.completed === 0.5
                           ? "text-amber-500"
-                          : "text-slate-500"
+                          : "text-slate-500",
                     )}
                   >
                     {section.name}
                   </span>
-                </div>
-
-                <div className="flex items-center gap-1">
-                  {[0, 1, 2].map((idx) => (
-                    <div
-                      key={idx}
-                      className={cn(
-                        "h-1.5 w-4 rounded-full transition-colors duration-200",
-                        idx < filled ? "bg-emerald-500" : "bg-slate-200"
-                      )}
-                    />
-                  ))}
                 </div>
               </li>
             );

@@ -10,6 +10,7 @@ import {
 import WorkspaceSubscriptionTab from "./workspace-tabs/workspace-subscription-tab";
 import WorkspaceMembersTab from "./workspace-tabs/workspace-members-tab";
 import WorkspaceMissionsTab from "./workspace-tabs/workspace-missions-tab";
+import WorkspaceCreditsTransactionsTab from "./workspace-tabs/workspace-credits-transactions-tab";
 
 export default function WorkspaceTabs({
   workspaceId,
@@ -31,8 +32,10 @@ export default function WorkspaceTabs({
           <h2 className="text-xl font-semibold text-gray-800">
             Détails du workspace
           </h2>
-          <TabsList className="grid w-fit grid-cols-3">
+
+          <TabsList className="grid w-fit grid-cols-4">
             <TabsTrigger value="subscription">Abonnement</TabsTrigger>
+            <TabsTrigger value="credits">Crédits</TabsTrigger>
             <TabsTrigger value="members">
               Membres ({members.length})
             </TabsTrigger>
@@ -46,6 +49,13 @@ export default function WorkspaceTabs({
           <WorkspaceSubscriptionTab
             workspaceId={workspaceId}
             subscription={subscription}
+            currentCredits={Number(currentCredits)}
+          />
+        </TabsContent>
+
+        <TabsContent value="credits">
+          <WorkspaceCreditsTransactionsTab
+            workspaceId={workspaceId}
             currentCredits={Number(currentCredits)}
           />
         </TabsContent>

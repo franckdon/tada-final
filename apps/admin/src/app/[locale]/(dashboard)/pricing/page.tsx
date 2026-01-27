@@ -14,19 +14,11 @@ function splitBullets(text: string) {
     .map((l) => l.replace(/^\-\s*/, ""));
 }
 
-function formatEURFromCents(cents: number) {
-  return new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  }).format(cents / 100);
-}
-
 function formatPriceLabel(priceCents: number, locale: Locale) {
-  if (!priceCents || priceCents <= 0) return "Custom"; // ou "Sur devis" en FR
-  return new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB", {
+  if (!priceCents || priceCents <= 0) return "Custom";
+  return new Intl.NumberFormat(locale === "fr" ? "en-US" : "en-US", {
     style: "currency",
-    currency: "EUR",
+    currency: "USD",
     maximumFractionDigits: 0,
   }).format(priceCents / 100);
 }

@@ -25,9 +25,17 @@ import { useI18n, useCurrentLocale } from "@/locales/client";
 interface CreateSurveyModalProps {
   trigger?: React.ReactNode;
   orgId?: string;
+
+  canCreate?: boolean;
+  onBlocked?: () => void;
 }
 
-export function CreateSurveyModal({ trigger, orgId }: CreateSurveyModalProps) {
+export function CreateSurveyModal({
+  trigger,
+  orgId,
+  canCreate = true,
+  onBlocked,
+}: CreateSurveyModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
@@ -35,6 +43,14 @@ export function CreateSurveyModal({ trigger, orgId }: CreateSurveyModalProps) {
   const router = useRouter();
   const t = useI18n();
   const currentLocale = useCurrentLocale();
+
+  const guard = () => {
+    if (!canCreate) {
+      onBlocked?.();
+      return false;
+    }
+    return true;
+  };
 
   const surveyOptions = [
     {
@@ -59,7 +75,7 @@ export function CreateSurveyModal({ trigger, orgId }: CreateSurveyModalProps) {
       description: t("missions.createSurveyModal.ai.description"),
       onClick: () =>
         router.push(
-          `/${currentLocale}/missions/create?workspaceId=${orgId}&mode=ai`
+          `/${currentLocale}/missions/create?workspaceId=${orgId}&mode=ai`,
         ),
     },
     {
@@ -84,7 +100,7 @@ export function CreateSurveyModal({ trigger, orgId }: CreateSurveyModalProps) {
       description: t("missions.createSurveyModal.template.description"),
       onClick: () =>
         router.push(
-          `/${currentLocale}/missions/create?workspaceId=${orgId}&mode=template`
+          `/${currentLocale}/missions/create?workspaceId=${orgId}&mode=template`,
         ),
     },
     {
@@ -109,7 +125,7 @@ export function CreateSurveyModal({ trigger, orgId }: CreateSurveyModalProps) {
       description: t("missions.createSurveyModal.manuel.description"),
       onClick: () =>
         router.push(
-          `/${currentLocale}/missions/create?workspaceId=${orgId}&mode=manual`
+          `/${currentLocale}/missions/create?workspaceId=${orgId}&mode=manual`,
         ),
     },
     {
@@ -134,7 +150,7 @@ export function CreateSurveyModal({ trigger, orgId }: CreateSurveyModalProps) {
       description: t("missions.createSurveyModal.upload.description"),
       onClick: () =>
         router.push(
-          `/${currentLocale}/missions/create?workspaceId=${orgId}&mode=upload`
+          `/${currentLocale}/missions/create?workspaceId=${orgId}&mode=upload`,
         ),
     },
   ];
@@ -189,6 +205,12 @@ export function CreateSurveyModal({ trigger, orgId }: CreateSurveyModalProps) {
         `}
                       onClick={() => {
                         if (isDisabled) return;
+
+                        if (!canCreate) {
+                          onBlocked?.();
+                          return;
+                        }
+
                         setIsLoading(true);
                         option.onClick();
                       }}

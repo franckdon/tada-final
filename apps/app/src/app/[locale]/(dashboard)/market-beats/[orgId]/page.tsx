@@ -3,6 +3,7 @@ import { TadaStudies } from "../../../../../components/market-beats/tada-studies
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { serializePrisma } from "@/lib/prisma/serialize";
 
 export default async function MarketBeatsPage({
   params,
@@ -49,9 +50,9 @@ export default async function MarketBeatsPage({
       ? organization.subscription.plan?.maxMissions || 0
       : 1;
 
-  const consultedMissionIds = consultedMissions.map(
-    (consultation) => consultation.missionId
-  );
+  const consultedMissionIds = consultedMissions.map((c) => c.missionId);
+
+  const organizationSafe = serializePrisma(organization);
 
   return (
     <div className="min-h-screen">

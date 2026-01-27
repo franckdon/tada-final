@@ -75,9 +75,9 @@ type PlanRow = {
 };
 
 function formatEURFromCents(cents: number) {
-  return new Intl.NumberFormat("fr-FR", {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "EUR",
+    currency: "USD",
     maximumFractionDigits: 2,
   }).format(cents / 100);
 }
@@ -228,7 +228,7 @@ export function PlansTable({ plans }: { plans: PlanRow[] }) {
             <div className="font-semibold text-gray-900">
               {formatEURFromCents(row.original.priceCents)}
             </div>
-            <div className="text-xs text-gray-500">EUR</div>
+            <div className="text-xs text-gray-500">USD</div>
           </div>
         ),
       },

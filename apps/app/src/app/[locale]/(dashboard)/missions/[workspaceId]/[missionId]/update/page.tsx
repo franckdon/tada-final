@@ -1,3 +1,4 @@
+// src/app/%5Blocale%5D/%28dashboard%29/missions/%5BworkspaceId%5D/%5BmissionId%5D/update/page.tsx
 import { ConversationCard } from "@/components/missions/conversation-card";
 import { UpdateMissionCard } from "@/components/missions/update-mission-card";
 import { prisma } from "@/lib/prisma";

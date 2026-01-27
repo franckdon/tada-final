@@ -11,8 +11,8 @@ const aiVersion = process.env.NEXT_PUBLIC_AI_VERSION ?? "unknown";
 function getWelcomeMessage(locale: string) {
   const isFr = (locale ?? "").toLowerCase().startsWith("fr");
   return isFr
-    ? "Bienvenue sur Tada, je suis Dyna. Comment puis-je vous aider à résoudre votre problème aujourd’hui ?"
-    : "Welcome to Tada, I'm Dyna. How can I help you solve your problem today?";
+    ? "Bienvenue sur Tada, je suis Dina. Comment puis-je vous aider à résoudre votre problème aujourd’hui ?"
+    : "Welcome to Tada, I'm Dina. How can I help you solve your problem today?";
 }
 
 export function MyRuntimeProvider({ children }: { children: React.ReactNode }) {

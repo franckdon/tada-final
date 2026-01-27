@@ -10,6 +10,10 @@ import {
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 
+import type { PlanCode } from "@/lib/plans/plan-limits";
+import { resolveQuestionsLimit } from "@/lib/plans/resolve-questions-limit";
+import { countSurveyQuestions } from "@/lib/surveys/count-questions";
+
 export default async function Page({
   params,
 }: {
@@ -27,13 +31,31 @@ export default async function Page({
       audiences: true,
       mode: true,
       workspaceId: true,
+      workspace: {
+        select: {
+          workspacePlanSubscription: true,
+        },
+      },
     },
   });
 
   if (!mission) return redirect("/");
 
-  console.log("survey mission:", mission);
-  console.log("mode", mission.mode);
+  const defaultSurvey = mission.surveys[0]?.questions as unknown as Survey;
+
+  const planCode = (mission.workspace?.workspacePlanSubscription?.planCode ??
+    "starter") as PlanCode;
+  const overrideQ =
+    (mission.workspace?.workspacePlanSubscription as any)?.overrides
+      ?.questionsPerSurvey ?? null;
+
+  const questionsLimit = resolveQuestionsLimit({
+    planCode,
+    overrideQuestionsPerSurvey: overrideQ,
+    fallback: 10,
+  });
+
+  const currentQuestionsCount = countSurveyQuestions(defaultSurvey);
 
   const redirectToMissionsList = `/missions?workspaceId=${mission.workspaceId}`;
   return (
@@ -49,7 +71,10 @@ export default async function Page({
         audiences={mission.audiences as Record<string, string | number>}
         isAiMode={mission.mode === "ai"}
         redirectTo={redirectToMissionsList}
+        questionsLimit={questionsLimit}
+        initialQuestionsCount={currentQuestionsCount}
       />
+
       <div className="flex flex-1 overflow-hidden">
         <div className="w-72 bg-gray-100 dark:bg-gray-800 overflow-y-auto border-r border-gray-200 dark:border-gray-700 h-full">
           <QuestionsList surveyId={mission.surveys[0]?.id as string} />

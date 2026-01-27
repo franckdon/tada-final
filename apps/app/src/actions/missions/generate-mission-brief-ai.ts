@@ -26,7 +26,6 @@ const generateMissionBriefInputSchema = z.object({
       objectives: z.string().optional().nullable(),
       assumptions: z.string().optional().nullable(),
       sampleSummary: z.string().optional().nullable(),
-      targetSampleSize: z.number().int().positive().optional().nullable(),
       preliminaryRecommendations: z.string().optional().nullable(),
       studyStructure: z.string().optional().nullable(),
     })
@@ -63,7 +62,7 @@ AUDIENCES (JSON) :
 ${JSON.stringify(audiences ?? {}, null, 2)}
 
 Tâche :
-- Génère/complète un brief complet (name, problemSummary, objectives, assumptions, sampleSummary, targetSampleSize, preliminaryRecommendations, studyStructure).
+- Génère/complète un brief complet (name, problemSummary, objectives, assumptions, sampleSummary, preliminaryRecommendations, studyStructure).
 - Si certaines infos sont absentes de la conversation, propose des hypothèses raisonnables, mais reste prudent.
 - Si des informations sont absentes ou ambiguës dans la conversation, laisse le champ concerné vide ou mets "À préciser".
 - N’invente pas de données.

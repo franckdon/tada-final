@@ -89,10 +89,6 @@ export function isUnlimited(v: unknown): v is "unlimited" {
   return v === "unlimited";
 }
 
-/**
- * Formats numeric/unlimited/custom values for UI.
- * - locale: used for number formatting and strings (FR/EN)
- */
 export function formatLimit(
   v: LimitValue,
   opts?: { locale?: "fr" | "en" },
@@ -115,10 +111,6 @@ export function formatYesNo(
   return v ? (locale === "fr" ? "Oui" : "Yes") : locale === "fr" ? "Non" : "No";
 }
 
-/**
- * Convenience helper specifically for dashboard access
- * (still uses formatLimit but keeps naming explicit)
- */
 export function formatDashboards(
   v: LimitValue,
   opts?: { locale?: "fr" | "en" },
@@ -126,10 +118,6 @@ export function formatDashboards(
   return formatLimit(v, opts);
 }
 
-/**
- * Optional: central list of items to render a comparison table consistently.
- * You can map over this in /pricing to generate rows.
- */
 export const PLAN_FEATURES = [
   { key: "respondentCompletes", labelFr: "Réponses (soumissions)", labelEn: "Respondent completes (submissions)" },
   { key: "deploymentLocations", labelFr: "Zones de déploiement", labelEn: "Deployment locations" },
@@ -140,3 +128,26 @@ export const PLAN_FEATURES = [
   { key: "surveyTemplateLibraryAndImport", labelFr: "Templates & import", labelEn: "Template library & import" },
   { key: "proprietaryDashboardsAccess", labelFr: "Dashboards TADA", labelEn: "TADA dashboards access" },
 ] as const;
+
+export function getUnitPriceUSD(args: {
+  planCode: PlanCode | null;
+  credits: number;
+}) {
+  const credits = Number.isFinite(args.credits) ? Math.max(0, Math.trunc(args.credits)) : 0;
+  const planCode = args.planCode ?? null;
+
+  if (!planCode) return 17;
+
+  if (planCode === "starter") return 15;
+  if (planCode === "business") return 12;
+
+  if (planCode === "growth") return 15;
+
+  if (planCode === "entreprise") {
+    if (credits >= 2000) return 10;
+    if (credits >= 500) return 11;
+    return 12;
+  }
+
+  return 17;
+}

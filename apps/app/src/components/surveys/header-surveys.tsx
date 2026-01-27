@@ -1,3 +1,4 @@
+// src/components/surveys/header-surveys.tsx
 "use client";
 
 import { addQuestionAIAction } from "@/actions/missions/add-question-ai.action";
@@ -13,9 +14,9 @@ import { useI18n } from "@/locales/client";
 import { Button } from "@tada/ui/components/button";
 import { Loader2, Plus, RefreshCw } from "lucide-react";
 import { useAction } from "next-safe-action/hooks";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AddNewQuestionModal } from "./modals/add-new-question-modal";
-import { useSearchParams } from "next/navigation";
+import { countSurveyQuestions } from "@/lib/surveys/count-questions";
 
 interface HeaderSurveysProps {
   surveyId: string;
@@ -26,6 +27,10 @@ interface HeaderSurveysProps {
   audiences: Record<string, string | number>;
   isAiMode: boolean;
   redirectTo: string;
+
+  // ✅ injectés depuis le server component
+  questionsLimit: number;
+  initialQuestionsCount: number;
 }
 
 export function HeaderSurveys({
@@ -37,11 +42,22 @@ export function HeaderSurveys({
   audiences,
   isAiMode = false,
   redirectTo,
+  questionsLimit,
+  initialQuestionsCount,
 }: HeaderSurveysProps) {
   const t = useI18n();
   const { toast } = useToast();
-  const { setSurveys } = useSurveysBuilder();
+  const { surveys, setSurveys } = useSurveysBuilder();
+
   const [showAddModal, setShowAddModal] = useState(false);
+
+  const currentCount = useMemo(() => {
+    return surveys?.pages
+      ? countSurveyQuestions(surveys)
+      : initialQuestionsCount;
+  }, [surveys, initialQuestionsCount]);
+
+  const quotaReached = currentCount >= questionsLimit;
 
   const updateSurveyQuestions = useAction(updateSurveyQuestionsAction, {
     onSuccess: () => {
@@ -50,10 +66,12 @@ export function HeaderSurveys({
         description: t("missions.surveys.saveDraftSuccessDescription"),
       });
     },
-    onError: () => {
+    onError: ({ error }) => {
       toast({
         title: t("missions.surveys.saveDraftError"),
-        description: t("missions.surveys.saveDraftErrorDescription"),
+        description:
+          (error as any)?.serverError ??
+          t("missions.surveys.saveDraftErrorDescription"),
         variant: "destructive",
       });
     },
@@ -67,10 +85,12 @@ export function HeaderSurveys({
         description: t("missions.surveys.saveDraftSuccessDescription"),
       });
     },
-    onError: () => {
+    onError: ({ error }) => {
       toast({
         title: t("missions.surveys.saveDraftError"),
-        description: t("missions.surveys.saveDraftErrorDescription"),
+        description:
+          (error as any)?.serverError ??
+          t("missions.surveys.saveDraftErrorDescription"),
         variant: "destructive",
       });
     },
@@ -85,10 +105,12 @@ export function HeaderSurveys({
         description: t("missions.surveys.saveDraftSuccessDescription"),
       });
     },
-    onError: () => {
+    onError: ({ error }) => {
       toast({
         title: t("missions.surveys.saveDraftError"),
-        description: t("missions.surveys.saveDraftErrorDescription"),
+        description:
+          (error as any)?.serverError ??
+          t("missions.surveys.saveDraftErrorDescription"),
         variant: "destructive",
       });
     },
@@ -101,10 +123,12 @@ export function HeaderSurveys({
         description: t("missions.surveys.publishedDescription"),
       });
     },
-    onError: () => {
+    onError: ({ error }) => {
       toast({
         title: t("missions.surveys.publishedError"),
-        description: t("missions.surveys.publishedErrorDescription"),
+        description:
+          (error as any)?.serverError ??
+          t("missions.surveys.publishedErrorDescription"),
         variant: "destructive",
       });
     },
@@ -116,15 +140,17 @@ export function HeaderSurveys({
         <h1 className="text-lg font-medium text-gray-800 dark:text-white">
           {t("missions.surveys.title")}
         </h1>
+
+        <div className="text-xs text-gray-500 dark:text-gray-300">
+          {currentCount}/{questionsLimit} questions
+        </div>
+
         <div className="flex gap-2">
           <Button
             onClick={() => {
-              updateMission.execute({
-                missionId: missionId,
-                status: "on hold",
-              });
+              updateMission.execute({ missionId, status: "on hold" });
             }}
-            className="flex items-center "
+            className="flex items-center"
             disabled={updateMission.status === "executing"}
           >
             {updateMission.status === "executing" ? (
@@ -135,21 +161,29 @@ export function HeaderSurveys({
           </Button>
         </div>
       </div>
-      {/* 🧠 Bannière IA uniquement en mode=ai */}
+
       {isAiMode && (
         <div className="mt-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-100">
           {t("missions.surveys.aiInfoBanner") ??
             "Les questions ci-dessous ont été générées automatiquement à partir de votre brief (problématique, objectifs, hypothèses et ciblage). Vous pouvez les modifier, réorganiser ou en ajouter de nouvelles librement."}
         </div>
       )}
+
       <div className="flex mt-3 gap-2">
         <Button
           onClick={() => setShowAddModal(true)}
           className="flex items-center justify-center gap-2"
+          disabled={quotaReached}
+          title={
+            quotaReached
+              ? `Quota atteint (${currentCount}/${questionsLimit})`
+              : undefined
+          }
         >
           <Plus size={14} />
           {t("missions.surveys.addNewQuestion.add")}
         </Button>
+
         {isAiMode && (
           <Button
             variant="outline"
@@ -176,14 +210,14 @@ export function HeaderSurveys({
           </Button>
         )}
       </div>
+
       <AddNewQuestionModal
         isOpen={showAddModal}
         onOpenChange={setShowAddModal}
-        updateSurveyQuestions={(surveys) => {
-          updateSurveyQuestions.execute({
-            surveyId,
-            questions: surveys,
-          });
+        questionsLimit={questionsLimit}
+        currentQuestionsCount={currentCount}
+        updateSurveyQuestions={(next) => {
+          updateSurveyQuestions.execute({ surveyId, questions: next });
         }}
         isLoadingUpdate={updateSurveyQuestions.status === "executing"}
         addQuestionAI={async (userPrompt) => {

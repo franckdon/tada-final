@@ -86,7 +86,7 @@ function renderBulletedList(text: string): JSX.Element {
     line
       .replace(/^[-*•●]\s*/, "")
       .replace(/^\d+[\.\)]\s*/, "")
-      .trim()
+      .trim(),
   );
 
   return (
@@ -173,15 +173,15 @@ export function CreateMissionForm({
       form.setValue("sampleSummary", brief.sampleSummary, {
         shouldDirty: true,
       });
-      form.setValue("targetSampleSize", brief.targetSampleSize ?? undefined, {
-        shouldDirty: true,
-      });
+      // form.setValue("targetSampleSize", brief.targetSampleSize ?? undefined, {
+      //   shouldDirty: true,
+      // });
       form.setValue(
         "preliminaryRecommendations",
         brief.preliminaryRecommendations,
         {
           shouldDirty: true,
-        }
+        },
       );
       form.setValue("studyStructure", brief.studyStructure, {
         shouldDirty: true,
@@ -194,7 +194,7 @@ export function CreateMissionForm({
             return { ...s, content: v, status: v ? "completed" : "pending" };
           }
           return s;
-        })
+        }),
       );
 
       toast({
@@ -280,8 +280,8 @@ export function CreateMissionForm({
               content: tempContent,
               status: tempContent ? "completed" : "pending",
             }
-          : section
-      )
+          : section,
+      ),
     );
 
     setEditingSection(null);
@@ -296,7 +296,7 @@ export function CreateMissionForm({
         audiences: selectedFilters,
         templateId,
         mode,
-      })
+      }),
     );
   };
 
@@ -391,9 +391,8 @@ export function CreateMissionForm({
         objectives: form.getValues("objectives"),
         assumptions: form.getValues("assumptions"),
         sampleSummary: form.getValues("sampleSummary"),
-        targetSampleSize: form.getValues("targetSampleSize"),
         preliminaryRecommendations: form.getValues(
-          "preliminaryRecommendations"
+          "preliminaryRecommendations",
         ),
         studyStructure: form.getValues("studyStructure"),
       },
@@ -458,7 +457,7 @@ export function CreateMissionForm({
             };
           }
           return section;
-        })
+        }),
       );
     });
 
@@ -472,8 +471,8 @@ export function CreateMissionForm({
       prev.map((s) =>
         s.key === "audiences"
           ? { ...s, status: hasAnyAudiences ? "completed" : "pending" }
-          : s
-      )
+          : s,
+      ),
     );
   }, [activeFiltersCount, suggestions.length]);
 
@@ -637,10 +636,10 @@ export function CreateMissionForm({
                             Object.keys(selectedFilters[groupId] || {}).map(
                               (filterId) => {
                                 const group = filterGroups.find(
-                                  (g) => g.id === groupId
+                                  (g) => g.id === groupId,
                                 );
                                 const filter = group?.filters.find(
-                                  (f) => f.id === filterId
+                                  (f) => f.id === filterId,
                                 );
 
                                 return (
@@ -649,7 +648,7 @@ export function CreateMissionForm({
                                     | undefined
                                 )?.map((value) => {
                                   const option = filter?.options?.find(
-                                    (o) => o.value === value
+                                    (o) => o.value === value,
                                   );
                                   return (
                                     <span
@@ -668,7 +667,7 @@ export function CreateMissionForm({
                                             groupId,
                                             filterId,
                                             value,
-                                            false
+                                            false,
                                           )
                                         }
                                       >
@@ -692,8 +691,8 @@ export function CreateMissionForm({
                                     </span>
                                   );
                                 });
-                              }
-                            )
+                              },
+                            ),
                           )}
                         </div>
 
