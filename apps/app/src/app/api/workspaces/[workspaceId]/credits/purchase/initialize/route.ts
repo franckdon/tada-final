@@ -1,108 +1,55 @@
 // src/app/api/workspaces/[workspaceId]/credits/purchase/initialize/route.ts
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { getUnitPriceUSD, type PlanCode } from "@/lib/plans/plan-limits";
-import { buildPaystackReference } from "@/lib/payments/paystack/reference";
+import { debugDbContext, prisma } from "@/lib/prisma";
+
+export const runtime = "nodejs";
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status });
 }
 
+type Body = {
+  purchaseId?: string;
+  reference?: string; // providerRef
+};
+
 export async function POST(
   req: Request,
-  { params }: { params: { workspaceId: string } },
+  ctx: { params: Promise<{ workspaceId: string }> },
 ) {
-  const session = await auth();
+  const h = await headers();
+  const session = await auth.api.getSession({ headers: h });
   if (!session?.user?.id) return jsonError("Unauthorized", 401);
 
-  const workspaceId = params.workspaceId;
+  const { workspaceId } = await ctx.params;
+  const body = (await req.json().catch(() => ({}))) as Body;
 
-  const body = await req.json().catch(() => ({}));
-  const creditsRaw = body?.credits;
-  const planCodeRaw = body?.planCode ?? null;
-  const emailRaw = body?.email ?? null;
+  const purchaseId = typeof body.purchaseId === "string" ? body.purchaseId : null;
+  const reference = typeof body.reference === "string" ? body.reference : null;
 
-  const credits = Number(creditsRaw);
-  if (!Number.isFinite(credits) || credits <= 0) {
-    return jsonError("Invalid credits");
+  if (!purchaseId && !reference) {
+    return jsonError("purchaseId or reference is required");
   }
 
-  const planCode: PlanCode | null =
-    planCodeRaw === "starter" ||
-    planCodeRaw === "growth" ||
-    planCodeRaw === "business" ||
-    planCodeRaw === "entreprise"
-      ? planCodeRaw
-      : null;
-
-  const customerEmail =
-    typeof emailRaw === "string" && emailRaw.trim().length > 0
-      ? emailRaw.trim()
-      : (session.user.email ?? "").trim();
-
-  if (!customerEmail) {
-    return jsonError("Missing customer email");
-  }
-
-  // 1) Resolve organizationId (depuis workspace)
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    select: { id: true, organizationId: true },
-  });
-
-  if (!workspace?.organizationId) return jsonError("Workspace not found", 404);
-
-  // 2) Pricing snapshot (USD -> cents)
-  const unitPriceUsdCents = getUnitPriceUSD({ planCode, credits }) * 100;
-  const unit = Math.round(unitPriceUsdCents);
-  const total = unit * Math.trunc(credits);
-
-  // 3) Generate providerRef (idempotency ref) - use your canonical builder
-  const providerRef = buildPaystackReference({
-    workspaceId,
-    organizationId: workspace.organizationId,
-    purpose: "workspace_credits",
-  });
-
-  // 4) Create purchase in DB (historique ✅)
-  const purchase = await prisma.workspaceCreditPurchase.create({
-    data: {
+  // 1) Récupérer le purchase déjà créé au prepare (et vérifier workspace)
+  const purchase = await prisma.workspaceCreditPurchase.findFirst({
+    where: {
       workspaceId,
-      organizationId: workspace.organizationId,
-      planCode,
-      credits: Math.trunc(credits),
-      unitPriceUsd: unit,
-      totalAmountUsd: total,
-      currency: "USD",
-      provider: "paystack",
-      providerRef,
-      providerStatus: "pending",
-      metadata: {
-        pricing: { planCode, credits: Math.trunc(credits) },
-        userId: session.user.id,
-      },
-    },
-    select: {
-      id: true,
-      workspaceId: true,
-      organizationId: true,
-      planCode: true,
-      credits: true,
-      unitPriceUsd: true,
-      totalAmountUsd: true,
-      currency: true,
-      provider: true,
-      providerRef: true,
-      providerStatus: true,
-      metadata: true,
-      createdAt: true,
-      updatedAt: true,
+      ...(purchaseId ? { id: purchaseId } : {}),
+      ...(reference ? { providerRef: reference } : {}),
     },
   });
 
-  // 5) Build Paystack payload
-  // ✅ Important: callback must point to your real callback route
+  if (!purchase) return jsonError("Purchase not found", 404);
+
+  // (Optionnel) empêcher relance si déjà payé
+  if (purchase.providerStatus === "paid") {
+    return jsonError("Purchase already paid", 409);
+  }
+
+  // 2) Construire payload Paystack depuis la DB (pas depuis le client)
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
@@ -112,10 +59,11 @@ export async function POST(
     purchase.providerRef,
   )}`;
 
-  const paystackPayload = {
-    email: customerEmail,
+  const payload = {
+    email: (purchase.metadata as any)?.customerEmail ?? session.user.email,
     amount: purchase.totalAmountUsd, // cents
-    currency: "USD",
+    //currency: purchase.currency ?? "USD",
+    currency: "XOF",
     reference: purchase.providerRef,
     callback_url: callbackUrl,
     metadata: {
@@ -127,15 +75,53 @@ export async function POST(
     },
   };
 
+  // 3) Appeler Paystack initialize (exemple)
+  const secret = process.env.PAYSTACK_SECRET_KEY;
+  if (!secret) return jsonError("Missing PAYSTACK_SECRET_KEY", 500);
+
+  const res = await fetch("https://api.paystack.co/transaction/initialize", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${secret}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const json = await res.json().catch(() => ({} as any));
+
+  if (!res.ok || !json?.status) {
+    // log utile
+    console.error("[paystack.initialize] failed", { status: res.status, json });
+    return jsonError(json?.message || "Paystack initialize failed", 502);
+  }
+
+  // 4) Optionnel: marquer “initialized” + stocker réponse
+  const prevMeta =
+    purchase.metadata && typeof purchase.metadata === "object"
+      ? (purchase.metadata as Record<string, any>)
+      : {};
+
+  await debugDbContext("credits.initialize.before_update");
+
+  await prisma.workspaceCreditPurchase.update({
+    where: { id: purchase.id },
+    data: {
+      providerStatus: "pending",
+      metadata: {
+        ...prevMeta,
+        paystack: {
+          ...(prevMeta.paystack ?? {}),
+          initialize: json,
+        },
+      },
+    },
+  });
+
   return NextResponse.json({
     ok: true,
-    purchase: {
-      ...purchase,
-      unitPriceUsdCents: purchase.unitPriceUsd,
-      totalAmountUsdCents: purchase.totalAmountUsd,
-      createdAt: purchase.createdAt.toISOString(),
-      updatedAt: purchase.updatedAt.toISOString(),
-    },
-    paystack: { payload: paystackPayload },
+    authorization_url: json.data?.authorization_url,
+    reference: json.data?.reference,
+    purchaseId: purchase.id,
   });
 }

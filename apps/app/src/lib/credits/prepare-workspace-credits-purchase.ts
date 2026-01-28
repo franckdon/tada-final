@@ -115,22 +115,29 @@ export async function prepareWorkspaceCreditsPurchase(
   )}`;
 
   // 5) Persist purchase intent as PENDING
-  const row = await prisma.workspaceCreditPurchase.create({
-    data: {
+  // 5) Persist purchase intent as PENDING (idempotent)
+  const row = await prisma.workspaceCreditPurchase.upsert({
+    where: { providerRef },
+    create: {
       workspaceId: input.workspaceId,
       organizationId: input.organizationId,
-
       planCode: input.workspacePlanCode,
       credits,
-
       unitPriceUsd: unitPriceUsdCents,
       totalAmountUsd: totalAmountUsdCents,
       currency: "USD",
-
       provider: "paystack",
       providerRef,
       providerStatus: "pending",
-
+      metadata,
+    },
+    update: {
+      // On met à jour le snapshot (au cas où credits/plan/pricingTier change)
+      planCode: input.workspacePlanCode,
+      credits,
+      unitPriceUsd: unitPriceUsdCents,
+      totalAmountUsd: totalAmountUsdCents,
+      providerStatus: "pending", // si tu veux forcer pending tant que pas payé
       metadata,
     },
     select: {
@@ -150,6 +157,7 @@ export async function prepareWorkspaceCreditsPurchase(
       updatedAt: true,
     },
   });
+
 
   // 6) Build Paystack initialize payload (no HTTP call here)
   const payload = buildPaystackInitializePayload({

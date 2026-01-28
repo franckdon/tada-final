@@ -426,44 +426,6 @@ export function CreditsModal({
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Payload preview dialog */}
-      <Dialog open={payloadOpen} onOpenChange={setPayloadOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Payload Paystack (preview)</DialogTitle>
-          </DialogHeader>
-
-          {prepared ? (
-            <div className="space-y-3">
-              <div className="text-sm text-gray-700">
-                Purchase ID: <strong>{prepared.purchase.id}</strong>
-                <br />
-                Reference: <strong>{prepared.purchase.providerRef}</strong>
-              </div>
-
-              <pre className="max-h-[420px] overflow-auto rounded-md bg-gray-900 p-3 text-xs text-gray-100">
-                {JSON.stringify(
-                  {
-                    purchase: prepared.purchase,
-                    paystack: prepared.paystack,
-                  },
-                  null,
-                  2,
-                )}
-              </pre>
-
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setPayloadOpen(false)}>
-                  Fermer
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="text-sm text-gray-600">Aucun payload.</div>
-          )}
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
