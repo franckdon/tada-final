@@ -341,11 +341,6 @@ export function CreditsModal({
                       <strong>{prepared.purchase.providerRef}</strong>
                     </div>
                   ) : null}
-
-                  {/* ✅ debug quick */}
-                  <div className="text-[11px] text-gray-500">
-                    wsId: <code>{effectiveWorkspaceId || "∅"}</code>
-                  </div>
                 </div>
 
                 <Button

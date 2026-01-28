@@ -1,4 +1,3 @@
-// src/app/[locale]/(dashboard)/billing/success/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -12,80 +11,90 @@ import { ExternalLink, CheckCircle2, ArrowRight, LifeBuoy } from "lucide-react";
 import { useI18n } from "@/locales/client";
 import { authClient } from "@/lib/auth-client";
 
-type VerifySessionResponse = {
+type VerifyPaystackResponse = {
+  ok: boolean;
+  message?: string;
+  purchaseId?: string;
+  reference?: string;
   invoice?: {
     number?: string;
     hosted_invoice_url?: string;
     invoice_pdf?: string;
   };
-  // tu peux ajouter d'autres champs si ton API en retourne
 };
 
-export default function BillingSuccessPage() {
+export default function PaystackBillingSuccessPage() {
   const t = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
-
   const { data: organizations } = authClient.useListOrganizations();
 
-  const sessionId = searchParams.get("session_id");
+  const reference = searchParams.get("reference");
+  const purchaseId = searchParams.get("purchaseId");
+  const status = searchParams.get("status");
 
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
-  const [sessionData, setSessionData] = useState<VerifySessionResponse | null>(
-    null,
-  );
+  const [data, setData] = useState<VerifyPaystackResponse | null>(null);
   const [error, setError] = useState("");
 
   const orgId = organizations?.[0]?.id ?? null;
 
   const dashboardHref = useMemo(() => {
-    // adapte si ton “home dashboard” n’est pas /market-beats/[orgId]
     if (orgId) return `/market-beats/${orgId}`;
     return "/";
   }, [orgId]);
 
   const pricingHref = useMemo(() => {
-    // si tu as /pricing/[orgId] mets-le ici, sinon /pricing
     return orgId ? `/pricing/${orgId}` : "/pricing";
   }, [orgId]);
 
   useEffect(() => {
-    const fetchSession = async () => {
-      if (!sessionId) {
-        setError(t("billing.errors.missingSessionId"));
+    const verify = async () => {
+      // Paystack: status=success n'est pas une preuve, c'est juste un hint UI.
+      if (!reference && !purchaseId) {
+        setError("Reference ou purchaseId manquant.");
+        setLoading(false);
+        return;
+      }
+
+      // Si Paystack revient avec status=cancelled/failed, tu peux gérer UI vite
+      if (status && status !== "success") {
+        setError(`Paiement non confirmé (status=${status}).`);
         setLoading(false);
         return;
       }
 
       try {
         const res = await fetch(
-          `/api/verify-checkout-session?session_id=${encodeURIComponent(
-            sessionId,
-          )}`,
+          `/api/payments/paystack/verify?reference=${encodeURIComponent(
+            reference ?? "",
+          )}&purchaseId=${encodeURIComponent(purchaseId ?? "")}`,
           { cache: "no-store" },
         );
 
-        const data = (await res.json().catch(() => ({}))) as any;
+        const json = (await res
+          .json()
+          .catch(() => ({}))) as VerifyPaystackResponse;
 
-        if (!res.ok) {
-          setError(data?.error || t("billing.errors.generalError"));
+        if (!res.ok || !json?.ok) {
+          setError(json?.message || t("billing.errors.generalError"));
           setLoading(false);
           return;
         }
 
-        setMessage(t("billing.success.subscriptionActivated"));
-        setSessionData(data as VerifySessionResponse);
+        setMessage("Paiement confirmé ✅ Vos crédits ont été appliqués.");
+        setData(json);
       } catch (e) {
-        console.error("[BillingSuccessPage] verify error:", e);
-        setError(t("billing.errors.sessionRetrievalError"));
+        console.error("[PaystackBillingSuccessPage] verify error:", e);
+        setError("Erreur lors de la vérification Paystack.");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchSession();
-  }, [sessionId, t]);
+    verify();
+  }, [reference, purchaseId, status, t]);
 
   const handleContinue = () => {
     router.push(dashboardHref);
@@ -129,9 +138,15 @@ export default function BillingSuccessPage() {
             </Link>
           </div>
 
-          {sessionId ? (
+          {reference || purchaseId ? (
             <p className="mt-4 text-xs text-gray-500 text-center">
-              session_id: <span className="font-mono">{sessionId}</span>
+              ref: <span className="font-mono">{reference}</span>
+              {purchaseId ? (
+                <>
+                  {" "}
+                  • purchaseId: <span className="font-mono">{purchaseId}</span>
+                </>
+              ) : null}
             </p>
           ) : null}
         </div>
@@ -152,23 +167,23 @@ export default function BillingSuccessPage() {
           </div>
         </div>
 
-        {sessionData?.invoice ? (
+        {data?.invoice ? (
           <div className="mt-6 rounded-lg border bg-gray-50 p-4">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-sm font-semibold text-gray-900">
                 {t("billing.invoice.title")}
               </h2>
-              {sessionData.invoice.number ? (
+              {data.invoice.number ? (
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-800 border">
-                  #{sessionData.invoice.number}
+                  #{data.invoice.number}
                 </span>
               ) : null}
             </div>
 
             <div className="mt-3 flex flex-col gap-2 text-sm">
-              {sessionData.invoice.hosted_invoice_url ? (
+              {data.invoice.hosted_invoice_url ? (
                 <a
-                  href={sessionData.invoice.hosted_invoice_url}
+                  href={data.invoice.hosted_invoice_url}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-2 text-blue-600 hover:underline"
@@ -177,22 +192,15 @@ export default function BillingSuccessPage() {
                 </a>
               ) : null}
 
-              {sessionData.invoice.invoice_pdf ? (
+              {data.invoice.invoice_pdf ? (
                 <a
-                  href={sessionData.invoice.invoice_pdf}
+                  href={data.invoice.invoice_pdf}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-2 text-blue-600 hover:underline"
                 >
                   {t("billing.invoice.downloadPdf")} <ExternalLink size={16} />
                 </a>
-              ) : null}
-
-              {!sessionData.invoice.hosted_invoice_url &&
-              !sessionData.invoice.invoice_pdf ? (
-                <p className="text-xs text-gray-500">
-                  Aucune facture disponible pour l’instant.
-                </p>
               ) : null}
             </div>
           </div>

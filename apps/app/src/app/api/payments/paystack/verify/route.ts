@@ -1,6 +1,9 @@
 // src/app/api/payments/paystack/verify/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { applyWorkspaceCreditsFromPurchase } from "@/utils/apply-workspace-credits-from-purchase";
+
+export const runtime = "nodejs";
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status });
@@ -12,7 +15,7 @@ type PaystackVerifyResponse = {
   data?: {
     status: "success" | "failed" | "abandoned" | string;
     reference: string;
-    amount: number; // in subunits (kobo/cents)
+    amount: number; // subunits
     currency: string;
     paid_at?: string;
     channel?: string;
@@ -21,16 +24,16 @@ type PaystackVerifyResponse = {
   };
 };
 
-export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({}));
-  const reference = (body?.reference ?? "").toString().trim();
+function getReferenceFromUrl(req: Request) {
+  const url = new URL(req.url);
+  const ref = (url.searchParams.get("reference") ?? "").trim();
+  return ref || null;
+}
 
-  if (!reference) return jsonError("Missing reference");
-
+async function handleVerify(reference: string) {
   const secretKey = process.env.PAYSTACK_SECRET_KEY;
   if (!secretKey) return jsonError("PAYSTACK_SECRET_KEY missing", 500);
 
-  // 1) Find purchase row first (your DB is the source of truth for what we expect)
   const purchase = await prisma.workspaceCreditPurchase.findUnique({
     where: { providerRef: reference },
     select: {
@@ -43,12 +46,30 @@ export async function POST(req: Request) {
       providerStatus: true,
       metadata: true,
       createdAt: true,
+      updatedAt: true,
     },
   });
 
   if (!purchase) return jsonError("Purchase not found", 404);
 
-  // 2) Verify on Paystack
+  // ✅ If already paid, still ensure credits are applied (idempotent)
+  if (purchase.providerStatus === "paid") {
+    const applied = await applyWorkspaceCreditsFromPurchase({
+      purchaseId: purchase.id,
+      reference,
+      actorUserId: null,
+      paystackVerifyPayload: (purchase.metadata as any)?.paystack?.verify ?? null,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      alreadyPaid: true,
+      reference,
+      purchaseId: purchase.id,
+      applied,
+    });
+  }
+
   const url = `https://api.paystack.co/transaction/verify/${encodeURIComponent(
     reference,
   )}`;
@@ -65,29 +86,60 @@ export async function POST(req: Request) {
   const psJson = (await psRes.json().catch(() => ({}))) as PaystackVerifyResponse;
 
   if (!psRes.ok || !psJson?.status) {
-    return jsonError(psJson?.message || "Paystack verify failed", 400);
+    console.error("[paystack.verify] failed", { http: psRes.status, psJson });
+    return jsonError(psJson?.message || "Paystack verify failed", 502);
   }
 
   const data = psJson.data;
-  if (!data) return jsonError("Paystack response missing data", 400);
+  if (!data) return jsonError("Paystack response missing data", 502);
 
-  // 3) Basic checks
   const paystackStatus = data.status;
   const paystackAmount = Number(data.amount);
   const paystackCurrency = (data.currency ?? "").toUpperCase();
 
-  // Your DB stores totalAmountUsd in cents already.
   const expectedAmount = purchase.totalAmountUsd;
   const expectedCurrency = (purchase.currency ?? "USD").toUpperCase();
 
   const amountOk = paystackAmount === expectedAmount;
   const currencyOk = paystackCurrency === expectedCurrency;
 
+  const prevMeta =
+    purchase.metadata && typeof purchase.metadata === "object"
+      ? (purchase.metadata as Record<string, any>)
+      : {};
+
+  const isPaid = paystackStatus === "success";
+
+  await prisma.workspaceCreditPurchase.update({
+    where: { id: purchase.id },
+    data: {
+      providerStatus: isPaid ? "paid" : "pending",
+      metadata: {
+        ...prevMeta,
+        paystack: {
+          ...(prevMeta.paystack ?? {}),
+          verify: psJson,
+        },
+      },
+    },
+  });
+
+  let applied: any = null;
+  if (isPaid) {
+    applied = await applyWorkspaceCreditsFromPurchase({
+      purchaseId: purchase.id,
+      reference,
+      actorUserId: null,
+      paystackVerifyPayload: psJson,
+    });
+  }
+
   return NextResponse.json({
     ok: true,
     reference,
-    status: paystackStatus, // e.g. "success"
     purchaseId: purchase.id,
+    status: paystackStatus,
+    applied, // ✅ return it so you can see if credits were applied
     checks: {
       amountOk,
       currencyOk,
@@ -105,8 +157,21 @@ export async function POST(req: Request) {
       workspaceId: purchase.workspaceId,
       organizationId: purchase.organizationId,
       credits: purchase.credits,
-      providerStatus: purchase.providerStatus,
+      providerStatusBefore: purchase.providerStatus,
       createdAt: purchase.createdAt.toISOString(),
     },
   });
+}
+
+export async function GET(req: Request) {
+  const reference = getReferenceFromUrl(req);
+  if (!reference) return jsonError("Missing reference");
+  return handleVerify(reference);
+}
+
+export async function POST(req: Request) {
+  const body = await req.json().catch(() => ({}));
+  const reference = (body?.reference ?? "").toString().trim();
+  if (!reference) return jsonError("Missing reference");
+  return handleVerify(reference);
 }

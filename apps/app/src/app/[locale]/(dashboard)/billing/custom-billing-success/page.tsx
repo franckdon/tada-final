@@ -28,7 +28,7 @@ export default function BillingSuccessPage() {
       }
       try {
         const res = await fetch(
-          `/api/verify-custom-checkout-session?session_id=${sessionId}`
+          `/api/verify-custom-checkout-session?session_id=${sessionId}`,
         );
         const data = await res.json();
         if (res.ok) {
@@ -73,7 +73,7 @@ export default function BillingSuccessPage() {
           </h1>
           <p className="text-red-600 mb-6">{error}</p>
           <Button
-            onClick={() => router.push(`/pricing/${organizations![0]?.id}`)}
+            onClick={() => router.push(`/pricing`)}
             className="bg-orange-600 hover:bg-orange-700"
           >
             {t("billing.actions.backToPricing")}

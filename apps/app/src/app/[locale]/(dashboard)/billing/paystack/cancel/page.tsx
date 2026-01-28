@@ -1,8 +1,14 @@
-// src/app/[locale]/(dashboard)/billing/cancel/page.tsx
+"use client";
+
 import Link from "next/link";
+import { useParams, useSearchParams } from "next/navigation";
 import { XCircle, ArrowLeft, RefreshCcw, LifeBuoy } from "lucide-react";
 
 export default function BillingCancelPage() {
+  const { locale } = useParams<{ locale: string }>();
+  const searchParams = useSearchParams();
+  const reference = searchParams.get("reference");
+
   return (
     <div className="mx-auto w-full max-w-xl px-4 py-10">
       <div className="rounded-xl border bg-white p-6 shadow-sm">
@@ -30,9 +36,15 @@ export default function BillingCancelPage() {
           </ul>
         </div>
 
+        {reference && (
+          <p className="mt-4 text-xs text-gray-500 text-center">
+            Référence paiement : <span className="font-mono">{reference}</span>
+          </p>
+        )}
+
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <Link
-            href="/billing"
+            href={`/${locale}/billing`}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-black px-4 text-sm font-medium text-white hover:bg-black/90"
           >
             <RefreshCcw className="h-4 w-4" />
@@ -40,7 +52,7 @@ export default function BillingCancelPage() {
           </Link>
 
           <Link
-            href="/"
+            href={`/${locale}`}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium hover:bg-gray-50"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -48,7 +60,7 @@ export default function BillingCancelPage() {
           </Link>
 
           <Link
-            href="/support"
+            href={`/${locale}/support`}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium hover:bg-gray-50"
           >
             <LifeBuoy className="h-4 w-4" />
