@@ -24,8 +24,6 @@ export const submitMissionForValidationAction = authActionClient
       audiences,
     } = parsedInput;
 
-    console.log("missionId", missionId);
-
     const existingMission = await prisma.mission.findUnique({
       where: { id: missionId },
     });
@@ -35,41 +33,38 @@ export const submitMissionForValidationAction = authActionClient
     }
 
     try {
-      const originalMission = await prisma.tempMission.findUnique({
+      const existingTemp = await prisma.tempMission.findUnique({
         where: { missionId },
       });
 
-      if (originalMission) {
-        const lastModificationDate = new Date(originalMission.updatedAt);
-        const currentDate = new Date();
+      if (existingTemp) {
+        const updated = await prisma.tempMission.update({
+          where: { missionId },
+          data: {
+            name,
+            problemSummary,
+            objectives,
+            assumptions,
+            audiences,
+            status: status || existingMission.status,
+            validationStatus: "pending",
+          },
+        });
 
-        // Vérifier si nous sommes dans le même mois
-        const isSameMonth =
-          lastModificationDate.getFullYear() === currentDate.getFullYear() &&
-          lastModificationDate.getMonth() === currentDate.getMonth();
-
-        if (isSameMonth) {
-          // Calculer les jours restants jusqu'au prochain mois
-          const daysUntilNextMonth =
-            new Date(
-              currentDate.getFullYear(),
-              currentDate.getMonth() + 1,
-              1
-            ).getDate() - currentDate.getDate();
-
-          return {
-            success: true,
-            message: t("missions.update.editTooSoon"),
-          };
+        if (revalidateRoute) {
+          revalidatePath(revalidateRoute);
+        } else if (workspaceId) {
+          revalidatePath(`/missions/${workspaceId}`);
         }
 
         return {
           success: true,
+          duplicationId: updated.id,
           message: t("missions.update.alreadyPending"),
         };
       }
 
-      const missionDuplication = await prisma.tempMission.create({
+      const created = await prisma.tempMission.create({
         data: {
           missionId,
           name,
@@ -94,7 +89,7 @@ export const submitMissionForValidationAction = authActionClient
 
       return {
         success: true,
-        duplicationId: missionDuplication.id,
+        duplicationId: created.id,
         message: t("missions.update.submittedForReview"),
       };
     } catch (error) {

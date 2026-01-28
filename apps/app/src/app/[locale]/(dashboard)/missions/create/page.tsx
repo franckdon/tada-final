@@ -1,3 +1,4 @@
+// src/app/[locale]/(dashboard)/missions/create/page.tsx
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { CreateMissionLayout } from "./CreateMissionLayout";

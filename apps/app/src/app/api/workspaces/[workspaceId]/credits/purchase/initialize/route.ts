@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
-import { debugDbContext, prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
@@ -101,8 +101,6 @@ export async function POST(
     purchase.metadata && typeof purchase.metadata === "object"
       ? (purchase.metadata as Record<string, any>)
       : {};
-
-  await debugDbContext("credits.initialize.before_update");
 
   await prisma.workspaceCreditPurchase.update({
     where: { id: purchase.id },

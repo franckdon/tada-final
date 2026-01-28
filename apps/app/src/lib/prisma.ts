@@ -40,14 +40,6 @@ function isRelevantQuery(qLower: string) {
   );
 }
 
-console.log("NODE_ENV =", process.env.NODE_ENV);
-console.log("[prisma] cwd:", process.cwd());
-console.log("[prisma] DATABASE_URL =", redactDatabaseUrl(connectionString));
-console.log(
-  "[prisma] DATABASE_URL startsWith:",
-  (connectionString ?? "").slice(0, 30),
-);
-
 const prismaClient =
   global.prisma ??
   new PrismaClient({
@@ -91,59 +83,6 @@ async function dumpDbContextOnce() {
   } catch (err) {
     console.log("[prisma][db-context] failed", err);
   }
-}
-
-/**
- * Optional helper you can call from your route handlers too:
- *   await prismaDebug.debugDbContext("initialize.route");
- */
-export async function debugDbContext(tag = "debug") {
-  try {
-    const rows = await prismaClient.$queryRaw<
-      Array<{
-        db: string;
-        schema: string;
-        user: string;
-        search_path: string;
-        now: string;
-      }>
-    >`
-      select
-        current_database() as db,
-        current_schema() as schema,
-        current_user as user,
-        current_setting('search_path') as search_path,
-        now()::text as now
-    `;
-
-    console.log(`[prisma][${tag}][db-context]`, rows?.[0]);
-  } catch (err) {
-    console.log(`[prisma][${tag}][db-context] failed`, err);
-  }
-}
-
-if (shouldDebug()) {
-  // Query logs (filtered)
-  prismaClient.$on("query", (e) => {
-    const qLower = e.query.toLowerCase();
-    if (!isRelevantQuery(qLower)) return;
-
-    console.log("\n[prisma:query]", e.query);
-    console.log("[prisma:params]", e.params);
-    console.log("[prisma:duration(ms)]", e.duration);
-  });
-
-  // Error logs (include Prisma known error codes if available)
-  prismaClient.$on("error", (e) => {
-    console.log("\n[prisma:error]", e.message);
-  });
-
-  // Cache in dev to avoid too many connections in Next.js hot reload
-  global.prisma = prismaClient;
-
-  // Boot-time context dump (non-blocking)
-  // Note: fire-and-forget is okay here; it only logs context.
-  void dumpDbContextOnce();
 }
 
 export const prisma = prismaClient;

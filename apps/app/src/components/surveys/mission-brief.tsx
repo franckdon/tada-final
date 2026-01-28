@@ -11,11 +11,11 @@ export function MissionBrief({
   mission: {
     id: string;
     name: string;
-    orgId: string;
     problemSummary: string;
     objectives: string;
     assumptions: string;
     audiences: Record<string | number, string | number>;
+    workspaceId: string;
   };
 }) {
   const t = useI18n();
@@ -28,7 +28,9 @@ export function MissionBrief({
         {
           <Button
             onClick={() =>
-              router.push(`/missions/${mission.orgId}/${mission?.id}/update`)
+              router.push(
+                `/missions/${mission.workspaceId}/${mission?.id}/update`,
+              )
             }
           >
             {t("common.updateConfig")}
@@ -72,7 +74,7 @@ export function MissionBrief({
                   mission.audiences![groupId as any]![filterId as any] as any
                 )?.map((value) => {
                   const option = filter?.options?.find(
-                    (o) => o.value === value
+                    (o) => o.value === value,
                   );
                   return (
                     <span
@@ -85,7 +87,7 @@ export function MissionBrief({
                     </span>
                   );
                 });
-              })
+              }),
             )}
           </div>
         </div>

@@ -73,7 +73,7 @@ interface AudiencesFilterContextType {
     groupId: string,
     filterId: string,
     value: string,
-    isSelected: boolean
+    isSelected: boolean,
   ) => void;
 }
 
@@ -122,7 +122,7 @@ export function AudiencesFilterProvider({
       }
 
       return initialFilters;
-    }
+    },
   );
 
   const [suggestions, setSuggestions] = useState<AudienceSuggestion[]>([]);
@@ -159,7 +159,7 @@ export function AudiencesFilterProvider({
     groupId: string,
     filterId: string,
     value: string,
-    isSelected: boolean
+    isSelected: boolean,
   ) => {
     setSelectedFilters((prevFilters) => {
       const newFilters = { ...prevFilters };
@@ -200,7 +200,7 @@ export function AudiencesFilterProvider({
   const submitSuggestion = async (suggestion: AudienceSuggestion) => {
     if (!organizationId) {
       console.warn(
-        "[AudiencesFilterProvider] submitSuggestion called without organizationId"
+        "[AudiencesFilterProvider] submitSuggestion called without organizationId",
       );
       return;
     }
@@ -282,7 +282,7 @@ export function useAudiencesFilter() {
   const context = useContext(AudiencesFilterContext);
   if (!context) {
     throw new Error(
-      "useAudiencesFilter must be used within a AudiencesFilterProvider"
+      "useAudiencesFilter must be used within a AudiencesFilterProvider",
     );
   }
   return context;

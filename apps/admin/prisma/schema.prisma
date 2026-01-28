@@ -1326,6 +1326,7 @@ model workspace_credit_transaction {
   workspace_credit_account      workspace_credit_account       @relation(fields: [credit_account_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_wct_credit_account")
   workspace_credit_subscription workspace_credit_subscription? @relation(fields: [subscription_id], references: [id], onUpdate: NoAction, map: "fk_wct_subscription")
 
+  @@unique([credit_account_id, reference_id, reason, direction], map: "uniq_credit_tx_ref")
   @@index([actor_user_id], map: "idx_wct_actor_user_id")
   @@index([credit_account_id, created_at], map: "idx_wct_credit_account_created_at")
   @@index([subscription_id], map: "idx_wct_subscription_id")
