@@ -245,7 +245,7 @@ export default {
     title: "Ajout de crédits",
     approvedBy: "Apprécié et approuvé par plus de 2000 équipes",
     researchAsYouGo: {
-      title: "Ajouter du crédit supplémentaire",
+      title: "Pay as you Go",
       price: "17 $ / Réponse",
       creditCount: "Nombre de crédits",
       totalHT: "Total: ",
@@ -397,8 +397,8 @@ export default {
     templates: "Modèles",
     marketBeats: "Tendances du marché",
     help: "Centre d'aide",
-    analysis: "Analyse IA",
-    contactUs: "Contact us",
+    analysis: "Discuter avec vos données",
+    contactUs: "Contactez-nous",
     userManagement: "Gestion utilisateur",
   },
   user: {

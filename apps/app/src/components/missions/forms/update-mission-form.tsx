@@ -337,21 +337,18 @@ export function UpdateMissionForm({
       return;
     }
 
+    const safeName = (values?.name ?? form.getValues("name") ?? "").trim();
+
     updateMission.execute({
       missionId: originalMissionId,
       workspaceId: workspace.id,
       status: "on hold",
-      name: values?.name,
-      problemSummary: values?.problemSummary,
-      objectives: values?.objectives,
-      assumptions: values?.assumptions,
-
-      // ✅ audiences viennent du contexte (pré-remplies via AudiencesFilterProvider audiences=...)
-      audiences: selectedFilters,
-
-      // ✅ optionnel: si ton action/schema supporte
-      // suggestions,
-    } as any);
+      name: safeName,
+      problemSummary: values?.problemSummary ?? null,
+      objectives: values?.objectives ?? null,
+      assumptions: values?.assumptions ?? null,
+      audiences: selectedFilters ?? {},
+    });
   };
 
   // assistant thread

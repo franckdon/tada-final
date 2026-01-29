@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useCurrency } from "@/hooks/use-currency";
 import { authClient, signOut, useSession } from "@/lib/auth-client";
 import { useCurrentLocale, useI18n } from "@/locales/client";
@@ -20,7 +21,6 @@ import {
   Users,
   Contact,
   Bot,
-  Settings,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -29,15 +29,54 @@ import { SidebarGroup } from "./sidebar-group";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { useWorkspace } from "@/context/workspace-context";
 
+type NavItem = {
+  icon: React.ReactNode;
+  text: string;
+  href: string;
+  target?: string;
+  disabled?: boolean;
+};
+
+type NavGroup = {
+  title?: string;
+  items: NavItem[];
+};
+
 interface SidebarItemProps {
   icon: React.ReactNode;
   text: string;
   href: string;
   active?: boolean;
   target?: string;
+  disabled?: boolean;
 }
 
-function SidebarItem({ icon, text, href, active, target }: SidebarItemProps) {
+function SidebarItem({
+  icon,
+  text,
+  href,
+  active,
+  target,
+  disabled,
+}: SidebarItemProps) {
+  if (disabled) {
+    return (
+      <span
+        className={cn(
+          "flex items-center px-4 py-3 text-sm rounded-lg",
+          "text-gray-400 dark:text-gray-600",
+          "cursor-not-allowed opacity-60",
+          "select-none",
+        )}
+        aria-disabled="true"
+        title={typeof text === "string" ? text : undefined}
+      >
+        <span className="mr-3">{icon}</span>
+        <span>{text}</span>
+      </span>
+    );
+  }
+
   return (
     <Link
       href={href}
@@ -45,7 +84,7 @@ function SidebarItem({ icon, text, href, active, target }: SidebarItemProps) {
         "flex items-center px-4 py-3 text-sm rounded-lg transition-colors",
         active
           ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
-          : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+          : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800",
       )}
       target={target}
     >
@@ -66,18 +105,19 @@ export function Sidebar() {
   const t = useI18n();
   const pathname = usePathname();
   const router = useRouter();
-  //const { currencies, selectedCurrency, setSelectedCurrency } = useCurrency();
+
   const { currencies, selectedCurrency, setSelectedCurrency, hydrated } =
     useCurrency();
+
   const { data: session } = useSession();
   const { data: organizations } = authClient.useListOrganizations();
   const currentLocale = useCurrentLocale();
 
   const { currentWorkspace } = useWorkspace();
 
-  // 🔎 On essaie aussi de récupérer le workspaceId depuis l’URL
-  const parts = pathname.split("/"); // ["", "fr", "missions", "<workspaceId>", ...]
+  const parts = pathname.split("/");
   let workspaceIdFromUrl: string | undefined;
+
   if (
     parts.length > 3 &&
     (parts[2] === "missions" || parts[2] === "market-beats")
@@ -88,7 +128,7 @@ export function Sidebar() {
   const workspaceId =
     currentWorkspace?.id || workspaceIdFromUrl || "dev-workspace";
 
-  const navigationGroups = [
+  const navigationGroups: NavGroup[] = [
     {
       items: [
         {
@@ -113,6 +153,7 @@ export function Sidebar() {
           text: t("navigation.analysis"),
           href: `/${currentLocale}/analysis`,
           target: "_self",
+          disabled: true,
         },
         {
           icon: <Users className="h-5 w-5" />,
@@ -128,13 +169,17 @@ export function Sidebar() {
         {
           icon: <Layers className="h-5 w-5" />,
           text: t("navigation.templates"),
-          href: `/${currentLocale}/missions/org/${organizations ? organizations![0]?.id : "dev-org"}/templates`,
+          href: `/${currentLocale}/missions/org/${
+            organizations ? organizations[0]?.id : "dev-org"
+          }/templates`,
           target: "_self",
         },
         {
           icon: <TrendingUp className="h-5 w-5" />,
           text: t("navigation.marketBeats"),
-          href: `/${currentLocale}/market-beats/${organizations ? organizations![0]?.id : "dev-org"}`,
+          href: `/${currentLocale}/market-beats/${
+            organizations ? organizations[0]?.id : "dev-org"
+          }`,
           target: "_self",
         },
       ],
@@ -177,7 +222,6 @@ export function Sidebar() {
             width={90}
             height={32}
             priority
-            className=""
           />
         </Link>
       </div>
@@ -200,6 +244,7 @@ export function Sidebar() {
                 href={item.href}
                 active={pathname === item.href}
                 target={item.target}
+                disabled={item.disabled}
               />
             ))}
           </SidebarGroup>
@@ -212,6 +257,7 @@ export function Sidebar() {
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
             {t("common.currency")}
           </p>
+
           <Select
             value={selectedCurrency.code}
             onValueChange={(value: string) => {
@@ -225,6 +271,7 @@ export function Sidebar() {
                 {selectedCurrency.symbol} - {selectedCurrency.name}
               </SelectValue>
             </SelectTrigger>
+
             <SelectContent>
               {currencies.map((currency) => (
                 <SelectItem key={currency.code} value={currency.code}>

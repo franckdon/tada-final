@@ -179,7 +179,11 @@ function PlanCard({
                 : "bg-blue-600 hover:bg-blue-700 text-white",
             )}
           >
-            <Link href="/contact">
+            <Link
+              href="https://calendly.com/tadaiq/30min"
+              target="_blank"
+              rel="noreferrer"
+            >
               {locale === "fr" ? "Contactez-nous" : "Talk to us"}
             </Link>
           </Button>

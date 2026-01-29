@@ -254,7 +254,7 @@ export default {
     title: "Add Credits",
     approvedBy: "Appreciated and approved by over 2000 teams",
     researchAsYouGo: {
-      title: "As you go",
+      title: "Pay as you Go",
       price: "17 $ / submission",
       creditCount: "Amount of credits",
       totalHT: "Total: ",
@@ -406,7 +406,7 @@ export default {
     templates: "Templates",
     marketBeats: "Market Beats",
     help: "Help center",
-    analysis: "AI Analysis",
+    analysis: "Chat with your data",
     contactUs: "Contact us",
     userManagement: "User management",
   },
