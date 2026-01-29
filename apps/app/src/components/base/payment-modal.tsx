@@ -7,7 +7,6 @@ import {
   DialogTitle,
 } from "@tada/ui/components/dialog";
 import { Button } from "@tada/ui/components/button";
-import { RadioGroup, RadioGroupItem } from "@tada/ui/components/radio-group";
 import { Label } from "@tada/ui/components/label";
 import { Input } from "@tada/ui/components/input";
 import {
@@ -94,15 +93,10 @@ export function PaymentModal({
   const locale = useCurrentLocale();
 
   const [loadingCheckout, setLoadingCheckout] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"invoice" | "paystack">(
-    "paystack",
-  );
 
   // --- Paystack state ---
   const [isPreparing, setIsPreparing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
-  const [prepared, setPrepared] = useState<PrepareResponse | null>(null);
-  const [payloadOpen, setPayloadOpen] = useState(false);
 
   const {
     street,
@@ -181,11 +175,7 @@ export function PaymentModal({
         throw new Error(json?.error || "Failed to prepare purchase");
       }
 
-      const data = json as PrepareResponse;
-      setPrepared(data);
-      setPayloadOpen(true);
-
-      return data;
+      return json as PrepareResponse;
     } finally {
       setIsPreparing(false);
     }
@@ -233,18 +223,6 @@ export function PaymentModal({
   };
 
   const handleSubmit = async () => {
-    console.log("[PaymentModal] submit clicked", {
-      credits,
-      unitPrice,
-      currency,
-      storeWorkspaceId,
-      propWorkspaceId: workspaceId,
-      effectiveWorkspaceId,
-      organizationId,
-      sessionUserId: session?.user?.id,
-      paymentMethod,
-    });
-
     if (!isFormValid) {
       toast({
         title: commonT("error.somethingWentWrong"),
@@ -254,20 +232,13 @@ export function PaymentModal({
       return;
     }
 
-    if (paymentMethod === "invoice") {
-      toast({
-        title: "Facture",
-        description:
-          "Mode facture sélectionné. (Tu peux garder ton flow existant ici.)",
-      });
-      return;
-    }
-
     setLoadingCheckout(true);
 
     try {
+      // ✅ 1) Prepare purchase
       const preparedData = await preparePurchase();
 
+      // ✅ 2) Initialize paystack + redirect
       await initializePaystack({
         purchaseId: preparedData.purchase?.id,
         reference: preparedData.purchase?.providerRef,
@@ -275,8 +246,7 @@ export function PaymentModal({
     } catch (err: any) {
       toast({
         title: commonT("error.somethingWentWrong"),
-        description:
-          err?.message || "Erreur lors de l'initialisation Paystack.",
+        description: err?.message || "Erreur lors de la redirection Paystack.",
         variant: "destructive",
       });
     } finally {
@@ -284,271 +254,219 @@ export function PaymentModal({
     }
   };
 
+  const isBusy = loadingCheckout || isPreparing || isInitializing;
+
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-6xl p-0 gap-0 rounded-lg max-h-[90vh] overflow-y-auto flex flex-col">
-          <DialogHeader className="px-6 py-4 bg-[#F8F9F9] border-b flex flex-row items-center justify-between flex-shrink-0">
-            <DialogTitle className="text-lg font-semibold">
-              {paymentModalT("title")}
-            </DialogTitle>
-          </DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-6xl p-0 gap-0 rounded-lg max-h-[90vh] overflow-y-auto flex flex-col">
+        <DialogHeader className="px-6 py-4 bg-[#F8F9F9] border-b flex flex-row items-center justify-between flex-shrink-0">
+          <DialogTitle className="text-lg font-semibold">
+            {paymentModalT("title")}
+          </DialogTitle>
+        </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch flex-grow">
-            {/* Summary */}
-            <div className="space-y-6 bg-[#F5F5F5] p-6 flex flex-col justify-between">
-              <h2 className="text-lg font-bold">
-                {paymentModalT("summarySection.title")}
-              </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch flex-grow">
+          {/* Summary */}
+          <div className="space-y-6 bg-[#F5F5F5] p-6 flex flex-col justify-between">
+            <h2 className="text-lg font-bold">
+              {paymentModalT("summarySection.title")}
+            </h2>
 
-              <div className="space-y-2 flex-grow text-sm text-gray-700">
-                <div className="flex justify-between">
-                  <span>
-                    {paymentModalT("summarySection.creditsLabel")} {credits}{" "}
-                    {credits > 1 ? "crédits" : "crédit"}
-                  </span>
-                </div>
-
-                <div className="flex justify-between">
-                  <span>Prix par crédit :</span>
-                  <span>{money(unitPrice)}</span>
-                </div>
-
-                <div className="flex justify-between font-bold text-lg">
-                  <span>Total :</span>
-                  <span>{money(total)}</span>
-                </div>
+            <div className="space-y-2 flex-grow text-sm text-gray-700">
+              <div className="flex justify-between">
+                <span>
+                  {paymentModalT("summarySection.creditsLabel")} {credits}{" "}
+                  {credits > 1 ? "crédits" : "crédit"}
+                </span>
               </div>
 
-              <p className="text-xs text-gray-500 leading-relaxed">
-                {paymentModalT("summarySection.disclaimer")}
-              </p>
+              <div className="flex justify-between">
+                <span>Prix par crédit :</span>
+                <span>{money(unitPrice)}</span>
+              </div>
+
+              <div className="flex justify-between font-bold text-lg">
+                <span>Total :</span>
+                <span>{money(total)}</span>
+              </div>
             </div>
 
-            {/* Form */}
-            <div className="space-y-6 p-6">
-              <h2 className="text-lg font-bold">
-                {paymentModalT("paymentMethodSection.title")}
-              </h2>
-
-              <RadioGroup
-                value={paymentMethod}
-                onValueChange={(v) => setPaymentMethod(v as any)}
-                className="flex space-x-4"
-              >
-                <div
-                  className={`flex items-center space-x-2 border rounded-md py-2 px-3 flex-1 cursor-pointer ${
-                    paymentMethod === "paystack"
-                      ? "border-2 border-appinio-blue"
-                      : "border-gray-200"
-                  }`}
-                  onClick={() => setPaymentMethod("paystack")}
-                >
-                  <RadioGroupItem value="paystack" id="paystack" />
-                  <Label
-                    htmlFor="paystack"
-                    className="font-medium cursor-pointer"
-                  >
-                    Paystack
-                  </Label>
-                </div>
-
-                <div
-                  className={`flex items-center space-x-2 border rounded-md py-2 px-3 flex-1 cursor-pointer ${
-                    paymentMethod === "invoice"
-                      ? "border-2 border-appinio-blue"
-                      : "border-gray-200"
-                  }`}
-                  onClick={() => setPaymentMethod("invoice")}
-                >
-                  <RadioGroupItem value="invoice" id="invoice" />
-                  <Label
-                    htmlFor="invoice"
-                    className="font-medium cursor-pointer"
-                  >
-                    {paymentModalT("paymentMethodSection.invoice")}
-                  </Label>
-                </div>
-              </RadioGroup>
-
-              {/* ---- FORM ---- */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label htmlFor="civility">
-                    {paymentModalT("form.civility")}
-                  </Label>
-                  <Select
-                    value={civility}
-                    onValueChange={(value) =>
-                      setField("civility", value as any)
-                    }
-                  >
-                    <SelectTrigger id="civility" className="h-9">
-                      <SelectValue
-                        placeholder={paymentModalT("form.civility")}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="m">{formT("civility.mr")}</SelectItem>
-                      <SelectItem value="mme">
-                        {formT("civility.mrs")}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="firstName">
-                    {paymentModalT("form.firstName")}
-                  </Label>
-                  <Input
-                    id="firstName"
-                    placeholder={paymentModalT("form.firstName")}
-                    value={firstName}
-                    onChange={(e) => setField("firstName", e.target.value)}
-                    className="h-9"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="lastName">
-                    {paymentModalT("form.lastName")}
-                  </Label>
-                  <Input
-                    id="lastName"
-                    placeholder={paymentModalT("form.lastName")}
-                    value={lastName}
-                    onChange={(e) => setField("lastName", e.target.value)}
-                    className="h-9"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="street-number">
-                    {paymentModalT("form.streetNumber")}
-                  </Label>
-                  <Input
-                    id="street-number"
-                    placeholder={paymentModalT("form.streetNumber")}
-                    value={street}
-                    onChange={(e) => setField("street", e.target.value)}
-                    className="h-9"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="postal-code">
-                    {paymentModalT("form.postalCode")}
-                  </Label>
-                  <Input
-                    id="postal-code"
-                    placeholder={paymentModalT("form.postalCode")}
-                    value={zip}
-                    onChange={(e) => setField("zip", e.target.value)}
-                    className="h-9"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="city">{paymentModalT("form.city")}</Label>
-                  <Input
-                    id="city"
-                    placeholder={paymentModalT("form.city")}
-                    value={city}
-                    onChange={(e) => setField("city", e.target.value)}
-                    className="h-9"
-                  />
-                </div>
-
-                {/* ✅ PAYS : liste complète provenant de countries (comme ton firstModal) */}
-                <div className="space-y-1">
-                  <Label htmlFor="country">
-                    {paymentModalT("form.country")}
-                  </Label>
-                  <Select
-                    value={country || ""}
-                    onValueChange={(value) => setField("country", value)}
-                  >
-                    <SelectTrigger id="country" className="h-9">
-                      <SelectValue
-                        placeholder={paymentModalT("form.country")}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(countries).map(([code, c]) => (
-                        <SelectItem key={code} value={code}>
-                          <span className="flex items-center gap-2">
-                            <span>{c.emoji}</span>
-                            <span>{c.name}</span>
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1 col-span-2">
-                  <Label htmlFor="company">
-                    {paymentModalT("form.company")}
-                  </Label>
-                  <Input
-                    id="company"
-                    placeholder={paymentModalT("form.company")}
-                    value={company}
-                    onChange={(e) => setField("company", e.target.value)}
-                    className="h-9"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="terms"
-                  checked={acceptTerms}
-                  onCheckedChange={(checked) =>
-                    setField("acceptTerms", !!checked)
-                  }
-                />
-                <Label htmlFor="terms" className="text-sm">
-                  {paymentModalT("form.acceptTerms")}{" "}
-                  <a href="#" className="text-appinio-blue hover:underline">
-                    {paymentModalT("form.termsAndConditions")}
-                  </a>
-                </Label>
-              </div>
-
-              {/* ✅ Bouton cohérent avec le résumé */}
-              <Button
-                className="w-full h-9"
-                onClick={handleSubmit}
-                disabled={
-                  !isFormValid ||
-                  loadingCheckout ||
-                  isPreparing ||
-                  isInitializing
-                }
-              >
-                {loadingCheckout || isPreparing || isInitializing ? (
-                  <span className="inline-flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {isPreparing
-                      ? "Préparation..."
-                      : isInitializing
-                        ? "Redirection Paystack..."
-                        : "Chargement..."}
-                  </span>
-                ) : paymentMethod === "invoice" ? (
-                  <>Demander une facture — {money(total)}</>
-                ) : (
-                  <>
-                    Acheter {credits} crédits — {money(total)}
-                  </>
-                )}
-              </Button>
-            </div>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              {paymentModalT("summarySection.disclaimer")}
+            </p>
           </div>
-        </DialogContent>
-      </Dialog>
-    </>
+
+          {/* Form */}
+          <div className="space-y-6 p-6">
+            <h2 className="text-lg font-bold">
+              {paymentModalT("paymentMethodSection.title")}
+            </h2>
+
+            {/* ---- FORM ---- */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="civility">
+                  {paymentModalT("form.civility")}
+                </Label>
+                <Select
+                  value={civility}
+                  onValueChange={(value) => setField("civility", value as any)}
+                  disabled={isBusy}
+                >
+                  <SelectTrigger id="civility" className="h-9">
+                    <SelectValue placeholder={paymentModalT("form.civility")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="m">{formT("civility.mr")}</SelectItem>
+                    <SelectItem value="mme">{formT("civility.mrs")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="firstName">
+                  {paymentModalT("form.firstName")}
+                </Label>
+                <Input
+                  id="firstName"
+                  placeholder={paymentModalT("form.firstName")}
+                  value={firstName}
+                  onChange={(e) => setField("firstName", e.target.value)}
+                  className="h-9"
+                  disabled={isBusy}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="lastName">
+                  {paymentModalT("form.lastName")}
+                </Label>
+                <Input
+                  id="lastName"
+                  placeholder={paymentModalT("form.lastName")}
+                  value={lastName}
+                  onChange={(e) => setField("lastName", e.target.value)}
+                  className="h-9"
+                  disabled={isBusy}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="street-number">
+                  {paymentModalT("form.streetNumber")}
+                </Label>
+                <Input
+                  id="street-number"
+                  placeholder={paymentModalT("form.streetNumber")}
+                  value={street}
+                  onChange={(e) => setField("street", e.target.value)}
+                  className="h-9"
+                  disabled={isBusy}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="postal-code">
+                  {paymentModalT("form.postalCode")}
+                </Label>
+                <Input
+                  id="postal-code"
+                  placeholder={paymentModalT("form.postalCode")}
+                  value={zip}
+                  onChange={(e) => setField("zip", e.target.value)}
+                  className="h-9"
+                  disabled={isBusy}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="city">{paymentModalT("form.city")}</Label>
+                <Input
+                  id="city"
+                  placeholder={paymentModalT("form.city")}
+                  value={city}
+                  onChange={(e) => setField("city", e.target.value)}
+                  className="h-9"
+                  disabled={isBusy}
+                />
+              </div>
+
+              {/* ✅ PAYS : liste complète provenant de countries */}
+              <div className="space-y-1">
+                <Label htmlFor="country">{paymentModalT("form.country")}</Label>
+                <Select
+                  value={country || ""}
+                  onValueChange={(value) => setField("country", value)}
+                  disabled={isBusy}
+                >
+                  <SelectTrigger id="country" className="h-9">
+                    <SelectValue placeholder={paymentModalT("form.country")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(countries).map(([code, c]) => (
+                      <SelectItem key={code} value={code}>
+                        <span className="flex items-center gap-2">
+                          <span>{c.emoji}</span>
+                          <span>{c.name}</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1 col-span-2">
+                <Label htmlFor="company">{paymentModalT("form.company")}</Label>
+                <Input
+                  id="company"
+                  placeholder={paymentModalT("form.company")}
+                  value={company}
+                  onChange={(e) => setField("company", e.target.value)}
+                  className="h-9"
+                  disabled={isBusy}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="terms"
+                checked={acceptTerms}
+                onCheckedChange={(checked) =>
+                  setField("acceptTerms", !!checked)
+                }
+                disabled={isBusy}
+              />
+              <Label htmlFor="terms" className="text-sm">
+                {paymentModalT("form.acceptTerms")}{" "}
+                <a href="#" className="text-appinio-blue hover:underline">
+                  {paymentModalT("form.termsAndConditions")}
+                </a>
+              </Label>
+            </div>
+
+            {/* ✅ Bouton : plus de choix "invoice", redirection Paystack directe */}
+            <Button
+              className="w-full h-9"
+              onClick={handleSubmit}
+              disabled={!isFormValid || isBusy}
+            >
+              {isBusy ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {isPreparing
+                    ? "Préparation..."
+                    : isInitializing
+                      ? "Redirection Paystack..."
+                      : "Chargement..."}
+                </span>
+              ) : (
+                <>Payer avec Paystack — {money(total)}</>
+              )}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -33,7 +33,7 @@ export function UpgradeRequiredModal({
 
   const description =
     reason === "no_plan"
-      ? "Vous devez activer un forfait pour créer une mission."
+      ? "Vous devez activer un forfait ou avoir des points pour créer une mission."
       : `Vous avez ${balance} crédits. Il vous faut au moins ${minCredits} crédits pour créer une mission.`;
 
   return (
