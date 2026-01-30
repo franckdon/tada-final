@@ -18,7 +18,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@tada/ui/components/form";
-import { Loader2 } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { useAction } from "next-safe-action/hooks";
 import { configureMissionAction } from "@/actions/missions/configure-mission-action";
 import { useToast } from "@/hooks/use-toast";
@@ -42,11 +42,13 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface MissionConfigurationFormProps {
   mission: TempMission;
-  // Optionnel: données existantes de MissionConfigContributor si en mode édition
-  initialConfig?: any; 
+  initialConfig?: any;
 }
 
-export function MissionConfigurationForm({ mission, initialConfig }: MissionConfigurationFormProps) {
+export function MissionConfigurationForm({
+  mission,
+  initialConfig,
+}: MissionConfigurationFormProps) {
   const t = useI18n();
   const { toast } = useToast();
   const router = useRouter();
@@ -58,7 +60,9 @@ export function MissionConfigurationForm({ mission, initialConfig }: MissionConf
       publicTitle: initialConfig?.title || "",
       publicDescription: initialConfig?.description || "",
       gain: initialConfig?.gain ? Number(initialConfig.gain) : 1, // Convert BigInt to number
-      deadline: initialConfig?.deadline ? new Date(initialConfig.deadline) : null,
+      deadline: initialConfig?.deadline
+        ? new Date(initialConfig.deadline)
+        : null,
       targetSubmissions: mission.targetSubmissions || 100, // Assumer que ce champ existe sur TempMission
       geographicZones: mission.geographicZones || "Global",
       requiresPhoto: initialConfig?.requiresPhoto || false, // Assumer ces champs existent sur MissionConfigContributor
@@ -88,18 +92,20 @@ export function MissionConfigurationForm({ mission, initialConfig }: MissionConf
 
   const onSubmit = (values: FormValues) => {
     execute({
-        ...values,
-        missionId: mission.id,
+      ...values,
+      missionId: mission.id,
     });
   };
-  
-  // NOTE: Le composant de Date (Input type="date") n'est pas inclus ici pour des raisons de simplicité, 
+
+  // NOTE: Le composant de Date (Input type="date") n'est pas inclus ici pour des raisons de simplicité,
   // mais vous devriez utiliser un DatePicker ou un Input type="date" pour le champ 'deadline'.
-  
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 bg-white p-6 rounded-lg shadow-sm">
-        
+      <form
+        onSubmit={form.handleSubmit(onSubmit)}
+        className="space-y-6 bg-white p-6 rounded-lg shadow-sm"
+      >
         <h3 className="text-xl font-semibold border-b pb-3 mb-4">
           {t("missions.config.section_public")}
         </h3>
@@ -117,35 +123,39 @@ export function MissionConfigurationForm({ mission, initialConfig }: MissionConf
             </FormItem>
           )}
         />
-        
+
         <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="publicTitle"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("missions.config.public_title")}</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="gain"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("missions.config.gain")}</FormLabel>
-                  <FormControl>
-                    <Input type="number" {...field} onChange={(e) => field.onChange(e.target.valueAsNumber)} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <FormField
+            control={form.control}
+            name="publicTitle"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("missions.config.public_title")}</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="gain"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("missions.config.gain")}</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    {...field}
+                    onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
 
         <FormField
@@ -155,115 +165,135 @@ export function MissionConfigurationForm({ mission, initialConfig }: MissionConf
             <FormItem>
               <FormLabel>{t("missions.config.public_description")}</FormLabel>
               <FormControl>
-                <Textarea rows={5} placeholder={t("missions.config.description_placeholder")} {...field} />
+                <Textarea
+                  rows={5}
+                  placeholder={t("missions.config.description_placeholder")}
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        
+
         <h3 className="text-xl font-semibold border-b pb-3 pt-6 mb-4">
           {t("missions.config.section_operational")}
         </h3>
 
         <div className="grid grid-cols-3 gap-4">
-            <FormField
-              control={form.control}
-              name="targetSubmissions"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("missions.config.target_submissions")}</FormLabel>
-                  <FormControl>
-                    <Input type="number" {...field} onChange={(e) => field.onChange(e.target.valueAsNumber)} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-              control={form.control}
-              name="geographicZones"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("missions.config.geographic_zones")}</FormLabel>
-                  <FormControl>
-                    <Input placeholder="FR, US, CA" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-              control={form.control}
-              name="deadline"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("missions.config.deadline")}</FormLabel>
-                  <FormControl>
-                    {/* NOTE: Utiliser un DatePicker réel en production */}
-                    <Input 
-                      type="date" 
-                      {...field} 
-                      value={field.value ? field.value.toISOString().split('T')[0] : ''}
-                      onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <FormField
+            control={form.control}
+            name="targetSubmissions"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("missions.config.target_submissions")}</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    {...field}
+                    onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="geographicZones"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("missions.config.geographic_zones")}</FormLabel>
+                <FormControl>
+                  <Input placeholder="FR, US, CA" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="deadline"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("missions.config.deadline")}</FormLabel>
+                <FormControl>
+                  {/* NOTE: Utiliser un DatePicker réel en production */}
+                  <Input
+                    type="date"
+                    {...field}
+                    value={
+                      field.value ? field.value.toISOString().split("T")[0] : ""
+                    }
+                    onChange={(e) =>
+                      field.onChange(
+                        e.target.value ? new Date(e.target.value) : null,
+                      )
+                    }
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
-        
+
         <h3 className="text-xl font-semibold border-b pb-3 pt-6 mb-4">
           {t("missions.config.section_media")}
         </h3>
-        
+
         <div className="flex space-x-6">
-             <FormField
-                control={form.control}
-                name="requiresPhoto"
-                render={({ field }) => (
-                  <FormItem className="flex items-center space-x-2 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormLabel className="font-normal">{t("missions.config.requires_photo")}</FormLabel>
-                  </FormItem>
-                )}
-            />
-             <FormField
-                control={form.control}
-                name="requiresVideo"
-                render={({ field }) => (
-                  <FormItem className="flex items-center space-x-2 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormLabel className="font-normal">{t("missions.config.requires_video")}</FormLabel>
-                  </FormItem>
-                )}
-            />
-            <FormField
-                control={form.control}
-                name="requiresAudio"
-                render={({ field }) => (
-                  <FormItem className="flex items-center space-x-2 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormLabel className="font-normal">{t("missions.config.requires_audio")}</FormLabel>
-                  </FormItem>
-                )}
-            />
+          <FormField
+            control={form.control}
+            name="requiresPhoto"
+            render={({ field }) => (
+              <FormItem className="flex items-center space-x-2 space-y-0">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <FormLabel className="font-normal">
+                  {t("missions.config.requires_photo")}
+                </FormLabel>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="requiresVideo"
+            render={({ field }) => (
+              <FormItem className="flex items-center space-x-2 space-y-0">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <FormLabel className="font-normal">
+                  {t("missions.config.requires_video")}
+                </FormLabel>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="requiresAudio"
+            render={({ field }) => (
+              <FormItem className="flex items-center space-x-2 space-y-0">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <FormLabel className="font-normal">
+                  {t("missions.config.requires_audio")}
+                </FormLabel>
+              </FormItem>
+            )}
+          />
         </div>
 
         <Button type="submit" disabled={isExecuting} className="w-full mt-8">

@@ -1172,6 +1172,7 @@ export default {
         success: "Mission created successfully",
         error: "An error occurred while creating the mission",
         showSurveys: "Show surveys",
+        targetSampleSize: "Target sample size",
       },
     },
     missionSubmission: {

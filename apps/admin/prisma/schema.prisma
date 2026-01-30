@@ -206,6 +206,7 @@ model SurveyResponse {
   validation_comment ValidationComment[]
   survey             Survey              @relation(fields: [surveyId], references: [id])
   user               User?               @relation(fields: [userId], references: [id])
+  qualityControl     qualityControl?
 
   @@map("survey_response")
 }
@@ -932,11 +933,13 @@ model ValidationComment {
 }
 
 model qualityControl {
-  id                String        @id
-  surveyResponseId  String        @unique
-  status            QualityStatus @default(pending)
-  overallScore      Float         @default(0)
-  maxScore          Float         @default(100)
+  id                String         @id
+  surveyResponseId  String         @unique
+  surveyResponse    SurveyResponse @relation(fields: [surveyResponseId], references: [id], onDelete: Cascade)
+  qualityIssues     qualityIssue[]
+  status            QualityStatus  @default(pending)
+  overallScore      Float          @default(0)
+  maxScore          Float          @default(100)
   consistencyScore  Float?
   mediaScore        Float?
   geoScore          Float?
@@ -951,7 +954,7 @@ model qualityControl {
   decisionReason    String?
   reviewedBy        String?
   reviewedAt        DateTime?
-  createdAt         DateTime      @default(now())
+  createdAt         DateTime       @default(now())
   updatedAt         DateTime
 
   @@index([surveyResponseId], map: "idx_quality_control_survey_id")
@@ -988,6 +991,7 @@ model qualityIssue {
   confidence       Float             @default(0)
   suggestions      Json?
   createdAt        DateTime          @default(now())
+  qualityControl   qualityControl    @relation(fields: [qualityControlId], references: [id])
 
   @@index([qualityControlId], map: "idx_quality_issue_qc_id")
   @@map("quality_issue")
@@ -1021,6 +1025,8 @@ model MissionConfigContributor {
   createdAt   DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime? @updatedAt @db.Timestamp(6)
   deadline    DateTime? @db.Timestamptz(6)
+
+  targetSampleSize Int @default(0)
 
   @@index([missionId], map: "idx_mission_config_mission_id")
   @@map("mission_config_contributor")

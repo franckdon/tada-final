@@ -1,3 +1,4 @@
+// src/actions/missions/create-config-mission-action.ts
 "use server";
 
 import { prisma } from "@/lib/prisma";
@@ -6,24 +7,33 @@ import { createMissionConfigForContributorsSchema } from "./schema";
 import { revalidatePath } from "next/cache";
 import { generateMissionChartsAction } from "./generate-mission-charts-action";
 
+/**
+ * Option 4 (aligné apps/app) :
+ * - l'image est uploadée AVANT via /api/uploads/storage (service role)
+ * - on stocke en DB un PATH Supabase (ex: "mission-thumbnails/xxx.png")
+ * - ici on ne gère plus les dataURL / écriture disque
+ */
 export const createConfigMissionAction = authActionClient
   .schema(createMissionConfigForContributorsSchema)
-  .metadata({
-    name: "create-config-mission-action",
-  })
-  .action(async ({ parsedInput, ctx: { user, auth } }) => {
+  .metadata({ name: "create-config-mission-action" })
+  .action(async ({ parsedInput }) => {
     try {
-      // Supprimer l'ancienne config s'il y en a une
+      const missionId = parsedInput.missionId as string;
+
+      // 1) Supprimer l'ancienne config (si existante)
       await prisma.missionConfigContributor.deleteMany({
-        where: { missionId: parsedInput.missionId as string },
+        where: { missionId },
       });
 
-      const mission = await prisma.missionConfigContributor.create({
+      // 2) Créer la nouvelle config
+      //    imageUrl doit être un PATH supabase (ou null)
+      const missionConfig = await prisma.missionConfigContributor.create({
         data: parsedInput as any,
       });
 
+      // 3) Publier la mission
       await prisma.mission.update({
-        where: { id: parsedInput.missionId as string },
+        where: { id: missionId },
         data: {
           isPublish: true,
           status: "live",
@@ -31,11 +41,9 @@ export const createConfigMissionAction = authActionClient
         },
       });
 
-      // Générer automatiquement les graphiques quand la mission passe en "live"
+      // 4) Générer automatiquement les graphiques quand la mission passe en "live"
       try {
-        const chartsResult = await generateMissionChartsAction({
-          missionId: parsedInput.missionId as string,
-        });
+        const chartsResult = await generateMissionChartsAction({ missionId });
 
         if (chartsResult?.data?.success) {
           console.log(
@@ -48,21 +56,17 @@ export const createConfigMissionAction = authActionClient
           );
         }
       } catch (chartError) {
-        console.error(
-          "Erreur lors de la génération des graphiques:",
-          chartError
-        );
+        console.error("Erreur lors de la génération des graphiques:", chartError);
         // Ne pas faire échouer la création de config si les graphiques échouent
       }
 
       revalidatePath("/missions");
-      return { success: true, data: mission };
+      return { success: true, data: missionConfig };
     } catch (error) {
       console.error("[CREATE_MISSION_CONFIG_ERROR]", error);
       return {
         success: false,
-        error:
-          error instanceof Error ? error.message : "Une erreur est survenue",
+        error: error instanceof Error ? error.message : "Une erreur est survenue",
       };
     }
   });

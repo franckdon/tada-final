@@ -63,13 +63,13 @@ export default async function MissionSubmissionsPage({
           createdAt: true,
         },
       },
-      validationComment: {
+      validation_comment: {
         select: {
           id: true,
           comment: true,
           action: true,
           createdAt: true,
-          validator: {
+          user: {
             select: {
               id: true,
               name: true,

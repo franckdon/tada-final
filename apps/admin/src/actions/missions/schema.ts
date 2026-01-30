@@ -17,12 +17,20 @@ export const createMissionConfigForContributorsSchema = z.object({
   title: z.string().min(1),
   missionId: z.string().optional().nullable(),
   description: z.string().min(1),
-  gain: z.number(),
-  duration: z.number(),
-  targetSampleSize: z.number(),
-  deadline: z.date().optional().nullable(),
+
+  // ✅ coerce number (input text/number -> string -> number)
+  gain: z.coerce.number().min(0),
+  duration: z.coerce.number().min(0),
+
+  // ✅ important : ton schema le demande, mais ton defaultValues ne le met pas
+  targetSampleSize: z.coerce.number().int().min(1),
+
+  // ✅ coerce date si jamais tu passes une string (ex: input type="date")
+  deadline: z.coerce.date().optional().nullable(),
+
   imageUrl: z.string().optional().nullable(),
 });
+
 export const regenerateSurveysAISchema = z.object({
   problemSummary: z.string().min(1),
   objectives: z.string().min(1),
@@ -84,6 +92,7 @@ export const missionForValidationSchema = z.object({
   problemSummary: z.string().optional().nullable(),
   objectives: z.string().optional().nullable(),
   assumptions: z.string().optional().nullable(),
+  targetSampleSize: z.number().optional().nullable(),
   status: z
     .enum(["draft", "live", "paused", "cancelled", "complete", "on hold"])
     .optional()
@@ -104,6 +113,7 @@ export const updateMissionSchema = z.object({
     .optional()
     .nullable(),
   revalidateRoute: z.string().optional().nullable(),
+  targetSampleSize: z.number().optional().nullable(),
 });
 
 export const updateMissionPermissionsSchema = z.object({

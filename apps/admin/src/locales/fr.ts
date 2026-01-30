@@ -638,6 +638,7 @@ export default {
         success: "Mission créée avec succès",
         error: "Une erreur est survenue lors de la création de la mission",
         showSurveys: "Afficher les questionnaires",
+        targetSampleSize: "Taille d'échantillon cible",
       },
     },
     missionSubmission: {

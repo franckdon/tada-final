@@ -40,10 +40,10 @@ export default async function Page({
       status: true,
       createdAt: true,
       updatedAt: true,
-      survey: {
+      surveys: {
         select: {
           questions: true,
-          response: {
+          responses: {
             select: {
               id: true,
               responses: true,
@@ -97,7 +97,7 @@ export default async function Page({
                   } Participants (${Math.round(
                     (question.participants_responded /
                       responseDb.metadata.total_responses) *
-                      100
+                      100,
                   )}%)`}
                 />
               )}
@@ -121,7 +121,7 @@ export default async function Page({
                   } Participants (${Math.round(
                     (question.participants_responded /
                       responseDb.metadata.total_responses) *
-                      100
+                      100,
                   )}%)`}
                   participantCount={question.participants_responded}
                 />
@@ -145,7 +145,7 @@ export default async function Page({
                   } Participants (${Math.round(
                     (question.participants_responded /
                       responseDb.metadata.total_responses) *
-                      100
+                      100,
                   )}%)`}
                   participantCount={question.participants_responded}
                   primaryKeys={question.primaryKeys}
@@ -165,7 +165,7 @@ export default async function Page({
                   } Participants (${Math.round(
                     (question.participants_responded /
                       responseDb.metadata.total_responses) *
-                      100
+                      100,
                   )}%)`}
                 />
               )}

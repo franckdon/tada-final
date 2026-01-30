@@ -47,6 +47,7 @@ const ResumeStep = ({ mission }: { mission: Mission }) => {
                 problemSummary: mission.problemSummary || "",
                 objectives: mission.objectives || "",
                 assumptions: mission.assumptions || "",
+                targetSampleSize: mission.targetSampleSize || 0,
                 audiences:
                   (mission.audiences as Record<string, string | number>) || {},
               }}

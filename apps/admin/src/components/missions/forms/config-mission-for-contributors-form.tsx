@@ -18,7 +18,7 @@ import { Textarea } from "@tada/ui/components/textarea";
 import { useUpload } from "@/hooks/use-upload";
 import { stripSpecialCharacters } from "@/lib/utils";
 import Image from "next/image";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { createConfigMissionAction } from "@/actions/missions/create-config-mission-action";
 
 export function ConfigMissionForContributorsForm({
@@ -31,60 +31,106 @@ export function ConfigMissionForContributorsForm({
   const t = useI18n();
   const { toast } = useToast();
   const form = useFormContext();
+
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
   const { uploadFile, isLoading } = useUpload();
 
   const createMission = useAction(createConfigMissionAction, {
-    onSuccess: (data) => {
-      // setMission(data.data?.data!);
+    onSuccess: (res) => {
+      // ✅ IMPORTANT: vérifier le payload business
+      const ok = res?.data?.success;
+      if (!ok) {
+        console.error("[CREATE_CONFIG_MISSION_FAILED]", res?.data);
+        toast({
+          title: t("missions.createMission.form.error"),
+          description: (res?.data as any)?.error ?? "Action failed",
+          variant: "destructive",
+        });
+        return;
+      }
+
       goNext();
-      toast({
-        title: t("missions.createMission.form.success"),
-      });
+      toast({ title: t("missions.createMission.form.success") });
     },
-    onError: () => {
+    onError: (err) => {
+      console.error("[CREATE_CONFIG_MISSION_ACTION_ERROR]", err);
       toast({
         title: t("missions.createMission.form.error"),
+        description: "Server action error",
         variant: "destructive",
       });
     },
   });
 
-  const onSubmit = async (values: object) => {
-    let imageUrl = avatarUrl;
-    if (avatarFile) {
-      const filename = stripSpecialCharacters(avatarFile.name);
-      const { url } = await uploadFile({
-        file: avatarFile,
-        path: ["missions-contributors", filename],
-        bucket: "avatars",
-      });
+  const onSubmit = async (values: any) => {
+    try {
+      let imageUrl: string | null = null;
 
-      setAvatarUrl(url);
-      imageUrl = url;
-    }
-    createMission.execute(
-      createMissionConfigForContributorsSchema.parse({
+      // 1) Upload server-side (Option 4) => récupérer PATH à stocker
+      if (avatarFile) {
+        const filename = stripSpecialCharacters(avatarFile.name);
+
+        const { url: publicUrl, path: storedPath } = await uploadFile({
+          file: avatarFile,
+          bucket: "tada",
+          path: ["mission-thumbnails", `mission-${missionId}-${filename}`],
+        });
+
+        // Preview (URL publique)
+        if (publicUrl) setAvatarUrl(publicUrl);
+
+        // ⚠️ Sécuriser le type (selon ton implémentation de useUpload)
+        const normalizedPath =
+          typeof storedPath === "string"
+            ? storedPath
+            : Array.isArray(storedPath)
+              ? storedPath.join("/")
+              : null;
+
+        if (!normalizedPath) {
+          throw new Error("Upload OK mais path invalide.");
+        }
+
+        imageUrl = normalizedPath;
+      }
+
+      // 2) Validation Zod + exécution action
+      const payload = createMissionConfigForContributorsSchema.parse({
         ...values,
         missionId,
         imageUrl,
-      })
-    );
+      });
+
+      await createMission.execute(payload);
+    } catch (e) {
+      console.error("[CONFIG_MISSION_SUBMIT_ERROR]", e);
+
+      toast({
+        title: t("missions.createMission.form.error"),
+        description:
+          e instanceof Error ? e.message : "Erreur lors de l’enregistrement",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleAvatarUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      setAvatarFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+
+    setAvatarFile(file);
+
+    // preview base64
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAvatarUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   };
+
+  const isSubmitting = createMission.status === "executing" || isLoading;
 
   return (
     <form
@@ -106,7 +152,7 @@ export function ConfigMissionForContributorsForm({
                   className="w-full"
                 />
               ) : (
-                <label className=" p-6 text-center cursor-pointer">
+                <label className="p-6 text-center cursor-pointer">
                   <input
                     type="file"
                     className="hidden"
@@ -130,6 +176,7 @@ export function ConfigMissionForContributorsForm({
             </div>
           </div>
         </div>
+
         <div>
           <FormField
             control={form.control}
@@ -150,6 +197,7 @@ export function ConfigMissionForContributorsForm({
             )}
           />
         </div>
+
         <div>
           <FormField
             control={form.control}
@@ -162,7 +210,7 @@ export function ConfigMissionForContributorsForm({
                 <FormControl>
                   <Textarea
                     placeholder={t(
-                      "missions.publish.form.configMissionDescription"
+                      "missions.publish.form.configMissionDescription",
                     )}
                     rows={8}
                     {...field}
@@ -173,6 +221,7 @@ export function ConfigMissionForContributorsForm({
             )}
           />
         </div>
+
         <div>
           <FormField
             control={form.control}
@@ -195,6 +244,7 @@ export function ConfigMissionForContributorsForm({
             )}
           />
         </div>
+
         <div className="grid md:grid-cols-2 gap-4">
           <div className="md:col-span-1">
             <FormField
@@ -209,7 +259,7 @@ export function ConfigMissionForContributorsForm({
                     <Input
                       type="number"
                       placeholder={t(
-                        "missions.publish.form.configMissionDuration"
+                        "missions.publish.form.configMissionDuration",
                       )}
                       {...field}
                       onChange={(e) => field.onChange(Number(e.target.value))}
@@ -220,6 +270,7 @@ export function ConfigMissionForContributorsForm({
               )}
             />
           </div>
+
           <div className="md:col-span-1">
             <FormField
               control={form.control}
@@ -232,10 +283,20 @@ export function ConfigMissionForContributorsForm({
                   <FormControl>
                     <Input
                       type="datetime-local"
-                      placeholder={t("missions.publish.form.configMissionDeadline")}
+                      placeholder={t(
+                        "missions.publish.form.configMissionDeadline",
+                      )}
                       {...field}
-                      value={field.value ? new Date(field.value).toISOString().slice(0, 16) : ''}
-                      onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                      value={
+                        field.value
+                          ? new Date(field.value).toISOString().slice(0, 16)
+                          : ""
+                      }
+                      onChange={(e) =>
+                        field.onChange(
+                          e.target.value ? new Date(e.target.value) : null,
+                        )
+                      }
                     />
                   </FormControl>
                   <FormMessage />
@@ -244,6 +305,7 @@ export function ConfigMissionForContributorsForm({
             />
           </div>
         </div>
+
         <div>
           <FormField
             control={form.control}
@@ -256,7 +318,9 @@ export function ConfigMissionForContributorsForm({
                 <FormControl>
                   <Input
                     type="number"
-                    placeholder={t("missions.publish.form.configMissionSampleSize")}
+                    placeholder={t(
+                      "missions.publish.form.configMissionSampleSize",
+                    )}
                     {...field}
                     onChange={(e) => field.onChange(Number(e.target.value))}
                   />
@@ -267,12 +331,8 @@ export function ConfigMissionForContributorsForm({
           />
         </div>
 
-        <Button
-          type="submit"
-          disabled={createMission.status === "executing"}
-          className="mt-4"
-        >
-          {createMission.status === "executing" ? (
+        <Button type="submit" disabled={isSubmitting} className="mt-4">
+          {isSubmitting ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               {t("common.loading")}

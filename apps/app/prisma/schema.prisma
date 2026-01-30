@@ -1002,8 +1002,8 @@ model feedback_entry {
   createdAt         DateTime  @default(now())
 }
 
-model mission_config_contributor {
-  id          String    @id
+model MissionConfigContributor {
+  id          String    @id @default(uuid())
   title       String
   description String
   gain        BigInt
@@ -1011,8 +1011,13 @@ model mission_config_contributor {
   missionId   String
   imageUrl    String?
   createdAt   DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime? @db.Timestamp(6)
+  updatedAt   DateTime? @updatedAt @db.Timestamp(6)
   deadline    DateTime? @db.Timestamptz(6)
+
+  targetSampleSize Int      @default(0)
+
+  @@index([missionId], map: "idx_mission_config_mission_id")
+  @@map("mission_config_contributor")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments

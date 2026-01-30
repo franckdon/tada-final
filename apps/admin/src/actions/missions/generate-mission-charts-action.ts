@@ -91,7 +91,7 @@ export const generateMissionChartsAction = authActionClient
       const mission = await prisma.mission.findUnique({
         where: { id: missionId },
         include: {
-          survey: {
+          surveys: {
             select: {
               id: true,
               name: true,
@@ -105,13 +105,13 @@ export const generateMissionChartsAction = authActionClient
         throw new Error("Mission non trouvée");
       }
 
-      if (!mission.survey || mission.survey.length === 0) {
+      if (!mission.surveys || mission.surveys.length === 0) {
         throw new Error("Aucun sondage trouvé pour cette mission");
       }
 
       const generatedCharts: any[] = [];
       let dashboardOrder = 1;
-      const survey = mission.survey[0]!;
+      const survey = mission.surveys[0]!;
 
       // Parser les questions du sondage
       const questions =

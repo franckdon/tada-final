@@ -18,12 +18,6 @@ export function SurveyShow() {
   const { theme } = useTheme();
   const currentLocale = useCurrentLocale();
   const { surveys: domainSurvey } = useSurveysBuilder();
-  // useEffect(() => {
-  //   const surveyModel = new Model(surveyJson);
-  //   surveyModel.applyTheme(theme === "light" ? lightTheme : darkTheme);
-  //   surveyModel.locale = currentLocale;
-  //   setSurvey(surveyModel);
-  // }, [surveyJson, theme, currentLocale]);
   useEffect(() => {
     if (!domainSurvey) return;
 

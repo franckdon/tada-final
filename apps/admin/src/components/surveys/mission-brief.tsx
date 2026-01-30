@@ -17,6 +17,7 @@ export function MissionBrief({
     problemSummary: string;
     objectives: string;
     assumptions: string;
+    targetSampleSize: number;
     audiences: Record<string | number, string | number>;
   };
   isPublish?: boolean;
@@ -61,6 +62,13 @@ export function MissionBrief({
 
       <div className="mb-6">
         <h2 className="text-lg font-semibold mb-2">
+          {t("missions.createMission.form.targetSampleSize")}
+        </h2>
+        <p>{mission.targetSampleSize}</p>
+      </div>
+
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold mb-2">
           {t("missions.createMission.form.audiences")}
         </h2>
         <div className="flow-root">
@@ -74,7 +82,7 @@ export function MissionBrief({
                   mission.audiences![groupId as any]![filterId as any] as any
                 )?.map((value) => {
                   const option = filter?.options?.find(
-                    (o) => o.value === value
+                    (o) => o.value === value,
                   );
                   return (
                     <span
@@ -87,7 +95,7 @@ export function MissionBrief({
                     </span>
                   );
                 });
-              })
+              }),
             )}
           </div>
         </div>
