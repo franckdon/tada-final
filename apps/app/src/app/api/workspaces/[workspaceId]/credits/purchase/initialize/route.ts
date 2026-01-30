@@ -63,7 +63,7 @@ export async function POST(
     email: (purchase.metadata as any)?.customerEmail ?? session.user.email,
     amount: purchase.totalAmountUsd, // cents
     //currency: purchase.currency ?? "USD",
-    currency: "XOF",
+    currency: "EUR", 
     reference: purchase.providerRef,
     callback_url: callbackUrl,
     metadata: {

@@ -3,6 +3,7 @@ import { title } from "vega-lite/types_unstable/channeldef.js";
 
 export default {
   common: {
+    formSaving: "Génération des questions...",
     search: {
       placeholder: "Rechercher...",
     },

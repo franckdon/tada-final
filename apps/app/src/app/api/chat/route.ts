@@ -15,6 +15,7 @@ CRITICAL: You must first collect all the required information from the user thro
 2. Business problem summary
 3. Strategic objectives
 4. Assumptions/hypotheses
+5. The size of the target market
 
 Only after you have collected comprehensive information for all these sections should you use the appropriate tools to fill in the complete form. Once you have all necessary information, inform the user that you will now fill out the form based on your conversation.
 

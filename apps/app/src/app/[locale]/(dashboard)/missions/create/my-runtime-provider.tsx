@@ -6,53 +6,43 @@ import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 import { useChat, type UIMessage } from "@ai-sdk/react";
 import { useParams } from "next/navigation";
 
-const aiVersion = process.env.NEXT_PUBLIC_AI_VERSION ?? "unknown";
-
-function getWelcomeMessage(locale: string) {
+function buildSystem(locale: string) {
   const isFr = (locale ?? "").toLowerCase().startsWith("fr");
   return isFr
-    ? "Bienvenue sur Tada, je suis Dina. Comment puis-je vous aider à résoudre votre problème aujourd’hui ?"
-    : "Welcome to Tada, I'm Dina. How can I help you solve your problem today?";
+    ? `
+Tu es Dina, un copilote d'étude marketing.
+
+Règle stricte: tu dois commencer par poser exactement 2 questions courtes :
+1) Quel est ton produit/service et sur quel marché ?
+2) Quel problème business veux-tu résoudre (symptômes + ce qui a changé + quand) ?
+
+Ensuite, pose 1–3 questions max par message jusqu’à avoir:
+- problemSummary, objectives, assumptions, mission name, target sample size, audience
+Quand tout est OK: demander confirmation et finir par [[READY_TO_FILL_FORM]].
+`
+    : `
+You are Dina, a Marketing Research Copilot.
+
+Strict rule: start by asking exactly 2 short questions:
+1) What product/service and which market?
+2) What business problem are you trying to solve (symptoms + what changed + when)?
+
+Then ask 1–3 questions per message until you have:
+- problemSummary, objectives, assumptions, mission name, target sample size, audience
+When complete: ask confirmation and end with [[READY_TO_FILL_FORM]].
+`;
 }
 
 export function MyRuntimeProvider({ children }: { children: React.ReactNode }) {
   const params = useParams<{ locale?: string }>();
   const locale = params?.locale ?? "en";
 
-  React.useEffect(() => {
-    console.log("AI SDK version (client):", aiVersion);
-  }, []);
-
-  // Important: stable + typé UIMessage (et non Message)
-  const initialMessages = React.useMemo<UIMessage[]>(() => {
-    return [
-      {
-        id: "tada-welcome-1",
-        role: "assistant",
-        content: getWelcomeMessage(locale),
-      },
-    ];
-  }, [locale]);
+  const system = React.useMemo(() => buildSystem(locale), [locale]);
 
   const chat = useChat({
     api: "/api/chat",
-    initialMessages,
-    onResponse: async (res) => {
-      console.log("useChat response status:", res.status);
-      console.log(
-        "useChat response content-type:",
-        res.headers.get("content-type"),
-      );
-      const t = await res.clone().text();
-      console.log("useChat raw response text:", t.slice(0, 200));
-    },
-    onError: (err) => console.error("useChat error:", err),
-    onFinish: (msg) => console.log("useChat finished assistant message:", msg),
+    body: { system },
   });
-
-  React.useEffect(() => {
-    console.log("useChat messages:", chat.messages);
-  }, [chat.messages]);
 
   const runtime = useAISDKRuntime(chat);
 

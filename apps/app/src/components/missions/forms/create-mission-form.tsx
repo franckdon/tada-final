@@ -13,8 +13,12 @@ import { useAction } from "next-safe-action/hooks";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFormContext } from "react-hook-form";
-import { AudiencesFilterModal } from "../modals/audiences-filter-modal";
 import { Input } from "@tada/ui/components/input";
+
+import { useBoolean } from "@/hooks/use-boolean";
+import { useWorkspaceCredits } from "@/hooks/use-workspace-credits";
+import { useWorkspaceCreditsStore } from "@/hooks/use-workspace-credit-store";
+import { InsufficientCreditsModal } from "../modals/insufficient-credits-modal";
 
 interface Section {
   id: number;
@@ -102,10 +106,12 @@ export function CreateMissionForm({
   organization,
   workspaceId,
   locale,
+  onOpenAudiencesModal,
 }: {
   organization: { status: string | null; id: string };
   workspaceId: string;
   locale: string;
+  onOpenAudiencesModal: () => void;
 }) {
   const t = useI18n();
   const { toast } = useToast();
@@ -119,9 +125,6 @@ export function CreateMissionForm({
   const editSectionRef = useRef<HTMLDivElement>(null);
   const editTitleRef = useRef<HTMLDivElement>(null);
 
-  const [isAudiencesFilterModalOpen, setIsAudiencesFilterModalOpen] =
-    useState(false);
-
   const [title, setTitle] = useState(t("missions.createMission.form.name"));
   const [editingTitle, setEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState("");
@@ -132,6 +135,40 @@ export function CreateMissionForm({
   const [lastSyncedAssistantId, setLastSyncedAssistantId] = useState<
     string | null
   >(null);
+
+  // Credits
+  useWorkspaceCredits(workspaceId);
+
+  const balance = useWorkspaceCreditsStore((s) => s.balance);
+  const subscription = useWorkspaceCreditsStore((s) => s.subscription);
+  const loadingCredits = useWorkspaceCreditsStore((s) => s.loading);
+
+  /**
+   * ✅ IMPORTANT: ne jamais mettre "true" par défaut si status est null/undefined
+   * Sinon tu bypass le check crédits sans le vouloir.
+   *
+   * Règle métier:
+   * - plan actif payant => pas de check crédits
+   * - sinon => check crédits (balance)
+   */
+  const planCode = (subscription?.planCode ?? "").toLowerCase();
+  const planLabel = (subscription?.planLabel ?? "").toLowerCase();
+
+  // adapte ces valeurs à tes vrais codes/labels
+  const isFreePlan =
+    planCode === "free" ||
+    planCode === "trial" ||
+    planLabel.includes("free") ||
+    planLabel.includes("trial");
+
+  const hasPaidActivePlan = subscription?.status === "active" && !isFreePlan;
+
+  const insufficientCreditsModal = useBoolean(false);
+  const [requiredCredits, setRequiredCredits] = useState(0);
+  const [requestedSample, setRequestedSample] = useState(0);
+  const [maxSample, setMaxSample] = useState(0);
+
+  const CREDITS_PER_SAMPLE = 12;
 
   const {
     activeFiltersCount,
@@ -173,9 +210,9 @@ export function CreateMissionForm({
       form.setValue("sampleSummary", brief.sampleSummary, {
         shouldDirty: true,
       });
-      // form.setValue("targetSampleSize", brief.targetSampleSize ?? undefined, {
-      //   shouldDirty: true,
-      // });
+      form.setValue("targetSampleSize", brief.targetSampleSize ?? undefined, {
+        shouldDirty: true,
+      });
       form.setValue(
         "preliminaryRecommendations",
         brief.preliminaryRecommendations,
@@ -287,7 +324,47 @@ export function CreateMissionForm({
     setEditingSection(null);
   };
 
-  const onSubmit = async (values: object) => {
+  const onSubmit = async (values: any) => {
+    // 1) Récupérer sample depuis values (plus fiable que getValues ici)
+    const sample = Number(values?.targetSampleSize ?? 0);
+    const available = typeof balance === "number" ? balance : 0;
+
+    // 2) Si crédits encore en chargement => on bloque strictement (anti bypass)
+    if (loadingCredits) {
+      toast({
+        title:
+          locale === "fr" ? "Vérification des crédits…" : "Checking credits…",
+        description:
+          locale === "fr"
+            ? "Réessaie dans un instant."
+            : "Try again in a moment.",
+      });
+      return;
+    }
+
+    // 3) Si pas de plan payant actif => check crédits
+    if (!hasPaidActivePlan && sample > 0) {
+      const required = sample * CREDITS_PER_SAMPLE;
+
+      // DEBUG (à garder 1 minute, puis enlever)
+      // console.log("[MISSION CREDITS CHECK]", {
+      //   sample,
+      //   required,
+      //   available,
+      //   hasPaidActivePlan,
+      //   subscription,
+      // });
+
+      if (required > available) {
+        setRequestedSample(sample);
+        setRequiredCredits(required);
+        setMaxSample(Math.floor(available / CREDITS_PER_SAMPLE));
+        insufficientCreditsModal.onTrue();
+        return;
+      }
+    }
+
+    // 4) OK => création mission
     createMission.execute(
       createMissionSchema.parse({
         ...values,
@@ -312,12 +389,6 @@ export function CreateMissionForm({
     return lastAssistant ? extractTextFromMessage(lastAssistant) : "";
   }, [lastAssistant]);
 
-  /**
-   * AI FILL trigger:
-   * - Primary: token [[READY_TO_FILL_FORM]]
-   * - Fallback: assistant message looks like a "brief" and is long enough
-   * - (Optionnel) Confirmation user: gardée uniquement si tu veux, sinon tu peux la retirer
-   */
   useEffect(() => {
     const log = (...args: any[]) => console.log("[AI FILL]", ...args);
 
@@ -329,7 +400,6 @@ export function CreateMissionForm({
     const CONFIRM_RE =
       /\b(yes|yeah|yep|ok|okay|sure|confirmed|go ahead|do it|sounds good|looks good|oui|d['’]accord|ok|vas-y|c['’]est bon|parfait)\b/i;
 
-    // 1) Trouver le DERNIER message assistant avec le token READY
     let askedIndex = -1;
     for (let i = threadMessages.length - 1; i >= 0; i--) {
       const msg = threadMessages[i];
@@ -343,7 +413,6 @@ export function CreateMissionForm({
 
     if (askedIndex === -1) return log("skip: READY token not found");
 
-    // 2) Chercher une confirmation USER après ce message
     const after = threadMessages.slice(askedIndex + 1);
 
     const confirmMsg = after.find((m) => {
@@ -409,7 +478,6 @@ export function CreateMissionForm({
     selectedFilters,
   ]);
 
-  // Click outside: section edit
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
@@ -425,7 +493,6 @@ export function CreateMissionForm({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [editingSection, tempContent]);
 
-  // Click outside: title edit
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
@@ -441,7 +508,6 @@ export function CreateMissionForm({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [editingTitle, tempTitle]);
 
-  // Sync title + section statuses with form values
   useEffect(() => {
     const subscription = form.watch((values: any) => {
       if (values?.name) setTitle(values.name);
@@ -464,7 +530,6 @@ export function CreateMissionForm({
     return () => subscription.unsubscribe();
   }, [form]);
 
-  // Audiences section status
   useEffect(() => {
     const hasAnyAudiences = activeFiltersCount > 0 || suggestions.length > 0;
     setSections((prev) =>
@@ -477,415 +542,436 @@ export function CreateMissionForm({
   }, [activeFiltersCount, suggestions.length]);
 
   return (
-    <form
-      onSubmit={form.handleSubmit(onSubmit)}
-      className="h-full flex flex-col bg-white dark:bg-gray-900 p-4"
-    >
-      <input type="hidden" {...form.register("hidden")} />
+    <>
+      <form
+        onSubmit={form.handleSubmit(onSubmit)}
+        className="h-full flex flex-col bg-white dark:bg-gray-900 p-4"
+      >
+        <input type="hidden" {...form.register("hidden")} />
 
-      <div className="flex justify-between items-start mb-6">
-        <div className="flex-1 flex-col">
-          {editingTitle ? (
-            <div ref={editTitleRef} className="mb-2">
-              <FormField
-                control={form.control}
-                defaultValue={tempTitle}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <textarea
-                        className="w-full text-black dark:text-white p-2 border border-gray-600 rounded focus:outline-none focus:border-blue-500"
-                        rows={2}
-                        {...field}
-                        onChange={(e) => {
-                          field.onChange(e.target.value);
-                          setTitle(e.target.value);
-                          setTempTitle(e.target.value);
-                        }}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+        <div className="flex justify-between items-start mb-6">
+          <div className="flex-1 flex-col">
+            {editingTitle ? (
+              <div ref={editTitleRef} className="mb-2">
+                <FormField
+                  control={form.control}
+                  defaultValue={tempTitle}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <textarea
+                          className="w-full text-black dark:text-white p-2 border border-gray-600 rounded focus:outline-none focus:border-blue-500"
+                          rows={2}
+                          {...field}
+                          onChange={(e) => {
+                            field.onChange(e.target.value);
+                            setTitle(e.target.value);
+                            setTempTitle(e.target.value);
+                          }}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
 
-              <div className="flex mt-2 space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  onClick={() => setEditingTitle(false)}
-                  className="text-black dark:text-white"
-                >
-                  {t("common.cancel")}
-                </Button>
+                <div className="flex mt-2 space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={() => setEditingTitle(false)}
+                    className="text-black dark:text-white"
+                  >
+                    {t("common.cancel")}
+                  </Button>
 
-                <Button
-                  size="sm"
-                  type="button"
-                  onClick={() => {
-                    setTitle(form.getValues("name"));
-                    setEditingTitle(false);
-                  }}
-                >
-                  {t("common.save")}
-                </Button>
+                  <Button
+                    size="sm"
+                    type="button"
+                    onClick={() => {
+                      setTitle(form.getValues("name"));
+                      setEditingTitle(false);
+                    }}
+                  >
+                    {t("common.save")}
+                  </Button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="flex space-x-8 items-center">
-              <h1 className="text-xl font-semibold text-black dark:text-white transition-colors border-b border-transparent hover:border-gray-600 inline-block">
-                {title}
-              </h1>
-              <div className="flex space-x-2">
+            ) : (
+              <div className="flex space-x-8 items-center">
+                <h1 className="text-xl font-semibold text-black dark:text-white transition-colors border-b border-transparent hover:border-gray-600 inline-block">
+                  {title}
+                </h1>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={startEditingTitle}
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <span className="text-sm text-gray-400 cursor-pointer hover:text-gray-300 transition-colors">
+              {t("missions.createMission.form.researchMarket")}
+            </span>
+
+            {/* (Optionnel) indicateur debug */}
+            {/* <div className="mt-2 text-xs text-gray-400">
+              Plan actif payant: {String(hasPaidActivePlan)} | Balance: {balance}
+            </div> */}
+          </div>
+
+          <div className="flex flex-col gap-2 items-end">
+            <Button
+              variant="default"
+              size="lg"
+              type="submit"
+              disabled={createMission.status === "executing" || loadingCredits}
+            >
+              {createMission.status === "executing" ? (
+                <span className="inline-flex items-center gap-2">
+                  <Icons.spinner className="w-4 h-4 animate-spin" />
+                  <span>{t("common.formSaving")}</span>
+                </span>
+              ) : (
+                t("common.save")
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {generateBrief.status === "executing" && (
+          <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
+            <Icons.spinner className="h-4 w-4 animate-spin" />
+            <span>
+              {t("missions.createMission.form.aiBriefGenerating") ??
+                (locale === "fr"
+                  ? "Brief en cours de génération à partir de la conversation…"
+                  : "Generating the brief from the conversation…")}
+            </span>
+          </div>
+        )}
+
+        <div className="space-y-6 w-full">
+          {sections.map((section) => (
+            <div
+              key={section.key}
+              className="bg-[#FFD3CE] dark:bg-gray-900 border border-[#FFD3CE] rounded-md p-4"
+            >
+              <div className="flex items-center mb-3">
+                <div
+                  className={`w-3 h-3 rounded-full mr-3 ${
+                    section.status === "pending"
+                      ? "bg-yellow-400"
+                      : "bg-green-500"
+                  }`}
+                />
+
+                <h2 className="text-black dark:text-white font-bold text-lg flex-grow">
+                  {section.title}
+                </h2>
+
                 <Button
                   variant="outline"
                   size="sm"
                   type="button"
-                  onClick={startEditingTitle}
+                  onClick={() => startEditingContent(section.id)}
                 >
                   <Edit className="w-4 h-4" />
                 </Button>
               </div>
-            </div>
-          )}
 
-          <span className="text-sm text-gray-400 cursor-pointer hover:text-gray-300 transition-colors">
-            {t("missions.createMission.form.researchMarket")}
-          </span>
-        </div>
+              <div className="ml-6">
+                {section.id === 4 ? (
+                  <div className="flex-1 flex flex-col space-y-3 overflow-y-auto">
+                    <p className="text-sm text-black/80 dark:text-white/80">
+                      {section.placeholder}
+                    </p>
 
-        <div className="flex flex-col gap-2 items-end">
-          <Button variant="default" size="lg" type="submit">
-            {createMission.status === "executing" ? (
-              <Icons.spinner className="w-4 h-4 animate-spin" />
-            ) : (
-              t("common.save")
-            )}
-          </Button>
-        </div>
-      </div>
+                    <Button
+                      size="lg"
+                      className="w-full"
+                      type="button"
+                      onClick={onOpenAudiencesModal}
+                    >
+                      {t("missions.createMission.form.filterAudiences")}{" "}
+                      {activeFiltersCount > 0 && (
+                        <span className="text-sm text-gray-400">
+                          ({activeFiltersCount})
+                        </span>
+                      )}
+                    </Button>
 
-      {generateBrief.status === "executing" && (
-        <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
-          <Icons.spinner className="h-4 w-4 animate-spin" />
-          <span>
-            {t("missions.createMission.form.aiBriefGenerating") ??
-              (locale === "fr"
-                ? "Brief en cours de génération à partir de la conversation…"
-                : "Generating the brief from the conversation…")}
-          </span>
-        </div>
-      )}
-
-      <div className="space-y-6 w-full">
-        {sections.map((section) => (
-          <div
-            key={section.key}
-            className="bg-[#FFD3CE] dark:bg-gray-900 border border-[#FFD3CE] rounded-md p-4"
-          >
-            <div className="flex items-center mb-3">
-              <div
-                className={`w-3 h-3 rounded-full mr-3 ${
-                  section.status === "pending"
-                    ? "bg-yellow-400"
-                    : "bg-green-500"
-                }`}
-              />
-
-              <h2 className="text-black dark:text-white font-bold text-lg flex-grow">
-                {section.title}
-              </h2>
-
-              <Button
-                variant="outline"
-                size="sm"
-                type="button"
-                onClick={() => startEditingContent(section.id)}
-              >
-                <Edit className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <div className="ml-6">
-              {section.id === 4 ? (
-                <div className="flex-1 flex flex-col space-y-3 overflow-y-auto">
-                  <p className="text-sm text-black/80 dark:text-white/80">
-                    {section.placeholder}
-                  </p>
-
-                  <Button
-                    size="lg"
-                    className="w-full"
-                    type="button"
-                    onClick={() => setIsAudiencesFilterModalOpen(true)}
-                  >
-                    {t("missions.createMission.form.filterAudiences")}{" "}
-                    {activeFiltersCount > 0 && (
-                      <span className="text-sm text-gray-400">
-                        ({activeFiltersCount})
-                      </span>
-                    )}
-                  </Button>
-
-                  {(activeFiltersCount > 0 || suggestions.length > 0) && (
-                    <div className="mt-2">
-                      <div className="flow-root">
-                        <div className="-mx-2 -my-1 flex flex-wrap">
-                          {Object.keys(selectedFilters).map((groupId) =>
-                            Object.keys(selectedFilters[groupId] || {}).map(
-                              (filterId) => {
-                                const group = filterGroups.find(
-                                  (g) => g.id === groupId,
-                                );
-                                const filter = group?.filters.find(
-                                  (f) => f.id === filterId,
-                                );
-
-                                return (
-                                  selectedFilters[groupId]?.[filterId] as
-                                    | string[]
-                                    | undefined
-                                )?.map((value) => {
-                                  const option = filter?.options?.find(
-                                    (o) => o.value === value,
+                    {(activeFiltersCount > 0 || suggestions.length > 0) && (
+                      <div className="mt-2">
+                        <div className="flow-root">
+                          <div className="-mx-2 -my-1 flex flex-wrap">
+                            {Object.keys(selectedFilters).map((groupId) =>
+                              Object.keys(selectedFilters[groupId] || {}).map(
+                                (filterId) => {
+                                  const group = filterGroups.find(
+                                    (g) => g.id === groupId,
                                   );
+                                  const filter = group?.filters.find(
+                                    (f) => f.id === filterId,
+                                  );
+
                                   return (
-                                    <span
-                                      key={`${groupId}-${filterId}-${value}`}
-                                      className="m-1 inline-flex items-center rounded-full border border-gray-200 bg-white py-1.5 pl-3 pr-1 text-sm font-medium text-gray-900"
-                                    >
-                                      <span>
-                                        {filter?.label}:{" "}
-                                        {option?.label || value}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        className="ml-1 inline-flex h-4 w-4 flex-shrink-0 rounded-full p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-500"
-                                        onClick={() =>
-                                          handleOptionSelect(
-                                            groupId,
-                                            filterId,
-                                            value,
-                                            false,
-                                          )
-                                        }
+                                    selectedFilters[groupId]?.[filterId] as
+                                      | string[]
+                                      | undefined
+                                  )?.map((value) => {
+                                    const option = filter?.options?.find(
+                                      (o) => o.value === value,
+                                    );
+                                    return (
+                                      <span
+                                        key={`${groupId}-${filterId}-${value}`}
+                                        className="m-1 inline-flex items-center rounded-full border border-gray-200 bg-white py-1.5 pl-3 pr-1 text-sm font-medium text-gray-900"
                                       >
-                                        <span className="sr-only">
-                                          Retirer {filter?.label}{" "}
+                                        <span>
+                                          {filter?.label}:{" "}
                                           {option?.label || value}
                                         </span>
-                                        <svg
-                                          className="h-2 w-2"
-                                          stroke="currentColor"
-                                          fill="none"
-                                          viewBox="0 0 8 8"
+                                        <button
+                                          type="button"
+                                          className="ml-1 inline-flex h-4 w-4 flex-shrink-0 rounded-full p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-500"
+                                          onClick={() =>
+                                            handleOptionSelect(
+                                              groupId,
+                                              filterId,
+                                              value,
+                                              false,
+                                            )
+                                          }
                                         >
-                                          <path
-                                            strokeLinecap="round"
-                                            strokeWidth="1.5"
-                                            d="M1 1l6 6m0-6L1 7"
-                                          />
-                                        </svg>
-                                      </button>
+                                          <span className="sr-only">
+                                            Retirer {filter?.label}{" "}
+                                            {option?.label || value}
+                                          </span>
+                                          <svg
+                                            className="h-2 w-2"
+                                            stroke="currentColor"
+                                            fill="none"
+                                            viewBox="0 0 8 8"
+                                          >
+                                            <path
+                                              strokeLinecap="round"
+                                              strokeWidth="1.5"
+                                              d="M1 1l6 6m0-6L1 7"
+                                            />
+                                          </svg>
+                                        </button>
+                                      </span>
+                                    );
+                                  });
+                                },
+                              ),
+                            )}
+                          </div>
+
+                          {suggestions.length > 0 && (
+                            <>
+                              <div className="my-2 w-full">
+                                <div className="h-px w-full bg-gray-200" />
+                                <p className="mt-2 text-xs text-gray-500">
+                                  {locale === "fr"
+                                    ? "Suggestions"
+                                    : "Suggestions"}
+                                </p>
+                              </div>
+
+                              {suggestions.map((s, idx) => (
+                                <span
+                                  key={`${s.groupId ?? "none"}-${s.label}-${idx}`}
+                                  className="m-1 inline-flex items-center rounded-full border border-amber-200 bg-amber-50 py-1.5 pl-3 pr-1 text-sm font-medium text-amber-900"
+                                  title={s.description ?? ""}
+                                >
+                                  <span>
+                                    {s.groupId
+                                      ? `${filterGroups.find((g) => g.id === s.groupId)?.label ?? s.groupId}: `
+                                      : ""}
+                                    {s.label}
+                                  </span>
+
+                                  <button
+                                    type="button"
+                                    className="ml-1 inline-flex h-4 w-4 flex-shrink-0 rounded-full p-1 text-amber-700 hover:bg-amber-100"
+                                    onClick={() => removeSuggestion(idx)}
+                                  >
+                                    <span className="sr-only">
+                                      {locale === "fr"
+                                        ? "Retirer la suggestion"
+                                        : "Remove suggestion"}
                                     </span>
-                                  );
-                                });
-                              },
-                            ),
+                                    <svg
+                                      className="h-2 w-2"
+                                      stroke="currentColor"
+                                      fill="none"
+                                      viewBox="0 0 8 8"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeWidth="1.5"
+                                        d="M1 1l6 6m0-6L1 7"
+                                      />
+                                    </svg>
+                                  </button>
+                                </span>
+                              ))}
+                            </>
                           )}
                         </div>
-
-                        {suggestions.length > 0 && (
-                          <>
-                            <div className="my-2 w-full">
-                              <div className="h-px w-full bg-gray-200" />
-                              <p className="mt-2 text-xs text-gray-500">
-                                {locale === "fr"
-                                  ? "Suggestions"
-                                  : "Suggestions"}
-                              </p>
-                            </div>
-
-                            {suggestions.map((s, idx) => (
-                              <span
-                                key={`${s.groupId ?? "none"}-${s.label}-${idx}`}
-                                className="m-1 inline-flex items-center rounded-full border border-amber-200 bg-amber-50 py-1.5 pl-3 pr-1 text-sm font-medium text-amber-900"
-                                title={s.description ?? ""}
-                              >
-                                <span>
-                                  {s.groupId
-                                    ? `${filterGroups.find((g) => g.id === s.groupId)?.label ?? s.groupId}: `
-                                    : ""}
-                                  {s.label}
-                                </span>
-
-                                <button
-                                  type="button"
-                                  className="ml-1 inline-flex h-4 w-4 flex-shrink-0 rounded-full p-1 text-amber-700 hover:bg-amber-100"
-                                  onClick={() => removeSuggestion(idx)}
-                                >
-                                  <span className="sr-only">
-                                    {locale === "fr"
-                                      ? "Retirer la suggestion"
-                                      : "Remove suggestion"}
-                                  </span>
-                                  <svg
-                                    className="h-2 w-2"
-                                    stroke="currentColor"
-                                    fill="none"
-                                    viewBox="0 0 8 8"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeWidth="1.5"
-                                      d="M1 1l6 6m0-6L1 7"
-                                    />
-                                  </svg>
-                                </button>
-                              </span>
-                            ))}
-                          </>
-                        )}
                       </div>
-                    </div>
-                  )}
-                </div>
-              ) : editingSection === section.id ? (
-                <div ref={editSectionRef} className="w-full">
-                  <FormField
-                    control={form.control}
-                    defaultValue={tempContent}
-                    name={section.key}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <textarea
-                            className="w-full text-black dark:text-white p-2 border border-gray-600 rounded focus:outline-none focus:border-blue-500"
-                            rows={4}
-                            {...field}
-                            onChange={(e) => {
-                              field.onChange(e.target.value);
-                              setTempContent(e.target.value);
-                            }}
-                          />
-                        </FormControl>
-                      </FormItem>
                     )}
-                  />
-
-                  <div className="flex justify-end mt-2 space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      type="button"
-                      onClick={() => setEditingSection(null)}
-                      className="text-black dark:text-white"
-                    >
-                      {t("common.cancel")}
-                    </Button>
-                    <Button
-                      size="sm"
-                      type="button"
-                      onClick={() => {
-                        form.setValue(section.key as any, tempContent, {
-                          shouldDirty: true,
-                        });
-                        saveContentChanges();
-                      }}
-                    >
-                      {t("common.save")}
-                    </Button>
                   </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="text-black dark:text-white hover:bg-opacity-30 p-2 rounded-md transition-colors text-left w-full"
-                  onClick={() => startEditingContent(section.id)}
-                >
-                  {section.content
-                    ? renderBulletedList(section.content)
-                    : section.placeholder}
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Target sample size */}
-      <div className="bg-[#FFD3CE] dark:bg-gray-900 border border-[#FFD3CE] rounded-md p-4 pt-10 mt-6">
-        <div className="flex items-center mb-3">
-          <div className="w-3 h-3 rounded-full mr-3 bg-yellow-400" />
-          <h2 className="text-black dark:text-white font-bold text-lg flex-grow">
-            {t("missions.createMission.form.sampleSizeTitle", {
-              defaultValue:
-                locale === "fr" ? "Taille d’échantillon" : "Sample size",
-            })}
-          </h2>
-        </div>
-
-        <div className="ml-6">
-          <FormField
-            control={form.control}
-            name="targetSampleSize"
-            render={({ field }) => (
-              <FormItem>
-                <FormControl>
-                  <div className="flex flex-wrap items-center gap-2 text-black dark:text-white">
-                    <span className="text-sm">
-                      {t("missions.createMission.form.iWantToSurvey", {
-                        defaultValue:
-                          locale === "fr"
-                            ? "Je veux interroger"
-                            : "I want to survey",
-                      })}
-                    </span>
-
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      className="w-28 bg-white dark:bg-gray-800 text-black dark:text-white"
-                      value={field.value ?? ""}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        field.onChange(v === "" ? undefined : Number(v));
-                      }}
-                      placeholder="0"
+                ) : editingSection === section.id ? (
+                  <div ref={editSectionRef} className="w-full">
+                    <FormField
+                      control={form.control}
+                      defaultValue={tempContent}
+                      name={section.key}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <textarea
+                              className="w-full text-black dark:text-white p-2 border border-gray-600 rounded focus:outline-none focus:border-blue-500"
+                              rows={4}
+                              {...field}
+                              onChange={(e) => {
+                                field.onChange(e.target.value);
+                                setTempContent(e.target.value);
+                              }}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
                     />
 
-                    <span className="text-sm">
-                      {t("missions.createMission.form.participants", {
-                        defaultValue:
-                          locale === "fr" ? "participants" : "participants",
-                      })}
-                    </span>
+                    <div className="flex justify-end mt-2 space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        type="button"
+                        onClick={() => setEditingSection(null)}
+                        className="text-black dark:text-white"
+                      >
+                        {t("common.cancel")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        type="button"
+                        onClick={() => {
+                          form.setValue(section.key as any, tempContent, {
+                            shouldDirty: true,
+                          });
+                          saveContentChanges();
+                        }}
+                      >
+                        {t("common.save")}
+                      </Button>
+                    </div>
                   </div>
-                </FormControl>
-              </FormItem>
-            )}
-          />
-
-          <p className="mt-2 text-xs text-black/70 dark:text-white/70">
-            {t("missions.createMission.form.sampleSizeHint", {
-              defaultValue:
-                locale === "fr"
-                  ? "Optionnel. L’IA peut proposer une valeur, mais tu peux la modifier."
-                  : "Optional. AI may suggest a value, but you can adjust it.",
-            })}
-          </p>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-black dark:text-white hover:bg-opacity-30 p-2 rounded-md transition-colors text-left w-full"
+                    onClick={() => startEditingContent(section.id)}
+                  >
+                    {section.content
+                      ? renderBulletedList(section.content)
+                      : section.placeholder}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
 
-      <AudiencesFilterModal
-        isOpen={isAudiencesFilterModalOpen}
-        onOpenChange={() => setIsAudiencesFilterModalOpen(false)}
-        orgId={organization.id}
-        missionId={undefined}
-        currentUserId={undefined}
+        {/* Target sample size */}
+        <div className="bg-[#FFD3CE] dark:bg-gray-900 border border-[#FFD3CE] rounded-md p-4 pt-10 mt-6">
+          <div className="flex items-center mb-3">
+            <div className="w-3 h-3 rounded-full mr-3 bg-yellow-400" />
+            <h2 className="text-black dark:text-white font-bold text-lg flex-grow">
+              {t("missions.createMission.form.sampleSizeTitle", {
+                defaultValue:
+                  locale === "fr" ? "Taille d’échantillon" : "Sample size",
+              })}
+            </h2>
+          </div>
+
+          <div className="ml-6">
+            <FormField
+              control={form.control}
+              name="targetSampleSize"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <div className="flex flex-wrap items-center gap-2 text-black dark:text-white">
+                      <span className="text-sm">
+                        {t("missions.createMission.form.iWantToSurvey", {
+                          defaultValue:
+                            locale === "fr"
+                              ? "Je veux interroger"
+                              : "I want to survey",
+                        })}
+                      </span>
+
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        className="w-28 bg-white dark:bg-gray-800 text-black dark:text-white"
+                        value={field.value ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          field.onChange(v === "" ? undefined : Number(v));
+                        }}
+                        placeholder="0"
+                      />
+
+                      <span className="text-sm">
+                        {t("missions.createMission.form.participants", {
+                          defaultValue:
+                            locale === "fr" ? "participants" : "participants",
+                        })}
+                      </span>
+                    </div>
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+
+            <p className="mt-2 text-xs text-black/70 dark:text-white/70">
+              {t("missions.createMission.form.sampleSizeHint", {
+                defaultValue:
+                  locale === "fr"
+                    ? "Optionnel. L’IA peut proposer une valeur, mais tu peux la modifier."
+                    : "Optional. AI may suggest a value, but you can adjust it.",
+              })}
+            </p>
+          </div>
+        </div>
+      </form>
+
+      <InsufficientCreditsModal
+        open={insufficientCreditsModal.value}
+        onOpenChange={(open) =>
+          open
+            ? insufficientCreditsModal.onTrue()
+            : insufficientCreditsModal.onFalse()
+        }
+        locale={locale}
+        balance={typeof balance === "number" ? balance : 0}
+        requiredCredits={requiredCredits}
+        requestedSample={requestedSample}
+        maxSample={maxSample}
       />
-    </form>
+    </>
   );
 }

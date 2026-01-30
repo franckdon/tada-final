@@ -631,11 +631,11 @@ interface PrismaMission {
 export function convertPrismaSurveyToSurveyData(
   mission: PrismaMission
 ): SurveyData {
-  if (!mission.survey || mission.survey.length === 0) {
+  if (!mission.surveys || mission.surveys.length === 0) {
     throw new Error("No survey found in mission");
   }
 
-  const survey = mission.survey[0]; 
+  const survey = mission.surveys[0]; 
   const surveyResponses = survey?.response || [];
 
   if (!surveyResponses || surveyResponses.length === 0) {

@@ -1,4 +1,3 @@
-// src/app/api/workspaces/[workspaceId]/credits/route.ts
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
@@ -24,10 +23,9 @@ function toNumber(value: unknown): number {
     const n = Number(value);
     return Number.isFinite(n) ? n : 0;
   }
-  // Prisma Decimal peut être un objet { toNumber() }
   if (value && typeof value === "object" && "toNumber" in value) {
     try {
-      // @ts-expect-error - runtime safe
+      // @ts-expect-error runtime safe
       const n = value.toNumber();
       return Number.isFinite(n) ? n : 0;
     } catch {
@@ -57,11 +55,12 @@ function computeSubscriptionStatus(
 
 export async function GET(
   _req: Request,
-  // Next peut passer params en Promise selon versions
   { params }: { params: Promise<Record<string, string>> },
 ) {
   try {
-    const session = await auth.api.getSession({ headers: headers() });
+    const h = await headers();
+    const session = await auth.api.getSession({ headers: h });
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
@@ -70,8 +69,6 @@ export async function GET(
     }
 
     const p = await params;
-
-    // Supporte [id] OU [workspaceId]
     const workspaceId = String(p.id ?? p.workspaceId ?? "").trim();
 
     if (!workspaceId) {
@@ -84,29 +81,29 @@ export async function GET(
     const now = new Date();
 
     const ws = await prisma.workspace.findUnique({
-  where: { id: workspaceId },
-  select: {
-    id: true,
-    creditAccount: {
+      where: { id: workspaceId },
       select: {
         id: true,
-        balance: true,
-        currency: true,
-        updatedAt: true,
+        creditAccount: {
+          select: {
+            id: true,
+            balance: true,
+            currency: true,
+            updatedAt: true,
+          },
+        },
+        workspacePlanSubscription: {
+          select: {
+            id: true,
+            planCode: true,
+            status: true,
+            startsAt: true,
+            endsAt: true,
+            overrides: true,
+          },
+        },
       },
-    },
-    workspacePlanSubscription: {
-      select: {
-        id: true,
-        planCode: true,
-        status: true,
-        startsAt: true,
-        endsAt: true,
-        overrides: true,
-      },
-    },
-  },
-});
+    });
 
     if (!ws) {
       return NextResponse.json(
@@ -115,36 +112,26 @@ export async function GET(
       );
     }
 
-    // Solde (compte crédits)
     const balanceRaw = ws.creditAccount?.balance ?? 0;
-const balance = toNumber(balanceRaw);
-const currency = ws.creditAccount?.currency ?? "EUR";
+    const balance = toNumber(balanceRaw);
+    const currency = ws.creditAccount?.currency ?? "EUR";
 
-    // Subscription
     const sub = ws.workspacePlanSubscription ?? null;
     const planCode = sub?.planCode ? String(sub.planCode) : null;
     const computedStatus = computeSubscriptionStatus(sub, now);
 
-    // Quota mensuel du plan (si tu veux l’afficher côté client)
     const overrides = (sub?.overrides ?? null) as PlanOverrides | null;
     const monthlyCredits =
-      planCode != null
-        ? getMonthlyCredits(planCode as PlanCode, overrides)
-        : null;
+      planCode != null ? getMonthlyCredits(planCode as PlanCode, overrides) : null;
 
     return NextResponse.json(
       {
         success: true,
         data: {
           workspaceId,
-
-          // 1) “crédits restants” = balance du compte
           balance,
           currency,
-
-          // 2) “quota du plan” = ce que le plan donne par mois (optionnel)
           monthlyCredits,
-
           subscription: {
             id: sub?.id ?? null,
             planCode,
@@ -153,10 +140,8 @@ const currency = ws.creditAccount?.currency ?? "EUR";
             startsAt: sub?.startsAt ? new Date(sub.startsAt).toISOString() : null,
             endsAt: sub?.endsAt ? new Date(sub.endsAt).toISOString() : null,
           },
-
-          // Debug minimal (tu peux supprimer ensuite)
           debug: {
-            hasCreditAccount: Boolean(ws.workspace_credit_account?.id),
+            hasCreditAccount: Boolean(ws.creditAccount?.id),
             balanceRawType: typeof balanceRaw,
             subscriptionStatusRaw: sub?.status ?? null,
           },

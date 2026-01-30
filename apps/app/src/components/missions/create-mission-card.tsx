@@ -7,9 +7,10 @@ import { useAssistantForm } from "@assistant-ui/react-hook-form";
 import { Form } from "@tada/ui/components/form";
 import { CreateMissionForm } from "./forms/create-mission-form";
 import { ProgressSidebar } from "./progress-bar";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
+import { AudiencesFilterModal } from "./modals/audiences-filter-modal";
 
 export function CreateMissionCard({
   organization,
@@ -24,6 +25,9 @@ export function CreateMissionCard({
   const searchParams = useSearchParams();
   const templateId = searchParams.get("t");
   const mode = searchParams.get("mode");
+
+  const [isAudiencesFilterModalOpen, setIsAudiencesFilterModalOpen] =
+    useState(false);
 
   // Detect language based on the user's most recent message
   const chatLang = locale === "fr" ? "French" : "English";
@@ -57,10 +61,15 @@ Information to collect (in this order):
 2) Business problem (symptoms + what changed + when)
 3) Objectives (what decisions will be taken with results)
 4) Hypotheses (3–5 testable assumptions)
-5) Mission name (short title)
+5) Target sample size (how many people to survey)
+6) Audience (ask user to click the button to choose audiences)
+7) Mission name (short title)
+Rules for form filling:
+- When the user provides the target sample size, you MUST call the tool set_form_field with:
+  field="targetSampleSize" and value=<number>
+- For the audience step, you MUST call the tool open_audiences_modal to display a "Click here" button.
 
 When (and only when) you have ALL info above:
-- Provide a compact recap (5–8 bullets max)
 - Ask: "${confirmQuestion}"
 - End that message with exactly: [[READY_TO_FILL_FORM]]
 `);
@@ -73,20 +82,33 @@ When (and only when) you have ALL info above:
       objectives: "",
       assumptions: "",
       audiences: "",
-      targetSampleSize: "",
+      targetSampleSize: undefined,
+
+      sampleSummary: "",
+      preliminaryRecommendations: "",
+      studyStructure: "",
     },
     assistant: {
       tools: {
-        set_form_field: {
-          render: () => {
-            if (hasRenderedField.current === true) return null;
-            hasRenderedField.current = true;
-            return (
-              <p className="text-center font-mono text-sm font-bold text-blue-500">
-                {t("missions.createMission.filedFilled")}
-              </p>
-            );
-          },
+        show_filled_notice: {
+          render: () => (
+            <p className="text-center font-mono text-sm font-bold text-blue-500">
+              {t("missions.createMission.filedFilled")}
+            </p>
+          ),
+        },
+        open_audiences_modal: {
+          render: () => (
+            <button
+              type="button"
+              onClick={() => setIsAudiencesFilterModalOpen(true)}
+              className="underline text-blue-600 hover:text-blue-700 font-medium"
+            >
+              {locale === "fr"
+                ? "Cliquez ici pour choisir votre audience"
+                : "Click here to choose your audience"}
+            </button>
+          ),
         },
       },
     },
@@ -107,15 +129,23 @@ When (and only when) you have ALL info above:
                 organization={organization}
                 workspaceId={workspace.id}
                 locale={locale}
+                onOpenAudiencesModal={() => setIsAudiencesFilterModalOpen(true)}
               />
             </div>
           </div>
 
           {/* Sidebar à droite */}
-          <div className="w-80 flex flex-col h-full min-h-0 border-l border-gray-200 bg-white overflow-y-auto">
+          <div className="w-60 flex flex-col h-full min-h-0 border-l border-gray-200 bg-white overflow-y-auto">
             <ProgressSidebar />
           </div>
         </div>
+        <AudiencesFilterModal
+          isOpen={isAudiencesFilterModalOpen}
+          onOpenChange={(open) => setIsAudiencesFilterModalOpen(open)}
+          orgId={organization.id}
+          missionId={undefined}
+          currentUserId={undefined}
+        />
       </AudiencesFilterProvider>
     </Form>
   );

@@ -1,16 +1,14 @@
 "use client";
 
 import { useI18n } from "@/locales/client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { Icons } from "../icons";
 import { MissionCard } from "./mission-card";
 import { Mission } from "@prisma/client";
 
 type MissionFull = Mission & {
-  surveys: {
-    responses: { id: string }[];
-  }[];
+  surveys: { responses: { id: string }[] }[];
 };
 
 export function ListMissions({
@@ -33,25 +31,35 @@ export function ListMissions({
 }) {
   const t = useI18n();
   const { ref, inView } = useInView();
-  const [from, setFrom] = useState(pageSize);
-  const [page, setPage] = useState(1);
+
   const [missions, setMissions] = useState(initialData);
   const [hasNextPage, setHasNextPage] = useState(initialHasNextPage);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  // ⚠️ Si initialData = page 1, la prochaine page à charger est 2
+  const [page, setPage] = useState(2);
+
   useEffect(() => {
     setMissions(initialData);
-    setFrom(pageSize);
     setHasNextPage(initialHasNextPage);
-  }, [initialData, initialHasNextPage, pageSize]);
+    setLoadingMore(false);
+    setPage(2);
+  }, [initialData, initialHasNextPage]);
+
+  const mergeUniqueById = (prev: MissionFull[], next: MissionFull[]) => {
+    const map = new Map<string, MissionFull>();
+    for (const m of prev) map.set(m.id, m);
+    for (const m of next) map.set(m.id, m);
+    return Array.from(map.values());
+  };
 
   const loadMoreData = async () => {
     if (!hasNextPage || loadingMore) return;
-    setLoadingMore(true);
 
+    setLoadingMore(true);
     try {
       const res = await loadMore({ page });
-      setMissions((prev) => [...prev, ...res.missions]);
+      setMissions((prev) => mergeUniqueById(prev, res.missions));
       setHasNextPage(res.hasNextPage);
       setPage((p) => p + 1);
     } catch {
@@ -65,16 +73,9 @@ export function ListMissions({
     if (inView) loadMoreData();
   }, [inView]);
 
-  useEffect(() => {
-    if (inView) {
-      loadMoreData();
-    }
-  }, [inView]);
-
   return (
     <div className="flex flex-col space-y-4 items-end">
       <div className="w-full rounded-lg border border-gray-100 bg-white dark:bg-gray-900 shadow-sm">
-        {/* Lignes */}
         <div className="divide-y divide-gray-100 dark:divide-gray-800">
           {missions.map((task) => (
             <MissionCard
@@ -82,17 +83,11 @@ export function ListMissions({
               mission={
                 {
                   ...task,
-                  submissions:
-                    task.surveys.length > 0
-                      ? task.surveys[0]!.responses.length
-                      : 0 || 0,
+                  submissions: task.surveys?.[0]?.responses?.length ?? 0,
                   percentage: Math.min(
                     100,
                     Math.round(
-                      ((task.surveys.length > 0
-                        ? task.surveys[0]!.responses.length
-                        : 0) /
-                        1000) *
+                      ((task.surveys?.[0]?.responses?.length ?? 0) / 1000) *
                         100,
                     ),
                   ),
@@ -107,7 +102,6 @@ export function ListMissions({
           ))}
         </div>
 
-        {/* Loader infinite scroll */}
         {hasNextPage && (
           <div className="flex items-center justify-center mt-6 mb-4" ref={ref}>
             <div className="flex items-center space-x-2 px-6 py-5">

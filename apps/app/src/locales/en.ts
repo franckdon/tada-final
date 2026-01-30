@@ -17,6 +17,7 @@ export default {
     search: {
       placeholder: "Search...",
     },
+    formSaving: "Generating questions...",
     dateRange: {
       default: "Jan 6, 2024 - Jan 13, 2024",
     },

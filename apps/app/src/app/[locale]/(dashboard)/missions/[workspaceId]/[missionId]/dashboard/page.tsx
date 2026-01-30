@@ -41,11 +41,11 @@ export default async function Page({
       updatedAt: true,
       executiveSummary: true,
       executiveSummaryUpdatedAt: true,
-      survey: {
+      surveys: {
         select: {
           id: true,
           questions: true,
-          response: {
+          responses: {
             where: { status: "completed" },
             select: {
               id: true,
@@ -67,7 +67,7 @@ export default async function Page({
 
   if (!mission) notFound();
 
-  const surveyResponses = mission.survey?.[0]?.response ?? [];
+  const surveyResponses = mission.surveys?.[0]?.responses ?? [];
   if (surveyResponses.length === 0) {
     return (
       <div className="p-6 text-center">
@@ -103,7 +103,7 @@ export default async function Page({
       }
       return acc;
     },
-    {}
+    {},
   );
 
   const [workspace, currentUser] = await Promise.all([
@@ -143,15 +143,15 @@ export default async function Page({
 
         const qResponses = extractResponsesForQuestion(
           surveyResponses,
-          chartData.question
+          chartData.question,
         );
         const realData = formatChartDataFromResponses(
           qResponses,
-          chartData.type
+          chartData.type,
         );
         const realConfig = generateChartConfigFromData(
           realData,
-          chartData.type
+          chartData.type,
         );
 
         let primaryKeys: string[] | undefined;
@@ -207,7 +207,7 @@ export default async function Page({
         workspaceId={workspaceId}
         currentUserId={currentUser?.id ?? ""}
         workspaceMembers={workspaceMembers.filter(
-          (m) => m.id !== currentUser?.id
+          (m) => m.id !== currentUser?.id,
         )}
         initialComments={comments as any}
       />
@@ -229,7 +229,7 @@ export default async function Page({
           commentCountsByQuestion={commentCountsByQuestion}
           currentUserId={currentUser?.id ?? ""}
           workspaceMembers={workspaceMembers.filter(
-            (m) => m.id !== currentUser?.id
+            (m) => m.id !== currentUser?.id,
           )}
         />
         <AssistantModal />

@@ -134,8 +134,7 @@ export function ProgressSidebar() {
   return (
     <aside
       className={cn(
-        "h-full flex flex-col bg-slate-50 border-l border-slate-200 py-6 px-4 w-80",
-        (templateId || mode) && "w-96",
+        "h-full min-w-0 w-full flex flex-col bg-slate-50 border-l border-slate-200 py-6 px-4 overflow-x-hidden",
       )}
     >
       {/* HEADER */}
