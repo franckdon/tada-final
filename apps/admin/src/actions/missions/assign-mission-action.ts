@@ -37,7 +37,7 @@ export const assignMissionAction = action
         where: {
           id: { in: contributorIds },
           role: "contributor",
-          // banned: { not: true },
+          OR: [{ banned: false }, { banned: null }],
         },
       });
 

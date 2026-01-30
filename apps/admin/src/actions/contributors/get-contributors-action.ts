@@ -17,74 +17,92 @@ const getContributorsSchema = z.object({
 export const getContributorsAction = action
   .schema(getContributorsSchema)
   .action(async ({ parsedInput }) => {
-    const { search, skills, availability, limit, offset } = parsedInput;
+    const { search, limit, offset } = parsedInput;
 
     try {
-      const whereClause: any = {
+      // ✅ base filters (toujours appliqués)
+      const baseWhere: any = {
         role: "contributor",
-        banned: { not: true },
+        OR: [{ banned: false }, { banned: null }],
       };
 
-      if (search) {
-        whereClause.OR = [
-          { name: { contains: search, mode: "insensitive" } },
-          { email: { contains: search, mode: "insensitive" } },
-        ];
-      }
+      // ✅ search filter sans écraser baseWhere
+      const whereClause: any = search?.trim()
+        ? {
+            AND: [
+              baseWhere,
+              {
+                OR: [
+                  { name: { contains: search.trim(), mode: "insensitive" } },
+                  { email: { contains: search.trim(), mode: "insensitive" } },
+                ],
+              },
+            ],
+          }
+        : baseWhere;
 
+      // 1) on récupère la page de users
       const contributors = await prisma.user.findMany({
         where: whereClause,
-        include: {
-          _count: {
-            select: {
-              missionAssignments: {
-                where: {
-                  status: "completed",
-                },
-              },
-            },
-          },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+          createdAt: true,
         },
-        orderBy: [{ createdAt: "desc" }],
+        orderBy: { createdAt: "desc" },
         take: limit,
         skip: offset,
       });
 
-      // Calculer les statistiques pour chaque contributeur
-      const contributorsWithStats = await Promise.all(
-        contributors.map(async (contributor) => {
-          // Récupérer les assignations actives
-          const activeAssignments = await prisma.missionAssignment.count({
-            where: {
-              contributorId: contributor.id,
-              status: { in: ["assigned", "accepted", "in_progress"] },
-            },
-          });
+      const contributorIds = contributors.map((c) => c.id);
 
-          // Calculer la note moyenne (simulation - vous pouvez implémenter un vrai système de notation)
-          const completedAssignments = await prisma.missionAssignment.count({
-            where: {
-              contributorId: contributor.id,
-              status: "completed",
-            },
-          });
+      // 2) stats en batch (pas de _count filtré)
+      const [completedAgg, activeAgg] = await Promise.all([
+        prisma.missionAssignment.groupBy({
+          by: ["contributorId"],
+          where: {
+            contributorId: { in: contributorIds },
+            status: "completed",
+          },
+          _count: { _all: true },
+        }),
+        prisma.missionAssignment.groupBy({
+          by: ["contributorId"],
+          where: {
+            contributorId: { in: contributorIds },
+            status: { in: ["assigned", "accepted", "in_progress"] },
+          },
+          _count: { _all: true },
+        }),
+      ]);
 
-          const averageRating =
-            completedAssignments > 0 ? 4.0 + Math.random() * 1.0 : 0;
-
-          return {
-            ...contributor,
-            activeAssignments,
-            averageRating: Math.round(averageRating * 10) / 10,
-            completedMissions: contributor._count.missionAssignments,
-            availability: "available",
-          };
-        })
+      const completedMap = new Map(
+        completedAgg.map((r) => [r.contributorId, r._count._all])
+      );
+      const activeMap = new Map(
+        activeAgg.map((r) => [r.contributorId, r._count._all])
       );
 
-      const total = await prisma.user.count({
-        where: whereClause,
+      const contributorsWithStats = contributors.map((contributor) => {
+        const completedMissions = completedMap.get(contributor.id) ?? 0;
+        const activeAssignments = activeMap.get(contributor.id) ?? 0;
+
+        const averageRating =
+          completedMissions > 0 ? 4.0 + Math.random() * 1.0 : 0;
+
+        return {
+          ...contributor,
+          skills: [], // à adapter si tu as réellement des skills en DB
+          activeAssignments,
+          averageRating: Math.round(averageRating * 10) / 10,
+          completedMissions,
+          availability: "available",
+        };
       });
+
+      const total = await prisma.user.count({ where: whereClause });
 
       return {
         contributors: contributorsWithStats,
