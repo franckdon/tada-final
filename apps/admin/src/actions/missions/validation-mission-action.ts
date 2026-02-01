@@ -2,58 +2,90 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { action, publicProcedure } from "@/lib/safe-action";
+import { action } from "@/lib/safe-action";
 import { z } from "zod";
 
-// --- Schéma de validation ---
 const validationSchema = z.object({
   missionId: z.string().min(1, "ID de mission requis."),
-  // Statuts envoyés par l'interface client
-  validationStatus: z.enum(["approved", "rejected", "modification_requested"]), 
-  comment: z.string().optional(),
+  validationStatus: z.enum(["approved", "rejected", "modification_requested"]),
+  comment: z.string().trim().optional(),
 });
 
-// --- Action Serveur ---
 export const validateMissionAction = action
   .schema(validationSchema)
   .action(async ({ parsedInput }) => {
-    const { missionId, validationStatus, comment } = parsedInput;
+    const { missionId, validationStatus } = parsedInput;
+    const comment = parsedInput.comment?.trim();
 
-    let dbStatus: string;
-    
-    switch (validationStatus) {
-        case "approved":
-            dbStatus = "completed"; // Mission prête (peut être renommée 'ready_to_publish' si nécessaire)
-            break;
-        case "rejected":
-            dbStatus = "on hold";
-            break;
-        case "modification_requested":
-            dbStatus = "modification_needed"; // Statut interne pour indiquer que le client doit agir
-            break;
-        default:
-            throw new Error("Statut de validation inconnu.");
+    // ✅ Server-side guard: commentaire obligatoire si rejet / modif demandée
+    if (validationStatus !== "approved" && !comment) {
+      throw new Error(
+        validationStatus === "rejected"
+          ? "Commentaire requis pour rejeter une mission."
+          : "Commentaire requis pour demander des modifications.",
+      );
     }
-    
-    // 1. Mettre à jour le statut et le commentaire de la mission temporaire
+
+    // ✅ Update payload
+    const data: Record<string, any> = {
+      validationStatus,
+      validationComment: comment ?? null,
+      validatedAt: new Date(),
+    };
+
+    // ✅ Cahier des charges: si approuvée => mission devient LIVE
+    if (validationStatus === "approved") {
+      data.status = "live";
+    }
+
     const updatedMission = await prisma.mission.update({
       where: { id: missionId },
-      data: {
-        validationStatus: validationStatus, 
-        status: dbStatus, 
-        // Sauvegarde le commentaire SuperAdmin
-        validationComment: comment, 
-        validatedAt: new Date(),
-        // Si vous voulez mettre à jour le statut de la Mission finale immédiatement, 
-        // vous pouvez l'ajouter ici, mais généralement on attend la publication.
+      data,
+      select: {
+        id: true,
+        name: true,
+        validationStatus: true,
+        status: true,
+        workspaceId: true,
       },
-      select: { 
-          id: true, 
-          name: true, 
-          validationStatus: true // Retourne le statut mis à jour
-      }
     });
 
+    // ✅ "Envoyer au client" via notification (MVP)
+    // Hypothèse: client = owner du workspace de la mission
+    if (updatedMission.workspaceId) {
+      const ws = await prisma.workspace.findUnique({
+        where: { id: updatedMission.workspaceId },
+        select: { ownerId: true },
+      });
+
+      if (ws?.ownerId) {
+        const title =
+          validationStatus === "approved"
+            ? "Mission approuvée"
+            : validationStatus === "rejected"
+              ? "Mission rejetée"
+              : "Modifications demandées";
+
+        const body =
+          validationStatus === "approved"
+            ? `Votre mission "${updatedMission.name}" a été approuvée et est maintenant en ligne (live).`
+            : validationStatus === "rejected"
+              ? `Votre mission "${updatedMission.name}" a été rejetée.\n\nCommentaire: ${comment}`
+              : `Des modifications sont demandées pour "${updatedMission.name}".\n\nCommentaire: ${comment}`;
+
+        await prisma.notification.create({
+          data: {
+            userId: ws.ownerId,
+            type: "system",
+            title,
+            body,
+            data: { missionId: updatedMission.id, validationStatus },
+            entityType: "mission",
+            entityId: updatedMission.id,
+          },
+        });
+      }
+    }
+
     return { success: true, mission: updatedMission };
-  }
-);
+  });

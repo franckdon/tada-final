@@ -42,9 +42,9 @@ export function MissionCard({ mission }: MissionCardProps) {
   const t = useI18n();
   const currentLocale = useCurrentLocale();
   const router = useRouter();
+
   const [isLoading, setIsLoading] = useState(false);
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
-  const [isAssigning, setIsAssigning] = useState(false);
   const [isAssignedContributorsModalOpen, setIsAssignedContributorsModalOpen] =
     useState(false);
   const [isPublishMissionModalOpen, setIsPublishMissionModalOpen] =
@@ -56,11 +56,10 @@ export function MissionCard({ mission }: MissionCardProps) {
         title: t("missions.publish.success"),
         description: t("missions.publish.successDescription"),
       });
-
       window.location.reload();
     },
     onError: (error) => {
-      console.log("error", error);
+      console.log("publish error", error);
       toast({
         title: t("missions.publish.error"),
         variant: "destructive",
@@ -82,7 +81,7 @@ export function MissionCard({ mission }: MissionCardProps) {
       window.location.reload();
     },
     onError: (error) => {
-      console.log("error", error);
+      console.log("update status error", error);
       toast({
         title: "Erreur lors de la mise à jour",
         description: "Une erreur est survenue",
@@ -97,9 +96,7 @@ export function MissionCard({ mission }: MissionCardProps) {
   };
 
   useEffect(() => {
-    return () => {
-      setIsLoading(false);
-    };
+    return () => setIsLoading(false);
   }, []);
 
   return (
@@ -157,7 +154,7 @@ export function MissionCard({ mission }: MissionCardProps) {
                 {mission.updatedType && (
                   <span className="text-xs text-gray-400 mt-2 dark:text-gray-100">
                     {t(
-                      `missions.updated_type.${mission.updatedType}` as keyof typeof t
+                      `missions.updated_type.${mission.updatedType}` as keyof typeof t,
                     )}
                   </span>
                 )}
@@ -173,6 +170,7 @@ export function MissionCard({ mission }: MissionCardProps) {
                     )}
                   </Button>
                 </DropdownMenuTrigger>
+
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem
                     onClick={(e) => {
@@ -204,7 +202,6 @@ export function MissionCard({ mission }: MissionCardProps) {
                           publishMission.execute({
                             missionId: mission.id,
                             isPublish: false,
-                            status: "on hold",
                           });
                         }}
                       >
@@ -270,18 +267,16 @@ export function MissionCard({ mission }: MissionCardProps) {
         onClose={() => setIsAssignmentModalOpen(false)}
         missionId={mission.id}
         missionName={mission.name}
-        isLoading={isAssigning}
       />
+
       <PublishMissionModal
         isOpen={isPublishMissionModalOpen}
         onClose={(isAssign?: boolean) => {
           setIsPublishMissionModalOpen(false);
           if (isAssign) setIsAssignmentModalOpen(true);
-          setTimeout(() => {
-            router.refresh();
-          }, 100);
+          setTimeout(() => router.refresh(), 100);
         }}
-        mission={mission}
+        mission={mission as any}
       />
 
       <AssignedContributorsView

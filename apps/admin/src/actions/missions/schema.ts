@@ -1,3 +1,4 @@
+import { image } from "@heroui/react";
 import { z } from "zod";
 
 export const createMissionSchema = z.object({
@@ -29,6 +30,8 @@ export const createMissionConfigForContributorsSchema = z.object({
   deadline: z.coerce.date().optional().nullable(),
 
   imageUrl: z.string().optional().nullable(),
+
+  geoZones: z.array(z.string().min(2)).max(50).optional().default([]),
 });
 
 export const regenerateSurveysAISchema = z.object({
@@ -105,6 +108,7 @@ export const missionForValidationSchema = z.object({
 export const updateMissionSchema = z.object({
   missionId: z.string(),
   name: z.string().optional().nullable(),
+  image: z.string().optional().nullable(),
   problemSummary: z.string().optional().nullable(),
   objectives: z.string().optional().nullable(),
   assumptions: z.string().optional().nullable(),

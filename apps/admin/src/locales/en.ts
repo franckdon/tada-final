@@ -483,6 +483,7 @@ export default {
       languages: "Languages",
     },
     personalInfo: {
+      image: "image",
       title: "Personal Information",
       description: "Update your personal information",
       name: "Full Name",

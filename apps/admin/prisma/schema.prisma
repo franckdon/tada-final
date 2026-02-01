@@ -1026,8 +1026,11 @@ model MissionConfigContributor {
   updatedAt   DateTime? @updatedAt @db.Timestamp(6)
   deadline    DateTime? @db.Timestamptz(6)
 
-  targetSampleSize Int @default(0)
+  targetSampleSize Int      @default(0)
+  geoZones         String[] @default([])
 
+  @@unique([missionId], map: "uniq_mission_config_mission")
+  @@index([geoZones], type: Gin, map: "idx_mission_config_geo_zones_gin")
   @@index([missionId], map: "idx_mission_config_mission_id")
   @@map("mission_config_contributor")
 }

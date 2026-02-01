@@ -1,3 +1,6 @@
+// src/components/.../forms/config-mission-for-contributors-form.tsx
+"use client";
+
 import { createMissionConfigForContributorsSchema } from "@/actions/missions/schema";
 import { Icons } from "@/components/icons";
 import { useToast } from "@/hooks/use-toast";
@@ -19,7 +22,15 @@ import { useUpload } from "@/hooks/use-upload";
 import { stripSpecialCharacters } from "@/lib/utils";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
+
 import { createConfigMissionAction } from "@/actions/missions/create-config-mission-action";
+import { updateMissionAction } from "@/actions/missions/update-mission-action";
+
+const normalizeGeo = (v: string) =>
+  v.trim().replace(/\s+/g, " ").replace(/^,|,$/g, "");
+
+const uniq = (arr: string[]) =>
+  Array.from(new Map(arr.map((x) => [x.toLowerCase(), x])).values());
 
 export function ConfigMissionForContributorsForm({
   missionId,
@@ -37,23 +48,13 @@ export function ConfigMissionForContributorsForm({
 
   const { uploadFile, isLoading } = useUpload();
 
-  const createMission = useAction(createConfigMissionAction, {
-    onSuccess: (res) => {
-      // ✅ IMPORTANT: vérifier le payload business
-      const ok = res?.data?.success;
-      if (!ok) {
-        console.error("[CREATE_CONFIG_MISSION_FAILED]", res?.data);
-        toast({
-          title: t("missions.createMission.form.error"),
-          description: (res?.data as any)?.error ?? "Action failed",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      goNext();
-      toast({ title: t("missions.createMission.form.success") });
+  const updateMission = useAction(updateMissionAction, {
+    onError: (err) => {
+      console.error("[UPDATE_MISSION_ACTION_ERROR]", err);
     },
+  });
+
+  const createMissionConfig = useAction(createConfigMissionAction, {
     onError: (err) => {
       console.error("[CREATE_CONFIG_MISSION_ACTION_ERROR]", err);
       toast({
@@ -66,9 +67,9 @@ export function ConfigMissionForContributorsForm({
 
   const onSubmit = async (values: any) => {
     try {
-      let imageUrl: string | null = null;
+      let imagePath: string | null = null;
 
-      // 1) Upload server-side (Option 4) => récupérer PATH à stocker
+      // 1) Upload => récupérer PATH à stocker
       if (avatarFile) {
         const filename = stripSpecialCharacters(avatarFile.name);
 
@@ -78,32 +79,48 @@ export function ConfigMissionForContributorsForm({
           path: ["mission-thumbnails", `mission-${missionId}-${filename}`],
         });
 
-        // Preview (URL publique)
         if (publicUrl) setAvatarUrl(publicUrl);
 
-        // ⚠️ Sécuriser le type (selon ton implémentation de useUpload)
-        const normalizedPath =
-          typeof storedPath === "string"
-            ? storedPath
-            : Array.isArray(storedPath)
-              ? storedPath.join("/")
-              : null;
-
-        if (!normalizedPath) {
+        if (!storedPath || typeof storedPath !== "string") {
           throw new Error("Upload OK mais path invalide.");
         }
 
-        imageUrl = normalizedPath;
+        imagePath = storedPath;
+
+        // ✅ 1bis) Persister dans Mission.image (OBLIGATOIRE pour publish)
+        const up = await updateMission.executeAsync({
+          missionId,
+          image: imagePath,
+          revalidateRoute: `/missions/${missionId}`,
+        });
+
+        const ok = (up as any)?.data?.success;
+        if (!ok) {
+          throw new Error(
+            (up as any)?.data?.error ??
+              "Impossible d'enregistrer l'image mission",
+          );
+        }
       }
 
-      // 2) Validation Zod + exécution action
+      // 2) Valider + enregistrer la config contributeur
       const payload = createMissionConfigForContributorsSchema.parse({
         ...values,
         missionId,
-        imageUrl,
+        imageUrl: imagePath, // image publique config
       });
 
-      await createMission.execute(payload);
+      const res = await createMissionConfig.executeAsync(payload);
+
+      const ok = (res as any)?.data?.success;
+      if (!ok) {
+        throw new Error((res as any)?.data?.error ?? "Action failed");
+      }
+
+      toast({ title: t("missions.createMission.form.success") });
+
+      // ✅ aller au step "publish" (dans le modal)
+      goNext();
     } catch (e) {
       console.error("[CONFIG_MISSION_SUBMIT_ERROR]", e);
 
@@ -130,7 +147,10 @@ export function ConfigMissionForContributorsForm({
     reader.readAsDataURL(file);
   };
 
-  const isSubmitting = createMission.status === "executing" || isLoading;
+  const isSubmitting =
+    createMissionConfig.status === "executing" ||
+    updateMission.status === "executing" ||
+    isLoading;
 
   return (
     <form
@@ -139,7 +159,7 @@ export function ConfigMissionForContributorsForm({
     >
       <div className="space-y-4">
         <div>
-          <FormLabel>{t("settings.personalInfo.avatar")}</FormLabel>
+          <FormLabel>{t("settings.personalInfo.image")}</FormLabel>
 
           <div className="flex items-center">
             <div className="flex-1 border border-input rounded-md shadow-sm">
@@ -175,6 +195,98 @@ export function ConfigMissionForContributorsForm({
               )}
             </div>
           </div>
+        </div>
+
+        {/* ✅ Zones géographiques exactes */}
+        <div>
+          <FormField
+            control={form.control}
+            name="geoZones"
+            render={({ field }) => {
+              const zones: string[] = Array.isArray(field.value)
+                ? field.value
+                : [];
+
+              const addZone = (raw: string) => {
+                const v = normalizeGeo(raw);
+                if (!v) return;
+
+                // Permet "Abidjan, Bouaké"
+                const parts = v
+                  .split(",")
+                  .map((p) => normalizeGeo(p))
+                  .filter(Boolean);
+
+                const next = uniq([...zones, ...parts]).slice(0, 50);
+                field.onChange(next);
+              };
+
+              const removeZone = (value: string) => {
+                const next = zones.filter(
+                  (z) => z.toLowerCase() !== value.toLowerCase(),
+                );
+                field.onChange(next);
+              };
+
+              return (
+                <FormItem>
+                  <FormLabel className="text-sm/5 font-medium">
+                    Zones géographiques exactes (pays / villes / Communes)
+                  </FormLabel>
+
+                  <FormControl>
+                    <div className="space-y-2">
+                      <Input
+                        placeholder="Ex: Côte d'Ivoire, Abidjan, Yopougon..."
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === ",") {
+                            e.preventDefault();
+                            const target = e.target as HTMLInputElement;
+                            addZone(target.value);
+                            target.value = "";
+                          }
+                        }}
+                        onPaste={(e) => {
+                          const text = e.clipboardData.getData("text");
+                          if (text?.includes(",")) {
+                            e.preventDefault();
+                            addZone(text);
+                          }
+                        }}
+                      />
+
+                      {zones.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {zones.map((z) => (
+                            <span
+                              key={z}
+                              className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs"
+                            >
+                              {z}
+                              <button
+                                type="button"
+                                className="text-gray-500 hover:text-gray-900"
+                                onClick={() => removeZone(z)}
+                                aria-label={`Remove ${z}`}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-500">
+                          Tape une zone puis Entrée (ou sépare par virgules).
+                        </p>
+                      )}
+                    </div>
+                  </FormControl>
+
+                  <FormMessage />
+                </FormItem>
+              );
+            }}
+          />
         </div>
 
         <div>
@@ -286,7 +398,6 @@ export function ConfigMissionForContributorsForm({
                       placeholder={t(
                         "missions.publish.form.configMissionDeadline",
                       )}
-                      {...field}
                       value={
                         field.value
                           ? new Date(field.value).toISOString().slice(0, 16)

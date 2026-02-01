@@ -1,3 +1,4 @@
+// src/actions/missions/update-mission-action.ts
 "use server";
 
 import { prisma } from "@/lib/prisma";
@@ -16,26 +17,31 @@ export const updateMissionAction = authActionClient
       objectives,
       assumptions,
       status,
+      image, // ✅ AJOUT
       revalidateRoute,
     } = parsedInput;
+
     try {
       const mission = await prisma.mission.update({
         where: { id: missionId },
-        data: { name, problemSummary, objectives, assumptions, status },
+        data: {
+          ...(name !== undefined ? { name } : {}),
+          ...(problemSummary !== undefined ? { problemSummary } : {}),
+          ...(objectives !== undefined ? { objectives } : {}),
+          ...(assumptions !== undefined ? { assumptions } : {}),
+          ...(status !== undefined ? { status } : {}),
+          ...(image !== undefined ? { image } : {}), // ✅ AJOUT
+        },
       });
-      if (revalidateRoute) {
-        revalidatePath(revalidateRoute);
-      }
-      return {
-        success: true,
-        mission,
-      };
+
+      if (revalidateRoute) revalidatePath(revalidateRoute);
+
+      return { success: true, mission };
     } catch (error) {
       console.error("[UPDATE_MISSION_ERROR]", error);
       return {
         success: false,
-        error:
-          error instanceof Error ? error.message : "Une erreur est survenue",
+        error: error instanceof Error ? error.message : "Une erreur est survenue",
       };
     }
   });

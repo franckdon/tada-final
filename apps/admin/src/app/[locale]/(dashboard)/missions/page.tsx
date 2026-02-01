@@ -1,3 +1,4 @@
+// src/app/[locale]/(dashboard)/missions/page.tsx
 import { ErrorFallback } from "@/components/base/error-fallback";
 import { Icons } from "@/components/icons";
 import { ListMissionServer } from "@/components/missions/list-mission-server";

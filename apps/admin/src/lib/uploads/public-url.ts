@@ -1,3 +1,4 @@
+//src/lib/uploads/public-url.ts
 export function isHttpUrl(value: string) {
   return value.startsWith("http://") || value.startsWith("https://");
 }

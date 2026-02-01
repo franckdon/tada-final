@@ -43,6 +43,7 @@ import {
   Tags,
   MonitorCloud,
   FolderKanban,
+  MessageCircleQuestionMark,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -151,6 +152,16 @@ export function Sidebar() {
           icon: <ClipboardList className="h-5 w-5" />,
           text: "Audit des Missions",
           href: "/audit/missions",
+        },
+      ],
+    },
+    {
+      title: "Notifications",
+      items: [
+        {
+          icon: <MessageCircleQuestionMark className="h-5 w-5" />,
+          text: "Notifications",
+          href: "/notifications",
         },
       ],
     },

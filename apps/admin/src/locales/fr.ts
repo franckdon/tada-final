@@ -1410,6 +1410,7 @@ export default {
       languages: "Langues",
     },
     personalInfo: {
+      image: "Image",
       title: "Informations personnelles",
       description: "Mettre à jour vos informations personnelles",
       name: "Nom complet",
