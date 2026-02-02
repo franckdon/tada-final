@@ -23,6 +23,8 @@ function parseDateSafe(v: unknown): Date | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
+const AssignedEnum = z.enum(["all", "assigned", "unassigned"]);
+
 const StatusEnum = z.enum(["draft", "live", "completed", "on hold"]);
 const TypeEnum = z.enum(["survey", "contributor-info"]);
 const ModeEnum = z.enum(["manual", "ai", "contributor-info", "template"]);
@@ -61,6 +63,13 @@ export const missionsListQuerySchema = z
     sortDir: SortDirEnum.optional().default("desc"),
 
     zone: z.string().optional().transform((v) => (v ? v.trim() : undefined)),
+
+    assigned: z
+      .string()
+      .optional()
+      .transform((v) => (typeof v === "string" ? v.trim().toLowerCase() : undefined))
+      .pipe(AssignedEnum.optional())
+      .default("all"),
   })
   .transform((q) => {
     const page = Math.max(1, q.page ?? 1);

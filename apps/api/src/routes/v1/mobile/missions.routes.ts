@@ -20,6 +20,8 @@ mobileMissionsRoutes.onError((err, c) => {
 mobileMissionsRoutes.get("/", requireMobileAuth, async (c) => {
   const userId = c.get("userId") as string;
 
+  console.log("[mobile/missions] userId =", userId);
+
   const raw = c.req.query();
   const query = missionsListQuerySchema.parse(raw);
 

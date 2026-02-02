@@ -1,5 +1,17 @@
 import { db } from "../../../lib/db";
 
+export type MissionAccessInfo = {
+  // mission flags
+  isPublic: boolean;
+  isPublish: boolean;
+  publishAt: string | null;
+  internal: boolean;
+  isSuperAdminMission: boolean;
+
+  // assignment for this user
+  isAssignedToMe: boolean;
+};
+
 export type MissionDetailsRow = {
   id: string;
   name: string;
@@ -34,9 +46,55 @@ export type MissionDetailsRow = {
   workspaceId: string | null;
 
   image: string | null;
+
+  // ---- expose for contributor mobile
+  contributorConfig: null | {
+    title: string;
+    description: string;
+    gain: string;
+    duration: string;
+    imageUrl: string | null;
+    deadline: string | null;
+    geoZones: string[];
+    targetSampleSize: number;
+  };
+
+  assignment: null | {
+    id: string;
+    status: string;
+    progress: number;
+    priority: string;
+    assignedAt: string;
+    acceptedAt: string | null;
+    startedAt: string | null;
+    completedAt: string | null;
+    dueDate: string | null;
+  };
+
+  isAssignedToMe: boolean;
 };
 
-export async function getMissionById(id: string): Promise<MissionDetailsRow | null> {
+export async function getMissionAccessInfo(missionId: string, userId: string): Promise<MissionAccessInfo | null> {
+  const sql = `
+    SELECT
+      COALESCE(m."isPublic", true) AS "isPublic",
+      m."isPublish" AS "isPublish",
+      m."publishAt" AS "publishAt",
+      COALESCE(m."internal", false) AS "internal",
+      COALESCE(m."isSuperAdminMission", false) AS "isSuperAdminMission",
+      (ma."id" IS NOT NULL) AS "isAssignedToMe"
+    FROM "mission" m
+    LEFT JOIN "mission_assignment" ma
+      ON ma."missionId" = m."id"
+     AND ma."contributorId" = $2
+    WHERE m."id" = $1
+    LIMIT 1
+  `;
+  const r = await db.query<MissionAccessInfo>(sql, [missionId, userId]);
+  return r.rows[0] ?? null;
+}
+
+export async function getMissionById(missionId: string, userId: string): Promise<MissionDetailsRow | null> {
   const sql = `
     SELECT
       m."id",
@@ -47,13 +105,10 @@ export async function getMissionById(id: string): Promise<MissionDetailsRow | nu
       m."createdAt",
       m."updatedAt",
       m."status",
-
       COALESCE(m."internal", false) AS "internal",
       m."type",
-
       COALESCE(m."isPublic", true) AS "isPublic",
       COALESCE(m."isSuperAdminMission", false) AS "isSuperAdminMission",
-
       m."isPublish",
       m."publishAt",
       m."mode",
@@ -65,13 +120,103 @@ export async function getMissionById(id: string): Promise<MissionDetailsRow | nu
       m."audiences",
       m."organizationId",
       m."workspaceId",
-      m."image"
+      m."image",
+
+      -- MissionConfigContributor
+      mcc."title" AS "mcc_title",
+      mcc."description" AS "mcc_description",
+      mcc."gain"::text AS "mcc_gain",
+      mcc."duration"::text AS "mcc_duration",
+      mcc."imageUrl" AS "mcc_imageUrl",
+      mcc."deadline" AS "mcc_deadline",
+      COALESCE(mcc."geo_zones", ARRAY[]::text[]) AS "mcc_geoZones",
+      COALESCE(mcc."targetSampleSize", 0) AS "mcc_targetSampleSize",
+
+      -- MissionAssignment for this user
+      ma."id" AS "ma_id",
+      ma."status" AS "ma_status",
+      ma."progress" AS "ma_progress",
+      ma."priority" AS "ma_priority",
+      ma."assignedAt" AS "ma_assignedAt",
+      ma."acceptedAt" AS "ma_acceptedAt",
+      ma."startedAt" AS "ma_startedAt",
+      ma."completedAt" AS "ma_completedAt",
+      ma."dueDate" AS "ma_dueDate"
+
     FROM "mission" m
+    LEFT JOIN "mission_config_contributor" mcc
+      ON mcc."missionId" = m."id"
+    LEFT JOIN "mission_assignment" ma
+      ON ma."missionId" = m."id"
+     AND ma."contributorId" = $2
     WHERE m."id" = $1
     LIMIT 1
   `;
-  const r = await db.query<MissionDetailsRow>(sql, [id]);
-  return r.rows[0] ?? null;
+
+  const r = await db.query<any>(sql, [missionId, userId]);
+  const row = r.rows[0];
+  if (!row) return null;
+
+  const hasConfig = !!row.mcc_title;
+  const isAssignedToMe = !!row.ma_id;
+
+  const mission: MissionDetailsRow = {
+    id: row.id,
+    name: row.name,
+    problemSummary: row.problemSummary,
+    objectives: row.objectives,
+    assumptions: row.assumptions,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    status: row.status,
+    internal: row.internal,
+    type: row.type,
+    isPublic: row.isPublic,
+    isSuperAdminMission: row.isSuperAdminMission,
+    isPublish: row.isPublish,
+    publishAt: row.publishAt,
+    mode: row.mode,
+    validationStatus: row.validationStatus,
+    validationComment: row.validationComment,
+    validatedAt: row.validatedAt,
+    executiveSummary: row.executiveSummary,
+    sampleSummary: row.sampleSummary,
+    audiences: row.audiences,
+    organizationId: row.organizationId,
+    workspaceId: row.workspaceId,
+    image: row.image,
+
+    contributorConfig: hasConfig
+      ? {
+          title: row.mcc_title,
+          description: row.mcc_description ?? "",
+          gain: row.mcc_gain ?? "0",
+          duration: row.mcc_duration ?? "0",
+          imageUrl: row.mcc_imageUrl,
+          deadline: row.mcc_deadline,
+          geoZones: row.mcc_geoZones ?? [],
+          targetSampleSize: row.mcc_targetSampleSize ?? 0,
+        }
+      : null,
+
+    assignment: isAssignedToMe
+      ? {
+          id: row.ma_id,
+          status: row.ma_status ?? "assigned",
+          progress: row.ma_progress ?? 0,
+          priority: row.ma_priority ?? "medium",
+          assignedAt: row.ma_assignedAt,
+          acceptedAt: row.ma_acceptedAt,
+          startedAt: row.ma_startedAt,
+          completedAt: row.ma_completedAt,
+          dueDate: row.ma_dueDate,
+        }
+      : null,
+
+    isAssignedToMe,
+  };
+
+  return mission;
 }
 
 export async function getOrganizationMini(id: string) {

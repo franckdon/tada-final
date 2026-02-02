@@ -8,7 +8,7 @@ function toBool(v: unknown): unknown {
   const s = v.trim().toLowerCase();
   if (truthy.has(s)) return true;
   if (falsy.has(s)) return false;
-  return v; // laisse Zod gérer si valeur invalide
+  return v;
 }
 
 export const missionDetailsQuerySchema = z.object({

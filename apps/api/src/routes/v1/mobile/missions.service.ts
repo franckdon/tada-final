@@ -4,7 +4,6 @@ import { ServiceResult } from "./mobile.types";
 
 type MissionListItem = Awaited<ReturnType<typeof repo.listMissions>>["items"][number];
 
-// 2) Type du payload de listMissions
 export type MissionsListData = {
   items: MissionListItem[];
   meta: {
@@ -21,8 +20,7 @@ export async function listMissions(
   userId: string,
   query: MissionsListQuery,
 ): Promise<ServiceResult<MissionsListData>> {
-
-  const { items, total } = await repo.listMissions(query);
+  const { items, total } = await repo.listMissions(userId, query);
 
   const page = query.page;
   const pageSize = query.pageSize;
