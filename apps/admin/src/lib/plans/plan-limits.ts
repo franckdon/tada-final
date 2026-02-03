@@ -131,12 +131,40 @@ export function formatDashboards(
  * You can map over this in /pricing to generate rows.
  */
 export const PLAN_FEATURES = [
-  { key: "respondentCompletes", labelFr: "Réponses (soumissions)", labelEn: "Respondent completes (submissions)" },
-  { key: "deploymentLocations", labelFr: "Zones de déploiement", labelEn: "Deployment locations" },
-  { key: "surveyVerificationRounds", labelFr: "Tours de vérification", labelEn: "Survey verification rounds" },
-  { key: "questionsPerSurvey", labelFr: "Questions par enquête", labelEn: "Questions per survey" },
-  { key: "segmentationDimensions", labelFr: "Dimensions de segmentation", labelEn: "Segmentation dimensions" },
+  {
+    key: "respondentCompletes",
+    labelFr: "Réponses (soumissions)",
+    labelEn: "Respondent completes (submissions)",
+  },
+  {
+    key: "deploymentLocations",
+    labelFr: "Zones de déploiement",
+    labelEn: "Deployment locations",
+  },
+  {
+    key: "surveyVerificationRounds",
+    labelFr: "Tours de vérification",
+    labelEn: "Survey verification rounds",
+  },
+  {
+    key: "questionsPerSurvey",
+    labelFr: "Questions par enquête",
+    labelEn: "Questions per survey",
+  },
+  {
+    key: "segmentationDimensions",
+    labelFr: "Dimensions de segmentation",
+    labelEn: "Segmentation dimensions",
+  },
   { key: "userSeats", labelFr: "Utilisateurs (sièges)", labelEn: "User seats" },
-  { key: "surveyTemplateLibraryAndImport", labelFr: "Templates & import", labelEn: "Template library & import" },
-  { key: "proprietaryDashboardsAccess", labelFr: "Dashboards TADA", labelEn: "TADA dashboards access" },
+  {
+    key: "surveyTemplateLibraryAndImport",
+    labelFr: "Templates & import",
+    labelEn: "Template library & import",
+  },
+  {
+    key: "proprietaryDashboardsAccess",
+    labelFr: "Dashboards TADA",
+    labelEn: "TADA dashboards access",
+  },
 ] as const;

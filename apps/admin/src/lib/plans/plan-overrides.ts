@@ -1,7 +1,8 @@
+// src/lib/plans/plan-overrides.ts
 import type { BoolValue, LimitValue, PlanLimits } from "./plan-limits";
 
 export type PlanOverrides = Partial<{
-  respondentCompletes: number;
+  respondentCompletes: LimitValue;
   deploymentLocations: LimitValue;
   surveyVerificationRounds: LimitValue;
   questionsPerSurvey: LimitValue;

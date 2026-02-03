@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   getPlanLimits,
   type PlanCode,
+  type LimitValue,
   formatLimit,
   formatYesNo,
 } from "@/lib/plans/plan-limits";
@@ -30,6 +31,79 @@ const formatDate = (d?: Date | string | null) => {
   const date = typeof d === "string" ? new Date(d) : d;
   return date.toLocaleDateString("fr-FR");
 };
+
+// ------------------------------
+// ✅ Helper UI typé LimitValue
+// ------------------------------
+function LimitOverrideField({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: LimitValue | undefined;
+  onChange: (v: LimitValue) => void;
+  placeholder?: string;
+}) {
+  const mode: "custom" | "unlimited" | "number" =
+    value === "unlimited"
+      ? "unlimited"
+      : value === "custom"
+        ? "custom"
+        : "number";
+
+  const num = typeof value === "number" ? value : "";
+
+  return (
+    <div className="mt-4">
+      <div className="mb-2 text-sm text-gray-700">{label}</div>
+
+      <div className="grid gap-2 md:grid-cols-[220px_1fr]">
+        <Select
+          value={mode}
+          onValueChange={(v) => {
+            if (v === "custom") onChange("custom");
+            if (v === "unlimited") onChange("unlimited");
+            if (v === "number") onChange(0);
+          }}
+        >
+          <SelectTrigger className="h-11">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="custom">Sur devis</SelectItem>
+            <SelectItem value="unlimited">Illimité</SelectItem>
+            <SelectItem value="number">Personnalisé</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {mode === "number" ? (
+          <Input
+            className="h-11"
+            type="number"
+            min={0}
+            value={num}
+            onChange={(e) => onChange(Number(e.target.value))}
+            placeholder={placeholder ?? "Ex: 10"}
+          />
+        ) : (
+          <div className="h-11 rounded-md border border-gray-200 bg-gray-50 px-3 flex items-center text-sm text-gray-600">
+            {mode === "unlimited" ? "Illimité" : "Sur devis"}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-2 text-xs text-gray-500">
+        {mode === "custom"
+          ? "Sur devis = valeur négociée (non chiffrée) pour ce workspace."
+          : mode === "unlimited"
+            ? "Illimité = aucune limite appliquée sur cette dimension."
+            : "Personnalisé = valeur numérique fixe négociée."}
+      </div>
+    </div>
+  );
+}
 
 export default function WorkspaceSubscriptionTab({
   workspaceId,
@@ -57,8 +131,7 @@ export default function WorkspaceSubscriptionTab({
 
   const [isSaving, setIsSaving] = React.useState(false);
 
-  // --------- ACTIVE STATE (FIX) ----------
-  // Ne dépend PLUS de subscription.isActive (qui peut être stale / mal calculé).
+  // --------- ACTIVE STATE ----------
   const endsAtDate: Date | null = subscription?.endsAt
     ? new Date(subscription.endsAt)
     : null;
@@ -66,7 +139,6 @@ export default function WorkspaceSubscriptionTab({
   const computedIsActive =
     hasSubscription &&
     subscription?.status === "active" &&
-    // endsAt null => actif (open-ended), sinon endsAt doit être dans le futur
     (endsAtDate ? endsAtDate.getTime() > Date.now() : true);
 
   const statusBadge = computedIsActive
@@ -75,15 +147,13 @@ export default function WorkspaceSubscriptionTab({
       ? { variant: "secondary" as const, label: "Inactif / Expiré" }
       : { variant: "secondary" as const, label: "Aucun abonnement" };
 
-  // --------- PLAN LIMITS ----------
-  // Limites "sélection à gauche" (utile pour preview avant changement)
+  // --------- LIMITS ----------
   const selectedDefaults = getPlanLimits(planCode);
   const selectedEffective = applyOverrides(
     selectedDefaults,
     planCode === "entreprise" ? overrides : null,
   );
 
-  // Limites du plan ACTUEL (celles réellement appliquées au workspace)
   const currentPlanCodeForLimits = hasSubscription
     ? (subscription.planCode as PlanCode)
     : planCode;
@@ -332,36 +402,51 @@ export default function WorkspaceSubscriptionTab({
                     Personnalisation ENTREPRISE
                   </div>
                   <div className="mt-1 text-xs text-gray-600">
-                    Saisis les limites négociées pour ce workspace.
+                    Personnalise les limites négociées (custom / unlimited /
+                    nombre).
                   </div>
                 </div>
                 <Badge variant="outline">Custom</Badge>
               </div>
 
-              <div className="mt-4">
-                <div className="mb-2 text-sm text-gray-700">
-                  Soumissions / mois
-                </div>
-                <Input
-                  className="h-11"
-                  type="number"
-                  min={0}
-                  value={overrides.respondentCompletes ?? ""}
-                  onChange={(e) =>
-                    setOverrides((prev) => ({
-                      ...prev,
-                      respondentCompletes:
-                        e.target.value === ""
-                          ? undefined
-                          : Number(e.target.value),
-                    }))
-                  }
-                  placeholder="Ex: 5000"
-                />
-                <div className="mt-2 text-xs text-gray-500">
-                  Si vide, on reste sur “Sur devis”.
-                </div>
-              </div>
+              <LimitOverrideField
+                label="Soumissions / mois"
+                value={overrides.respondentCompletes}
+                onChange={(v) =>
+                  setOverrides((prev) => ({ ...prev, respondentCompletes: v }))
+                }
+                placeholder="Ex: 5000"
+              />
+
+              <LimitOverrideField
+                label="Zones de déploiement"
+                value={overrides.deploymentLocations}
+                onChange={(v) =>
+                  setOverrides((prev) => ({ ...prev, deploymentLocations: v }))
+                }
+                placeholder="Ex: 5"
+              />
+
+              <LimitOverrideField
+                label="Segmentation (dimensions)"
+                value={overrides.segmentationDimensions}
+                onChange={(v) =>
+                  setOverrides((prev) => ({
+                    ...prev,
+                    segmentationDimensions: v,
+                  }))
+                }
+                placeholder="Ex: 3"
+              />
+
+              <LimitOverrideField
+                label="Questions / enquête"
+                value={overrides.questionsPerSurvey}
+                onChange={(v) =>
+                  setOverrides((prev) => ({ ...prev, questionsPerSurvey: v }))
+                }
+                placeholder="Ex: 25"
+              />
             </div>
           )}
 
