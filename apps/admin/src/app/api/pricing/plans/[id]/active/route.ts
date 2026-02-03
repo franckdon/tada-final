@@ -1,3 +1,4 @@
+//src/app/api/pricing/plans/%5Bid%5D/active/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 

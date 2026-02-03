@@ -65,7 +65,7 @@ type PlanRow = {
   code: string;
   name: string;
   description: string | null;
-  priceCents: number;
+  priceCents: number; // on garde le champ tel quel
   bulletsFr: string;
   bulletsEn: string;
   sortOrder: number;
@@ -74,12 +74,12 @@ type PlanRow = {
   updatedAt: Date;
 };
 
-function formatEURFromCents(cents: number) {
-  return new Intl.NumberFormat("en-US", {
+function formatXOF(amount: number) {
+  return new Intl.NumberFormat("fr-FR", {
     style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
-  }).format(cents / 100);
+    currency: "XOF",
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
 function countBullets(text: string) {
@@ -226,9 +226,8 @@ export function PlansTable({ plans }: { plans: PlanRow[] }) {
         cell: ({ row }) => (
           <div className="text-sm">
             <div className="font-semibold text-gray-900">
-              {formatEURFromCents(row.original.priceCents)}
+              {formatXOF(row.original.priceCents)}
             </div>
-            <div className="text-xs text-gray-500">USD</div>
           </div>
         ),
       },

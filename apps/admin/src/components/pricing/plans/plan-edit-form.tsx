@@ -60,10 +60,6 @@ function parseEuroToCents(input: string) {
   return Math.round(n * 100);
 }
 
-function centsToEuroDisplay(amountCents: number) {
-  return (amountCents / 100).toFixed(2);
-}
-
 function validate(state: FormState) {
   const errors: string[] = [];
 
@@ -101,7 +97,7 @@ export function PlanEditForm({ initialPlan }: { initialPlan: InitialPlan }) {
   const [state, setState] = React.useState<FormState>(() => ({
     name: initialPlan.name,
     description: initialPlan.description ?? "",
-    priceDisplay: centsToEuroDisplay(initialPlan.priceCents),
+    priceDisplay: initialPlan.priceCents.toString(),
     bulletsFr: initialPlan.bulletsFr ?? "",
     bulletsEn: initialPlan.bulletsEn ?? "",
     sortOrder: initialPlan.sortOrder ?? 0,
@@ -304,15 +300,17 @@ export function PlanEditForm({ initialPlan }: { initialPlan: InitialPlan }) {
             </div>
 
             <div className="md:col-span-3 space-y-2">
-              <Label>Prix (USD)</Label>
+              <Label>Prix (XOF)</Label>
               <Input
                 value={state.priceDisplay}
                 onChange={(e) =>
                   setState((p) => ({ ...p, priceDisplay: e.target.value }))
                 }
-                placeholder="Ex: 19.99"
+                placeholder="Ex: 4900"
               />
-              <p className="text-xs text-gray-500">Stocké en cents.</p>
+              <p className="text-xs text-gray-500">
+                Montant en XOF (entier). Stocké en centimes.
+              </p>
             </div>
 
             <div className="md:col-span-3 space-y-2">

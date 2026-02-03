@@ -293,16 +293,16 @@ export function PlanCreateForm() {
             </div>
 
             <div className="md:col-span-3 space-y-2">
-              <Label>Prix (USD)</Label>
+              <Label>Prix (XOF)</Label>
               <Input
                 value={state.priceDisplay}
                 onChange={(e) =>
                   setState((p) => ({ ...p, priceDisplay: e.target.value }))
                 }
-                placeholder="Ex: 19.99"
+                placeholder="Ex: 4900"
               />
               <p className="text-xs text-gray-500">
-                Montant en USD (décimales autorisées). Stocké en cents.
+                Montant en XOF (entier). Stocké en centimes.
               </p>
             </div>
 

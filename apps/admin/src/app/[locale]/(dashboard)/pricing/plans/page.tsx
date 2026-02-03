@@ -3,9 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { getI18n } from "@/locales/server";
 import {
   Package,
-  BadgeDollarSign,
   CalendarDays,
   Plus,
+  BadgeDollarSign,
   ArrowDownWideNarrow,
 } from "lucide-react";
 import { PlansTable } from "@/components/pricing/plans/plans-table";
@@ -21,7 +21,7 @@ export type PlanRow = {
   code: string;
   name: string;
   description: string | null;
-  priceCents: number;
+  priceCents: number; // on garde le champ tel quel, mais on l'affiche en XOF
   bulletsFr: string;
   bulletsEn: string;
   sortOrder: number;
@@ -91,7 +91,7 @@ export default async function PlansPage() {
         <CardContent className="p-6 space-y-5">
           <PricingPageHeader
             title="Plans"
-            description="Gère les plans (nom, description, prix EUR, bullets FR/EN, ordre et activation)."
+            description="Gère les plans (nom, description, prix XOF, bullets FR/EN, ordre et activation)."
             right={
               <Button asChild className="bg-blue-600 hover:bg-blue-700">
                 <Link href="/pricing/plans/new">
@@ -117,7 +117,7 @@ export default async function PlansPage() {
                 icon: <CalendarDays className="h-8 w-8 text-green-600" />,
               },
             ].map((item) => (
-              <StatCard key={item.key} item={item} />
+              <StatCard key={item.key} item={item as any} />
             ))}
           </div>
         </CardContent>
