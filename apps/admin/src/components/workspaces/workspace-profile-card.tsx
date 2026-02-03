@@ -40,15 +40,6 @@ export default function WorkspaceProfileCard({
           </Badge>
         )}
       </div>
-
-      <div className="mt-6">
-        <Button asChild className="w-full">
-          <Link href={`/workspaces/edit/${workspace.id}`}>
-            <Edit className="mr-2 h-4 w-4" />
-            Modifier
-          </Link>
-        </Button>
-      </div>
     </div>
   );
 }

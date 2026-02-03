@@ -3,11 +3,24 @@ import {
   DEFAULT_SERVER_ERROR_MESSAGE,
   createSafeActionClient,
 } from "next-safe-action";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
 import { z } from "zod";
 
+async function getNativeHeadersWithCookies(): Promise<Headers> {
+  const h = await headers();
+  const native = new Headers();
+
+  for (const [k, v] of h.entries()) native.set(k, v);
+
+  // IMPORTANT: s'assurer que les cookies partent bien vers getSession
+  const cookieHeader = cookies().toString();
+  if (cookieHeader) native.set("cookie", cookieHeader);
+
+  return native;
+}
+
 const handleServerError = (e: Error) => {
-  console.error("Action error:", e.message);
+  console.error("Action error:", e);
   return e instanceof Error ? e.message : DEFAULT_SERVER_ERROR_MESSAGE;
 };
 
@@ -24,37 +37,40 @@ export const actionClientWithMeta = createSafeActionClient({
   },
 });
 
-export const authActionClient = actionClientWithMeta
-  .use(async ({ next, clientInput, metadata }) => {
-    const result = await next({ ctx: {} });
-
-    if (process.env.NODE_ENV === "development") {
-      console.log(`Input -> ${JSON.stringify(clientInput)}`);
-      console.log(`Result -> ${JSON.stringify(result.data)}`);
-      console.log(`Metadata -> ${JSON.stringify(metadata)}`);
-
-      return result;
-    }
-
-    return result;
-  })
-  .use(async ({ next, clientInput, metadata }) => {
+export const authActionClient = actionClientWithMeta.use(
+  async ({ next, clientInput, metadata }) => {
+    // logs DEV
     if (process.env.NODE_ENV === "development") {
       console.log(`Input -> ${JSON.stringify(clientInput)}`);
       console.log(`Metadata -> ${JSON.stringify(metadata)}`);
+      console.log(
+        "[safe-action] cookies:",
+        cookies().getAll().map((c) => c.name)
+      );
     }
 
+    // auth
     const session = await auth.api.getSession({
-      headers: await headers(),
+      headers: await getNativeHeadersWithCookies(),
     });
+
     if (!session?.user) {
       throw new Error("Non authentifié");
     }
 
-    return next({
+    // exécuter l’action UNE SEULE FOIS, avec le bon ctx
+    const result = await next({
       ctx: {
         user: session.user,
         auth,
       },
     });
-  });
+
+    // logs DEV
+    if (process.env.NODE_ENV === "development") {
+      console.log(`Result -> ${JSON.stringify(result.data)}`);
+    }
+
+    return result;
+  }
+);

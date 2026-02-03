@@ -148,7 +148,7 @@ export function MissionSurveyResponseCard({
           variant: "destructive",
         });
       },
-    }
+    },
   );
 
   const formatLocation = (location: any) => {
@@ -247,7 +247,7 @@ export function MissionSurveyResponseCard({
   const getQuestionInfo = (questionName: string) => {
     if (response.survey.questions && Array.isArray(response.survey.questions)) {
       const question = response.survey.questions.find(
-        (q: any) => q.name === questionName
+        (q: any) => q.name === questionName,
       );
       return question || { name: questionName, type: "unknown" };
     }
@@ -278,6 +278,9 @@ export function MissionSurveyResponseCard({
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex-1">
+              <span className="text-xs text-muted-foreground">
+                status={response.status}
+              </span>
               <CardTitle className="text-base flex items-center gap-2 mb-2">
                 {response.survey.name}
                 {getStatusBadge()}
@@ -319,7 +322,7 @@ export function MissionSurveyResponseCard({
                         <Clock className="h-3 w-3" />
                         Membre depuis{" "}
                         {new Date(response.user.createdAt).toLocaleDateString(
-                          "fr-FR"
+                          "fr-FR",
                         )}
                       </span>
                     </div>
@@ -444,10 +447,10 @@ export function MissionSurveyResponseCard({
                                         issue.level === "critical"
                                           ? "text-red-500"
                                           : issue.level === "high"
-                                          ? "text-orange-500"
-                                          : issue.level === "medium"
-                                          ? "text-yellow-500"
-                                          : "text-blue-500"
+                                            ? "text-orange-500"
+                                            : issue.level === "medium"
+                                              ? "text-yellow-500"
+                                              : "text-blue-500"
                                       }`}
                                     />
                                     <div>
@@ -459,7 +462,7 @@ export function MissionSurveyResponseCard({
                                       </div>
                                     </div>
                                   </div>
-                                )
+                                ),
                               )}
                             </div>
                           </div>
@@ -469,7 +472,7 @@ export function MissionSurveyResponseCard({
                         <div className="text-xs text-muted-foreground">
                           Analysé le{" "}
                           {new Date(
-                            response.qualityControl.analyzedAt
+                            response.qualityControl.analyzedAt,
                           ).toLocaleString("fr-FR")}
                         </div>
                       )}
@@ -559,7 +562,7 @@ export function MissionSurveyResponseCard({
                           answer={answer}
                         />
                       );
-                    }
+                    },
                   )}
                 </div>
               </div>

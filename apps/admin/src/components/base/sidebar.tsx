@@ -222,7 +222,7 @@ export function Sidebar() {
             width={90}
             height={32}
             priority
-            className=""
+            className="w-40 h-auto"
           />
         </Link>
       </div>

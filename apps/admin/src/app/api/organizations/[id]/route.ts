@@ -238,8 +238,9 @@ export async function DELETE(
           select: {
             members: true,
             missions: true,
-            projects: true,
-            datasets: true,
+            aiDatasets: true,
+            audienceAttributeSuggestions: true,
+            workspaces: true,
           },
         },
       },
@@ -258,14 +259,15 @@ export async function DELETE(
     // Vérifier si l'organisation a des données associées
     const hasRelatedData = 
       existingOrg._count.missions > 0 ||
-      existingOrg._count.projects > 0 ||
-      existingOrg._count.datasets > 0;
+      existingOrg._count.aiDatasets > 0 ||
+      existingOrg._count.audienceAttributeSuggestions > 0 ||
+      existingOrg._count.workspaces > 0;
     
     if (hasRelatedData) {
       return NextResponse.json(
         {
           success: false,
-          error: `Cannot delete organization with related data. It has ${existingOrg._count.missions} missions, ${existingOrg._count.projects} projects, and ${existingOrg._count.datasets} datasets. Please remove or archive these first.`
+          error: `Cannot delete organization with related data. It has ${existingOrg._count.missions} missions, ${existingOrg._count.aiDatasets} AI datasets, ${existingOrg._count.audienceAttributeSuggestions} audience attribute suggestions, and ${existingOrg._count.workspaces} workspaces. Please remove or archive these first.`
         },
         { status: 409 }
       );

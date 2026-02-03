@@ -6,10 +6,16 @@ import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
 
+/**
+ * Input
+ */
 const AutoQualitySchema = z.object({
   surveyResponseId: z.string().uuid(),
 });
 
+/**
+ * LLM output schema
+ */
 const QualityAnalysisResultSchema = z.object({
   overallScore: z.number().min(0).max(100),
   scores: z.object({
@@ -19,22 +25,24 @@ const QualityAnalysisResultSchema = z.object({
     geographic: z.number().min(0).max(100),
     temporal: z.number().min(0).max(100),
   }),
-  issues: z.array(z.object({
-    type: z.enum([
-      "response_consistency",
-      "data_completeness", 
-      "suspicious_pattern",
-      "geographic_validity",
-      "temporal_integrity",
-      "media_quality"
-    ]),
-    level: z.enum(["low", "medium", "high", "critical"]),
-    title: z.string(),
-    description: z.string(),
-    fieldPath: z.string().optional(),
-    confidence: z.number().min(0).max(1),
-    suggestions: z.array(z.string()),
-  })),
+  issues: z.array(
+    z.object({
+      type: z.enum([
+        "response_consistency",
+        "data_completeness",
+        "suspicious_pattern",
+        "geographic_validity",
+        "temporal_integrity",
+        "media_quality",
+      ]),
+      level: z.enum(["low", "medium", "high", "critical"]),
+      title: z.string(),
+      description: z.string(),
+      fieldPath: z.string().optional(),
+      confidence: z.number().min(0).max(1),
+      suggestions: z.array(z.string()),
+    })
+  ),
   decision: z.enum(["accept", "review", "reject"]),
   decisionReason: z.string(),
   summary: z.string(),
@@ -42,15 +50,54 @@ const QualityAnalysisResultSchema = z.object({
   flagsForHumanReview: z.boolean(),
 });
 
+type QualityDecision = z.infer<typeof QualityAnalysisResultSchema>["decision"];
+
+function mapDecisionToStatus(decision: QualityDecision) {
+  return decision === "accept"
+    ? "accepted"
+    : decision === "review"
+    ? "review_required"
+    : "rejected";
+}
+
+function impactScoreFromLevel(level: "low" | "medium" | "high" | "critical") {
+  return level === "critical" ? 90 : level === "high" ? 70 : level === "medium" ? 50 : 30;
+}
+
+/**
+ * Safe logger: DO NOT crash the action if the Prisma delegate doesn't exist
+ * (your current error comes from prisma.qualityAnalysisLog being undefined).
+ */
+async function safeQualityAnalysisLogCreate(data: any) {
+  try {
+    const delegate = (prisma as any)?.qualityAnalysisLog;
+    if (!delegate?.create) {
+      console.warn(
+        "[autoQualityLLM] qualityAnalysisLog delegate not found on Prisma client. " +
+          "Run `npx prisma generate` or verify model name."
+      );
+      return null;
+    }
+    return await delegate.create({ data });
+  } catch (e) {
+    console.error("[autoQualityLLM] Failed to create qualityAnalysisLog:", e);
+    return null;
+  }
+}
+
 export const autoQualityLLMAction = authActionClient
   .metadata({ name: "autoQualityLLM" })
   .schema(AutoQualitySchema)
-  .action(async ({ parsedInput, ctx }) => {
+  .action(async ({ parsedInput }) => {
     const { surveyResponseId } = parsedInput;
-    const { user } = ctx;
+
+    // optional: if you want to measure duration properly
+    const startedAt = new Date();
 
     try {
-      // Récupérer la réponse avec toutes les données nécessaires
+      /**
+       * 1) Load survey response + context
+       */
       const surveyResponse = await prisma.surveyResponse.findUnique({
         where: { id: surveyResponseId },
         include: {
@@ -70,11 +117,8 @@ export const autoQualityLLMAction = authActionClient
         },
       });
 
-      if (!surveyResponse) {
-        throw new Error("Survey response not found");
-      }
+      if (!surveyResponse) throw new Error("Survey response not found");
 
-      // Préparer les données pour l'analyse LLM
       const analysisData = {
         surveyResponse: {
           id: surveyResponse.id,
@@ -95,11 +139,13 @@ export const autoQualityLLMAction = authActionClient
         },
         mission: surveyResponse.survey.mission,
         metadata: {
-          responseCount: Object.keys(surveyResponse.responses as any).length,
-        }
+          responseCount: Object.keys((surveyResponse.responses as any) ?? {}).length,
+        },
       };
 
-      // Analyse avec LLM
+      /**
+       * 2) LLM analysis
+       */
       const { object } = await generateObject({
         model: openai("gpt-4o-mini"),
         schema: QualityAnalysisResultSchema,
@@ -186,84 +232,65 @@ You are an expert in mobile survey data quality control and validation.
 - Inconsistent or contradictory responses
 - Automated submission patterns
 
-## Response Analysis:
-- Boolean + comment pairs: Check if comment supports the boolean choice
-- Rating + explanation: Verify rating matches sentiment of explanation
-- File uploads: Assess relevance, authenticity, and technical quality
-- Image analysis: Check for blur, pixelation, watermarks, contextual relevance
-- Photo authenticity: Distinguish between original photos vs downloaded/stock images
-- Visual quality: Identify low-resolution, poorly lit, or out-of-focus images
-- Location data: Validate GPS makes sense for the survey context
-- Text quality: Look for genuine, thoughtful responses vs rushed/generic ones
-
 ## CRITICAL REQUIREMENT:
 **All output fields (title, description, summary, decisionReason, recommendations, suggestions) MUST be written in French language.**
-
-Examples:
-- title: "Réponses incohérentes détectées"
-- description: "Les réponses booléennes ne correspondent pas aux commentaires associés"
-- summary: "Analyse automatique : Score 65/100. 3 problèmes détectés nécessitant une révision."
-- decisionReason: "Score acceptable mais présence de quelques incohérences mineures"
-- recommendations: ["Vérifier la cohérence des réponses", "Améliorer la qualité des images"]
-
-Be thorough and provide specific examples from the data to justify your analysis.
         `,
         temperature: 0.3,
       });
 
-      // Enregistrer ou mettre à jour le contrôle qualité
+      /**
+       * 3) Upsert quality control
+       * IMPORTANT: because your DB column `updatedAt` is NOT nullable and has no default,
+       * Prisma requires you to provide it on CREATE.
+       */
+      const now = new Date();
+      const status = mapDecisionToStatus(object.decision);
+
+      const qcData = {
+        surveyResponseId: surveyResponse.id,
+        status,
+        overallScore: object.overallScore,
+        consistencyScore: object.scores.consistency,
+        mediaScore: object.scores.authenticity,
+        geoScore: object.scores.geographic,
+        temporalScore: object.scores.temporal,
+        completenessScore: object.scores.completeness,
+        analyzedAt: now,
+        analyzer: "auto_quality_llm",
+        analyzerVersion: "1.0.0",
+        summary: object.summary,
+        recommendations: object.recommendations,
+        decision: object.decision,
+        decisionReason: object.decisionReason,
+        updatedAt: now,
+      };
+
       let qualityControl;
-      
+
       if (surveyResponse.qualityControl) {
         qualityControl = await prisma.qualityControl.update({
           where: { id: surveyResponse.qualityControl.id },
-          data: {
-            status: object.decision === "accept" ? "accepted" : 
-                   object.decision === "review" ? "review_required" : "rejected",
-            overallScore: object.overallScore,
-            consistencyScore: object.scores.consistency,
-            mediaScore: object.scores.authenticity,
-            geoScore: object.scores.geographic,
-            temporalScore: object.scores.temporal,
-            completenessScore: object.scores.completeness,
-            analyzedAt: new Date(),
-            analyzer: "auto_quality_llm",
-            analyzerVersion: "1.0.0",
-            summary: object.summary,
-            recommendations: object.recommendations,
-            decision: object.decision,
-            decisionReason: object.decisionReason,
-          },
+          data: qcData,
         });
       } else {
+        // qcData includes updatedAt so CREATE won't fail
         qualityControl = await prisma.qualityControl.create({
-          data: {
-            surveyResponseId: surveyResponse.id,
-            status: object.decision === "accept" ? "accepted" : 
-                   object.decision === "review" ? "review_required" : "rejected",
-            overallScore: object.overallScore,
-            consistencyScore: object.scores.consistency,
-            mediaScore: object.scores.authenticity,
-            geoScore: object.scores.geographic,
-            temporalScore: object.scores.temporal,
-            completenessScore: object.scores.completeness,
-            analyzedAt: new Date(),
-            analyzer: "auto_quality_llm",
-            analyzerVersion: "1.0.0",
-            summary: object.summary,
-            recommendations: object.recommendations,
-            decision: object.decision,
-            decisionReason: object.decisionReason,
-          },
+          data: qcData,
         });
       }
 
-      // Créer les issues détectés
-      if (object.issues.length > 0) {
-        await prisma.qualityIssue.deleteMany({
-          where: { qualityControlId: qualityControl.id },
-        });
+      /**
+       * 4) Replace issues (deleteMany then createMany)
+       * NOTE: your insert log shows Prisma already provides id values in the query.
+       * If you still got "Argument id is missing" previously, it means your Prisma schema
+       * for qualityIssue has `id String` WITHOUT @default(uuid()) (or DB has no default).
+       * Fix is in the Prisma schema + DB. But runtime here is OK if delegate matches DB.
+       */
+      await prisma.qualityIssue.deleteMany({
+        where: { qualityControlId: qualityControl.id },
+      });
 
+      if (object.issues.length > 0) {
         await prisma.qualityIssue.createMany({
           data: object.issues.map((issue) => ({
             qualityControlId: qualityControl.id,
@@ -272,29 +299,33 @@ Be thorough and provide specific examples from the data to justify your analysis
             title: issue.title,
             description: issue.description,
             fieldPath: issue.fieldPath,
-            impactScore: issue.level === "critical" ? 90 : 
-                        issue.level === "high" ? 70 :
-                        issue.level === "medium" ? 50 : 30,
+            impactScore: impactScoreFromLevel(issue.level),
             confidence: issue.confidence,
             suggestions: { recommendations: issue.suggestions },
+            // if your DB requires createdAt and has no default, set it:
+            // createdAt: now,
           })),
         });
       }
 
-      // Log de l'analyse
-      await prisma.qualityAnalysisLog.create({
-        data: {
-          surveyResponseId: surveyResponse.id,
-          analysisType: "auto_quality_full",
-          analyzer: "auto_quality_llm",
-          analyzerVersion: "1.0.0",
-          startedAt: new Date(),
-          completedAt: new Date(),
-          duration: 0,
-          status: "success",
-        },
+      /**
+       * 5) Log (safe)
+       */
+      const completedAt = new Date();
+      await safeQualityAnalysisLogCreate({
+        surveyResponseId: surveyResponse.id,
+        analysisType: "auto_quality_full",
+        analyzer: "auto_quality_llm",
+        analyzerVersion: "1.0.0",
+        startedAt,
+        completedAt,
+        duration: Math.max(0, completedAt.getTime() - startedAt.getTime()),
+        status: "success",
       });
 
+      /**
+       * 6) Read back full QC for UI
+       */
       const finalResult = await prisma.qualityControl.findUnique({
         where: { id: qualityControl.id },
         include: {
@@ -326,30 +357,21 @@ Be thorough and provide specific examples from the data to justify your analysis
         qualityControl: finalResult,
         message: `Automatic analysis completed - Score: ${object.overallScore}/100 - Decision: ${object.decision}`,
       };
-
     } catch (error) {
       console.error("Error in automatic quality analysis:", error);
-      
-      try {
-        await prisma.qualityAnalysisLog.create({
-          data: {
-            surveyResponseId,
-            analysisType: "auto_quality_full",
-            analyzer: "auto_quality_llm", 
-            analyzerVersion: "1.0.0",
-            startedAt: new Date(),
-            status: "error",
-            errorMessage: error instanceof Error ? error.message : "Unknown error",
-          },
-        });
-      } catch (logError) {
-        console.error("Failed to log error:", logError);
-      }
 
-      throw new Error(
-        error instanceof Error 
-          ? error.message 
-          : "Error during automatic quality analysis"
-      );
+      // safe error log (won't crash if delegate missing)
+      await safeQualityAnalysisLogCreate({
+        surveyResponseId,
+        analysisType: "auto_quality_full",
+        analyzer: "auto_quality_llm",
+        analyzerVersion: "1.0.0",
+        startedAt,
+        completedAt: new Date(),
+        status: "error",
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
+      });
+
+      throw new Error(error instanceof Error ? error.message : "Error during automatic quality analysis");
     }
   });
