@@ -11,7 +11,6 @@ export type LimitValue = number | "unlimited" | "custom";
 
 /**
  * yes/no values sometimes need "custom" for enterprise.
- * (If you don't need custom here, you can keep boolean only.)
  */
 export type BoolValue = boolean | "custom";
 
@@ -25,10 +24,10 @@ export type PlanLimits = {
   userSeats: LimitValue; // User Seats
 
   // Feature flags
-  surveyTemplateLibraryAndImport: BoolValue; // Survey Template Library & Import (yes/no)
+  surveyTemplateLibraryAndImport: BoolValue; // Survey Template Library & Import
 
   // Dashboards
-  proprietaryDashboardsAccess: LimitValue; // number of dashboards or unlimited/custom
+  proprietaryDashboardsAccess: LimitValue;
 };
 
 export const PLAN_LIMITS: Record<PlanCode, PlanLimits> = {
@@ -119,7 +118,11 @@ export function formatDashboards(
 }
 
 export const PLAN_FEATURES = [
-  { key: "respondentCompletes", labelFr: "Réponses (soumissions)", labelEn: "Respondent completes (submissions)" },
+  {
+    key: "respondentCompletes",
+    labelFr: "Réponses (soumissions)",
+    labelEn: "Respondent completes (submissions)",
+  },
   { key: "deploymentLocations", labelFr: "Zones de déploiement", labelEn: "Deployment locations" },
   { key: "surveyVerificationRounds", labelFr: "Tours de vérification", labelEn: "Survey verification rounds" },
   { key: "questionsPerSurvey", labelFr: "Questions par enquête", labelEn: "Questions per survey" },
@@ -129,19 +132,22 @@ export const PLAN_FEATURES = [
   { key: "proprietaryDashboardsAccess", labelFr: "Dashboards TADA", labelEn: "TADA dashboards access" },
 ] as const;
 
-export function getUnitPriceUSD(args: {
-  planCode: PlanCode | null;
-  credits: number;
-}) {
+/**
+ * ✅ Pricing base: tu avais du USD/credit
+ * - no plan => 17 USD / credit
+ * - starter/growth => 15 USD
+ * - business => 12 USD
+ * - entreprise => 10..12 USD selon volume
+ */
+export function getUnitPriceUSD(args: { planCode: PlanCode | null; credits: number }) {
   const credits = Number.isFinite(args.credits) ? Math.max(0, Math.trunc(args.credits)) : 0;
   const planCode = args.planCode ?? null;
 
   if (!planCode) return 17;
 
   if (planCode === "starter") return 15;
-  if (planCode === "business") return 12;
-
   if (planCode === "growth") return 15;
+  if (planCode === "business") return 12;
 
   if (planCode === "entreprise") {
     if (credits >= 2000) return 10;
@@ -150,4 +156,16 @@ export function getUnitPriceUSD(args: {
   }
 
   return 17;
+}
+
+/**
+ * ✅ XOF pricing:
+ * 1 USD = 600 XOF (fixe)
+ */
+export const USD_TO_XOF = 600;
+
+export function getUnitPriceXOF(args: { planCode: PlanCode | null; credits: number }) {
+  const usd = getUnitPriceUSD(args);
+  // prix unitaire entier en XOF
+  return Math.round(usd * USD_TO_XOF);
 }

@@ -139,7 +139,7 @@ export function TadaStudies({
     const fetchSubscription = async () => {
       setLoading(true);
       const result = await getOrganizationSubscription(
-        organizations?.[0]?.id ?? ""
+        organizations?.[0]?.id ?? "",
       );
       if (result.success) {
         setSubscription(result.data);
@@ -276,7 +276,7 @@ export function TadaStudies({
       {
         style: "currency",
         currency: currency.toUpperCase(),
-      }
+      },
     ).format(price);
     const intervalText =
       interval === "month" ? t("common.month") : t("common.year");
@@ -336,7 +336,7 @@ export function TadaStudies({
               </div>
               <Button
                 onClick={() => {
-                  router.push(`/pricing/${organization?.id}`);
+                  router.push(`/pricing`);
                 }}
                 className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={hasLoadingMission}

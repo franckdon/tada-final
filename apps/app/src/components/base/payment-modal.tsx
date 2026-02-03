@@ -26,7 +26,7 @@ import { useSession } from "@/lib/auth-client";
 import { useWorkspaceCreditsPurchaseStore } from "@/hooks/use-workspace-credits-purchase-store";
 import { countries } from "@/constants/countries";
 
-// --- Types alignés avec ton CreditsModal ---
+// --- Types alignés XOF ---
 type PlanCode = "starter" | "growth" | "business" | "entreprise";
 
 type PrepareResponse = {
@@ -36,9 +36,11 @@ type PrepareResponse = {
     organizationId: string;
     planCode: PlanCode | null;
     credits: number;
-    unitPriceUsdCents: number;
-    totalAmountUsdCents: number;
-    currency: "USD";
+
+    unitPriceXof: number;
+    totalAmountXof: number;
+    currency: "XOF";
+
     provider: "paystack";
     providerRef: string;
     providerStatus: "pending";
@@ -50,7 +52,7 @@ type PrepareResponse = {
     payload: {
       email: string;
       reference: string;
-      amount: number; // subunit (cents)
+      amount: number; // subunit
       currency?: string;
       callback_url?: string;
       metadata?: any;
@@ -80,6 +82,15 @@ interface PaymentModalProps {
   prepared?: any;
 }
 
+function formatMoneyXOF(value: number, locale: string) {
+  const safe = Number.isFinite(value) ? value : 0;
+  return new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-US", {
+    style: "currency",
+    currency: "XOF",
+    maximumFractionDigits: 0,
+  }).format(safe);
+}
+
 export function PaymentModal({
   open,
   onOpenChange,
@@ -93,8 +104,6 @@ export function PaymentModal({
   const locale = useCurrentLocale();
 
   const [loadingCheckout, setLoadingCheckout] = useState(false);
-
-  // --- Paystack state ---
   const [isPreparing, setIsPreparing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
 
@@ -114,21 +123,32 @@ export function PaymentModal({
 
   const {
     credits,
-    unitPrice,
+    unitPrice, // ✅ unitPrice = XOF / crédit
     currency,
     workspaceId: storeWorkspaceId,
+    setCurrency,
   } = useWorkspaceCreditsPurchaseStore();
 
   const effectiveWorkspaceId = (storeWorkspaceId || workspaceId || "").trim();
 
-  // --- helpers: money formatting + totals (cohérence résumé/bouton) ---
-  const total = credits * unitPrice;
+  // force XOF
+  if (currency !== "XOF") {
+    // évite des effets de bord : on aligne dès l’ouverture
+    // (si tu préfères, tu peux déplacer dans un useEffect)
+    setCurrency("XOF");
+  }
 
-  const money = (value: number) =>
-    new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-US", {
-      style: "currency",
-      currency: currency || "USD",
-    }).format(value);
+  const safeCredits =
+    typeof credits === "number" && Number.isFinite(credits)
+      ? Math.max(0, Math.trunc(credits))
+      : 0;
+
+  const safeUnit =
+    typeof unitPrice === "number" && Number.isFinite(unitPrice)
+      ? Math.max(0, Math.trunc(unitPrice))
+      : 0;
+
+  const totalXof = safeCredits * safeUnit;
 
   const isFormValid =
     !!acceptTerms &&
@@ -139,19 +159,20 @@ export function PaymentModal({
     !!city &&
     !!country &&
     !!effectiveWorkspaceId &&
-    credits > 0;
+    safeCredits > 0;
 
   const preparePurchase = async () => {
     setIsPreparing(true);
 
     try {
       const res = await fetch(
-        `/api/workspaces/${effectiveWorkspaceId}/credits/purchase/prepare`,
+        `/api/workspaces/${encodeURIComponent(effectiveWorkspaceId)}/credits/purchase/prepare`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            credits,
+            credits: safeCredits,
+            currency: "XOF",
             customerEmail: session?.user?.email ?? undefined,
             organizationId: organizationId || undefined,
             billing: {
@@ -189,7 +210,7 @@ export function PaymentModal({
 
     try {
       const res = await fetch(
-        `/api/workspaces/${effectiveWorkspaceId}/credits/purchase/initialize`,
+        `/api/workspaces/${encodeURIComponent(effectiveWorkspaceId)}/credits/purchase/initialize`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -235,10 +256,8 @@ export function PaymentModal({
     setLoadingCheckout(true);
 
     try {
-      // ✅ 1) Prepare purchase
       const preparedData = await preparePurchase();
 
-      // ✅ 2) Initialize paystack + redirect
       await initializePaystack({
         purchaseId: preparedData.purchase?.id,
         reference: preparedData.purchase?.providerRef,
@@ -275,19 +294,19 @@ export function PaymentModal({
             <div className="space-y-2 flex-grow text-sm text-gray-700">
               <div className="flex justify-between">
                 <span>
-                  {paymentModalT("summarySection.creditsLabel")} {credits}{" "}
-                  {credits > 1 ? "crédits" : "crédit"}
+                  {paymentModalT("summarySection.creditsLabel")} {safeCredits}{" "}
+                  {safeCredits > 1 ? "crédits" : "crédit"}
                 </span>
               </div>
 
               <div className="flex justify-between">
                 <span>Prix par crédit :</span>
-                <span>{money(unitPrice)}</span>
+                <span>{formatMoneyXOF(safeUnit, locale)}</span>
               </div>
 
               <div className="flex justify-between font-bold text-lg">
                 <span>Total :</span>
-                <span>{money(total)}</span>
+                <span>{formatMoneyXOF(totalXof, locale)}</span>
               </div>
             </div>
 
@@ -302,7 +321,6 @@ export function PaymentModal({
               {paymentModalT("paymentMethodSection.title")}
             </h2>
 
-            {/* ---- FORM ---- */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label htmlFor="civility">
@@ -391,7 +409,6 @@ export function PaymentModal({
                 />
               </div>
 
-              {/* ✅ PAYS : liste complète provenant de countries */}
               <div className="space-y-1">
                 <Label htmlFor="country">{paymentModalT("form.country")}</Label>
                 <Select
@@ -445,7 +462,6 @@ export function PaymentModal({
               </Label>
             </div>
 
-            {/* ✅ Bouton : plus de choix "invoice", redirection Paystack directe */}
             <Button
               className="w-full h-9"
               onClick={handleSubmit}
@@ -461,7 +477,7 @@ export function PaymentModal({
                       : "Chargement..."}
                 </span>
               ) : (
-                <>Payer avec Paystack — {money(total)}</>
+                <>Payer avec Paystack — {formatMoneyXOF(totalXof, locale)}</>
               )}
             </Button>
           </div>

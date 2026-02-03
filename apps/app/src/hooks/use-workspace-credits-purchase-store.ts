@@ -32,6 +32,6 @@ export const useWorkspaceCreditsPurchaseStore =
         workspaceId: null,
         credits: 0,
         unitPrice: 17,
-        currency: "EUR",
+        currency: "XOF",
       }),
   }));

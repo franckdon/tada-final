@@ -46,7 +46,7 @@ export default function PaystackBillingSuccessPage() {
   }, [orgId]);
 
   const pricingHref = useMemo(() => {
-    return orgId ? `/pricing/${orgId}` : "/pricing";
+    return "/pricing";
   }, [orgId]);
 
   useEffect(() => {

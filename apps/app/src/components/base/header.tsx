@@ -1,52 +1,57 @@
 "use client";
 
 import { Inbox } from "@novu/nextjs";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import type { User } from "@prisma/client";
+import { useTheme } from "next-themes";
 
-import { signOut } from "@/lib/auth-client";
+import { signOut, authClient } from "@/lib/auth-client";
 import {
   useChangeLocale,
   useCurrentLocale,
   useI18n,
   useScopedI18n,
 } from "@/locales/client";
+
 import { Button } from "@tada/ui/components/button";
 import {
-  DropdownMenuTrigger,
+  DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenu,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@tada/ui/components/dropdown";
+import { Avatar, AvatarImage } from "@tada/ui/components/avatar";
 import { cn } from "@tada/ui/lib/utils";
+
 import {
+  Bell,
   ChevronDown,
   CircleDollarSign,
   CreditCard,
   Gift,
+  HelpCircle,
+  Layers,
   Loader2,
   LogOut,
   Settings,
-  HelpCircle,
-  Layers,
   Globe,
-  Bell,
 } from "lucide-react";
-import { useTheme } from "next-themes";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import type { User } from "@prisma/client";
+
+import { toast } from "@/hooks/use-toast";
 import { useBoolean } from "@/hooks/use-boolean";
+import { useBillingStore } from "@/hooks/use-billing-store";
+import { useWorkspace } from "@/context/workspace-context";
+
+import { useWorkspaceCredits } from "@/hooks/use-workspace-credits";
+import { useWorkspaceCreditsStore } from "@/hooks/use-workspace-credit-store";
+
 import { CreditsModal } from "./credit-modal";
 import { PaymentModal } from "./payment-modal";
-import { useBillingStore } from "@/hooks/use-billing-store";
-import { authClient } from "@/lib/auth-client";
-import { toast } from "@/hooks/use-toast";
-import { Avatar, AvatarImage } from "@tada/ui/components/avatar";
-import { useWorkspace } from "@/context/workspace-context";
-import { useWorkspaceCreditsStore } from "@/hooks/use-workspace-credit-store";
-import { useWorkspaceCredits } from "@/hooks/use-workspace-credits";
+import { CreditsOverviewModal } from "./credits-overview-modal";
 
 import { countries } from "@/constants/countries";
 
@@ -56,51 +61,74 @@ interface HeaderProps {
   user?: User;
 }
 
-const languages = [
+const LANGUAGES = [
   { code: "fr", name: "Français" },
   { code: "en", name: "English" },
 ] as const;
 
-type LanguageCode = (typeof languages)[number]["code"];
+type LanguageCode = (typeof LANGUAGES)[number]["code"];
 
-const appearance = {
+const novuAppearance = {
   variables: {
     colorPrimary: "#FF5B4A",
     colorPrimaryForeground: "white",
   },
 };
 
+function normalizeCountry(value: unknown) {
+  if (typeof value !== "string") return "FR";
+  const v = value.trim();
+
+  // déjà un code connu
+  if (countries[v as keyof typeof countries]) return v;
+
+  // sinon on essaie par nom (ex: "France")
+  const found = Object.entries(countries).find(
+    ([, c]) => c.name.toLowerCase() === v.toLowerCase(),
+  );
+  return found?.[0] ?? "FR";
+}
+
 export function Header({ title = "Dashboard", className, user }: HeaderProps) {
+  const router = useRouter();
+  const { setTheme } = useTheme();
+
   const t = useI18n();
   const commonT = useScopedI18n("common");
   const headerT = useScopedI18n("header");
 
-  const router = useRouter();
-  const { setTheme, theme } = useTheme();
-
-  const creditModal = useBoolean(false);
+  // Modals
+  const creditModal = useBoolean(false); // purchase modal
+  const creditsOverviewModal = useBoolean(false); // Appinio-like overview
   const paymentModal = useBoolean(false);
 
+  // Locale
   const changeLocale = useChangeLocale();
   const currentLocale = useCurrentLocale();
+  const currentLanguage = useMemo(
+    () => LANGUAGES.find((l) => l.code === currentLocale) || LANGUAGES[0],
+    [currentLocale],
+  );
 
+  // Org / workspace
   const { data: organizations } = authClient.useListOrganizations();
-  const orgId = organizations?.[0]?.id;
+  const orgId = organizations?.[0]?.id ?? null;
 
   const { currentWorkspace } = useWorkspace();
   const workspaceId = currentWorkspace?.id ?? null;
 
-  const [preparedPurchase, setPreparedPurchase] = useState<any | null>(null);
+  // Billing store
+  const { setField, setAllFields } = useBillingStore();
 
-  // 1) Hook unique qui gère cache + fetch + anti-race
-  useWorkspaceCredits(workspaceId);
+  // Credits store (Zustand)
+  useWorkspaceCredits(workspaceId); // cache + fetch + anti-race (ton hook)
 
-  // 2) Sélecteurs Zustand stables
   const balance = useWorkspaceCreditsStore((s) => s.balance);
   const subscription = useWorkspaceCreditsStore((s) => s.subscription);
-  const loading = useWorkspaceCreditsStore((s) => s.loading);
+  const creditsLoading = useWorkspaceCreditsStore((s) => s.loading);
 
-  const { setField, setAllFields } = useBillingStore();
+  // Payment
+  const [preparedPurchase, setPreparedPurchase] = useState<any | null>(null);
 
   const handleSignOut = async () => {
     await signOut();
@@ -113,11 +141,27 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
     paymentModal.onTrue();
   };
 
-  const currentLanguage =
-    languages.find((lang) => lang.code === currentLocale) || languages[0];
+  // ✅ Click sur "Credits" : si 0 -> purchase modal, sinon -> overview modal
+  const handleCreditsClick = () => {
+    if (creditsLoading) return;
 
+    if (balance === 0) {
+      creditModal.onTrue();
+      return;
+    }
+
+    creditsOverviewModal.onTrue();
+  };
+
+  // ✅ Bouton "Add credits" dans l’overview : ferme overview puis ouvre purchase
+  const openPurchaseFromOverview = () => {
+    creditsOverviewModal.onFalse();
+    creditModal.onTrue();
+  };
+
+  // Guard org
   useEffect(() => {
-    if (organizations && organizations?.length <= 0) {
+    if (organizations && organizations.length <= 0) {
       toast({
         title: commonT("error.somethingWentWrong"),
         variant: "destructive",
@@ -125,20 +169,7 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
     }
   }, [organizations, commonT]);
 
-  const normalizeCountry = (value: unknown) => {
-    if (typeof value !== "string") return "FR";
-    const v = value.trim();
-
-    // déjà un code connu
-    if (countries[v as keyof typeof countries]) return v;
-
-    // sinon on essaie par nom (ex: "France")
-    const found = Object.entries(countries).find(
-      ([, c]) => c.name.toLowerCase() === v.toLowerCase(),
-    );
-    return found?.[0] ?? "FR";
-  };
-
+  // Fetch billing info
   useEffect(() => {
     const fetchBillingInfo = async () => {
       if (!orgId) return;
@@ -147,24 +178,24 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
         setField("organizationId", orgId);
 
         const res = await fetch(`/api/billing/get-one?organizationId=${orgId}`);
-        const data = await res.json();
+        const json = await res.json().catch(() => null);
 
-        if (!data.success) return;
+        if (!json?.success) return;
 
-        const billingData = data.data;
+        const billingData = json.data;
 
         setAllFields({
           credits:
-            typeof billingData.credits === "number" ? billingData.credits : 0,
-          street: billingData.street ?? "",
-          city: billingData.city ?? "",
-          zip: billingData.zip ?? "",
-          country: normalizeCountry(billingData.country ?? "FR"),
-          company: billingData.company ?? "",
-          civility: billingData.civility ?? "mr",
-          firstName: billingData.firstName ?? "",
-          lastName: billingData.lastName ?? "",
-          acceptTerms: Boolean(billingData.acceptTerms),
+            typeof billingData?.credits === "number" ? billingData.credits : 0,
+          street: billingData?.street ?? "",
+          city: billingData?.city ?? "",
+          zip: billingData?.zip ?? "",
+          country: normalizeCountry(billingData?.country ?? "FR"),
+          company: billingData?.company ?? "",
+          civility: billingData?.civility ?? "mr",
+          firstName: billingData?.firstName ?? "",
+          lastName: billingData?.lastName ?? "",
+          acceptTerms: Boolean(billingData?.acceptTerms),
         });
       } catch {
         // noop
@@ -183,14 +214,15 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
     >
       <div className="flex items-center justify-end">
         <div className="flex items-center space-x-4">
-          {/* ✅ Option A : click = CreditsModal directement (firstModal supprimé) */}
+          {/* Credits */}
           <Button
-            onClick={creditModal.onTrue}
+            onClick={handleCreditsClick}
             variant="ghost"
             className="flex items-center space-x-2 text-blue-600 hover:text-blue-700"
+            aria-label="Credits"
           >
             <CreditCard className="h-4 w-4" />
-            {loading ? (
+            {creditsLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <span className="text-sm font-medium">
@@ -213,8 +245,9 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
                 </span>
               </Button>
             </DropdownMenuTrigger>
+
             <DropdownMenuContent align="end" className="w-40">
-              {languages.map((lang) => (
+              {LANGUAGES.map((lang) => (
                 <DropdownMenuItem
                   key={lang.code}
                   onClick={() => changeLocale(lang.code as LanguageCode)}
@@ -233,16 +266,19 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
                 variant="ghost"
                 size="icon"
                 className="text-blue-600 hover:text-blue-700"
+                aria-label="Updates"
               >
                 <Gift className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
+
             <DropdownMenuContent className="w-96 p-0" align="end">
               <div className="p-4 border-b">
                 <h3 className="font-semibold text-lg">
                   {headerT("latestUpdates")}
                 </h3>
               </div>
+
               <div className="max-h-80 overflow-y-auto">
                 <div className="p-4 border-b hover:bg-gray-50">
                   <div className="flex items-start space-x-3">
@@ -304,11 +340,11 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Inbox */}
+          {/* Inbox (Novu) */}
           <Inbox
             applicationIdentifier="rkwq3JiGAl2y"
             subscriber={"685ed8ca56253bc5d63e4329"}
-            appearance={appearance}
+            appearance={novuAppearance}
             renderBell={() => (
               <button className="relative flex h-8 w-8 items-center justify-center rounded-full hover:bg-blue-100">
                 <Bell className="h-4 w-4 text-blue-600" />
@@ -325,12 +361,12 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
               >
                 {user?.image ? (
                   <Avatar>
-                    <AvatarImage src={user?.image} />
+                    <AvatarImage src={user.image} />
                   </Avatar>
                 ) : (
                   <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
                     <span className="text-white font-medium text-sm">
-                      {user?.name?.charAt(0)}
+                      {user?.name?.charAt(0) ?? "U"}
                     </span>
                   </div>
                 )}
@@ -352,7 +388,7 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
 
               <DropdownMenuItem>
                 <CircleDollarSign className="mr-2 h-4 w-4" />
-                <Link href={"/pricing"}>
+                <Link href="/pricing">
                   <span>{t("user.menu.pricings")}</span>
                 </Link>
               </DropdownMenuItem>
@@ -372,6 +408,7 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
+
               <DropdownMenuItem onClick={handleSignOut}>
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>{t("user.menu.signOut")}</span>
@@ -381,20 +418,34 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
         </div>
       </div>
 
+      {/* ✅ New overview modal (Appinio-like) */}
+      <CreditsOverviewModal
+        open={creditsOverviewModal.value}
+        onOpenChange={(v) =>
+          v ? creditsOverviewModal.onTrue() : creditsOverviewModal.onFalse()
+        }
+        workspaceId={workspaceId ?? ""}
+        balance={balance}
+        onAddCredits={openPurchaseFromOverview}
+        // onSeeAll={() => router.push("/billing/credits")} // optionnel
+      />
+
+      {/* Purchase modal */}
       <CreditsModal
         open={creditModal.value}
         toggleOpen={creditModal.onToggle}
         handleAsYouGo={handleAsYouGo}
-        organizationId={organizations?.[0]?.id}
-        workspaceId={workspaceId!}
+        organizationId={orgId ?? undefined}
+        workspaceId={workspaceId ?? ""}
         workspacePlanCode={(subscription?.planCode as any) ?? null}
       />
 
+      {/* Payment modal */}
       <PaymentModal
         open={paymentModal.value}
         onOpenChange={paymentModal.onFalse}
         inComingredits={balance}
-        workspaceId={workspaceId!}
+        workspaceId={workspaceId ?? ""}
         prepared={preparedPurchase}
       />
     </header>
