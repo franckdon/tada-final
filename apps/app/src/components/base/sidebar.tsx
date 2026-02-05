@@ -173,6 +173,7 @@ export function Sidebar() {
             organizations ? organizations[0]?.id : "dev-org"
           }/templates`,
           target: "_self",
+          disabled: true,
         },
         {
           icon: <TrendingUp className="h-5 w-5" />,

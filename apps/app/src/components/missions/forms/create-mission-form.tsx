@@ -20,6 +20,8 @@ import { useWorkspaceCredits } from "@/hooks/use-workspace-credits";
 import { useWorkspaceCreditsStore } from "@/hooks/use-workspace-credit-store";
 import { InsufficientCreditsModal } from "../modals/insufficient-credits-modal";
 
+import { useCreditsPurchaseFlowStore } from "@/stores/useCreditsPurchaseFlowStore";
+
 interface Section {
   id: number;
   key: string;
@@ -169,6 +171,13 @@ export function CreateMissionForm({
   const [maxSample, setMaxSample] = useState(0);
 
   const CREDITS_PER_SAMPLE = 12;
+
+  const sampleValue = form.watch("targetSampleSize");
+  const isSampleCompleted = typeof sampleValue === "number" && sampleValue > 0;
+
+  const openCreditsModal = useCreditsPurchaseFlowStore(
+    (s) => s.openCreditsModal,
+  );
 
   const {
     activeFiltersCount,
@@ -324,7 +333,21 @@ export function CreateMissionForm({
     setEditingSection(null);
   };
 
+  const hasAnyAudiences = activeFiltersCount > 0 || suggestions.length > 0;
   const onSubmit = async (values: any) => {
+    if (!hasAnyAudiences) {
+      toast({
+        title: locale === "fr" ? "Choisis une audience" : "Choose an audience",
+        description:
+          locale === "fr"
+            ? "Sélectionne au moins une cible dans le filtre des audiences pour continuer."
+            : "Select at least one audience target to continue.",
+        variant: "destructive",
+      });
+
+      onOpenAudiencesModal(); // ✅ ouvre direct le modal
+      return;
+    }
     // 1) Récupérer sample depuis values (plus fiable que getValues ici)
     const sample = Number(values?.targetSampleSize ?? 0);
     const available = typeof balance === "number" ? balance : 0;
@@ -359,7 +382,26 @@ export function CreateMissionForm({
         setRequestedSample(sample);
         setRequiredCredits(required);
         setMaxSample(Math.floor(available / CREDITS_PER_SAMPLE));
+
+        toast({
+          title:
+            locale === "fr" ? "Crédits insuffisants" : "Insufficient credits",
+          description:
+            locale === "fr"
+              ? `Il te faut ${required} crédits pour ${sample} participants. Solde actuel: ${available}.`
+              : `You need ${required} credits for ${sample} participants. Current balance: ${available}.`,
+          variant: "destructive",
+        });
+
+        // ✅ ouvre le flow d’achat (dans le Header)
+        openCreditsModal({
+          requiredCredits: required,
+          requestedSample: sample,
+        });
+
+        // (optionnel) ton modal “InsufficientCreditsModal” local, si tu veux garder le récap
         insufficientCreditsModal.onTrue();
+
         return;
       }
     }
@@ -514,6 +556,8 @@ export function CreateMissionForm({
 
       setSections((prev) =>
         prev.map((section) => {
+          if (section.key === "audiences") return section;
+
           const v = values?.[section.key];
           if (typeof v === "string") {
             return {
@@ -631,7 +675,11 @@ export function CreateMissionForm({
               variant="default"
               size="lg"
               type="submit"
-              disabled={createMission.status === "executing" || loadingCredits}
+              disabled={
+                createMission.status === "executing" ||
+                loadingCredits ||
+                !hasAnyAudiences
+              }
             >
               {createMission.status === "executing" ? (
                 <span className="inline-flex items-center gap-2">
@@ -695,14 +743,19 @@ export function CreateMissionForm({
 
                     <Button
                       size="lg"
-                      className="w-full"
                       type="button"
                       onClick={onOpenAudiencesModal}
+                      className={[
+                        "w-full",
+                        hasAnyAudiences
+                          ? "bg-green-500 hover:bg-green-600 text-white"
+                          : "bg-yellow-400 hover:bg-yellow-500 text-black",
+                      ].join(" ")}
                     >
                       {t("missions.createMission.form.filterAudiences")}{" "}
-                      {activeFiltersCount > 0 && (
-                        <span className="text-sm text-gray-400">
-                          ({activeFiltersCount})
+                      {(activeFiltersCount > 0 || suggestions.length > 0) && (
+                        <span className="text-sm opacity-80">
+                          ({activeFiltersCount + suggestions.length})
                         </span>
                       )}
                     </Button>
@@ -896,7 +949,11 @@ export function CreateMissionForm({
         {/* Target sample size */}
         <div className="bg-[#FFD3CE] dark:bg-gray-900 border border-[#FFD3CE] rounded-md p-4 pt-10 mt-6">
           <div className="flex items-center mb-3">
-            <div className="w-3 h-3 rounded-full mr-3 bg-yellow-400" />
+            <div
+              className={`w-3 h-3 rounded-full mr-3 ${
+                isSampleCompleted ? "bg-green-500" : "bg-yellow-400"
+              }`}
+            />
             <h2 className="text-black dark:text-white font-bold text-lg flex-grow">
               {t("missions.createMission.form.sampleSizeTitle", {
                 defaultValue:

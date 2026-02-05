@@ -22,9 +22,57 @@ import { Avatar, AvatarImage } from "../avatar";
 import { Button } from "../button";
 import { MarkdownText } from "./markdown-text";
 import { TooltipIconButton } from "./tooltip-icon-button";
+import { create } from "zustand";
+
+type AudienceModalState = {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  openModal: () => void;
+  closeModal: () => void;
+};
+
+export const useAudienceModalStore = create<AudienceModalState>((set) => ({
+  open: false,
+  setOpen: (open) => set({ open }),
+  openModal: () => set({ open: true }),
+  closeModal: () => set({ open: false }),
+}));
 
 type ThreadProps = {
   welcomeMessage?: string;
+};
+
+const ToolRenderer: FC<any> = (props) => {
+  const openModal = useAudienceModalStore((s) => s.openModal);
+
+  // selon version assistant-ui, le nom peut être à différents endroits
+  const name =
+    props?.toolName ??
+    props?.name ??
+    props?.tool?.name ??
+    props?.call?.name ??
+    props?.toolCall?.name;
+
+  // debug utile 1 fois
+  // console.log("[ToolRenderer props]", props);
+
+  if (name !== "open_audiences_modal") return null;
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        className="text-primary font-medium underline underline-offset-4"
+        onClick={(e) => {
+          e.preventDefault();
+          console.log("[ToolRenderer] open_audiences_modal clicked");
+          openModal();
+        }}
+      >
+        Choisissez votre audience
+      </button>
+    </div>
+  );
 };
 
 const ThreadTopWelcome: FC<{ welcomeMessage: string }> = ({
@@ -202,7 +250,12 @@ const AssistantMessage: FC = () => {
         />
       </Avatar>
       <div className="text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-4 col-span-2 col-start-2 row-start-1 my-1.5">
-        <MessagePrimitive.Content components={{ Text: MarkdownText }} />
+        <MessagePrimitive.Content
+          components={{
+            Text: MarkdownText,
+            Tool: ToolRenderer,
+          }}
+        />
       </div>
 
       <AssistantActionBar />

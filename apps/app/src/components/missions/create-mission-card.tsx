@@ -1,40 +1,31 @@
 "use client";
 
-import { AudiencesFilterProvider } from "@/context/audiences-filter-context";
+import {
+  AudiencesFilterProvider,
+  useAudiencesFilter,
+} from "@/context/audiences-filter-context";
 import { useI18n } from "@/locales/client";
 import { useAssistantInstructions } from "@assistant-ui/react";
 import { useAssistantForm } from "@assistant-ui/react-hook-form";
 import { Form } from "@tada/ui/components/form";
 import { CreateMissionForm } from "./forms/create-mission-form";
 import { ProgressSidebar } from "./progress-bar";
-import { useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useEffect, useState } from "react";
 import { AudiencesFilterModal } from "./modals/audiences-filter-modal";
+import { useAudienceModalStore } from "@/stores/useAudienceModalStore";
 
-export function CreateMissionCard({
-  organization,
-  workspace,
+function AssistantRules({
   locale,
+  confirmQuestion,
 }: {
-  organization: { status: string | null; id: string };
-  workspace: { id: string };
   locale: string;
+  confirmQuestion: string;
 }) {
-  const t = useI18n();
-  const searchParams = useSearchParams();
-  const templateId = searchParams.get("t");
-  const mode = searchParams.get("mode");
+  const { activeFiltersCount, suggestions } = useAudiencesFilter();
+  const audiencesSelectedCount =
+    (activeFiltersCount ?? 0) + (suggestions?.length ?? 0);
 
-  const [isAudiencesFilterModalOpen, setIsAudiencesFilterModalOpen] =
-    useState(false);
-
-  // Detect language based on the user's most recent message
   const chatLang = locale === "fr" ? "French" : "English";
-  const confirmQuestion =
-    locale === "fr"
-      ? "Confirmes-tu que c’est correct pour que je remplisse le formulaire ?"
-      : "Can you confirm this is correct so I can fill in the form?";
 
   useAssistantInstructions(`
 You are Dina, a Marketing Research Copilot.
@@ -61,9 +52,15 @@ Information to collect (in this order):
 2) Business problem (symptoms + what changed + when)
 3) Objectives (what decisions will be taken with results)
 4) Hypotheses (3–5 testable assumptions)
-5) Target sample size (how many people to survey)
-6) Audience (ask user to click the button to choose audiences)
+5) Ask user to click the button to choose audiences
+6) Target sample size (how many people to survey)
 7) Mission name (short title)
+
+Audience selection:
+- Current selected audience count: ${audiencesSelectedCount}
+- You MUST ask the user to choose an audience by clicking on the modal audience.
+- Do NOT ask for sample size until audience count is >= 1.
+
 Rules for form filling:
 - When the user provides the target sample size, you MUST call the tool set_form_field with:
   field="targetSampleSize" and value=<number>
@@ -74,7 +71,28 @@ When (and only when) you have ALL info above:
 - End that message with exactly: [[READY_TO_FILL_FORM]]
 `);
 
-  const hasRenderedField = useRef(false);
+  return null;
+}
+
+export function CreateMissionCard({
+  organization,
+  workspace,
+  locale,
+}: {
+  organization: { status: string | null; id: string };
+  workspace: { id: string };
+  locale: string;
+}) {
+  const t = useI18n();
+
+  const isAudiencesFilterModalOpen = useAudienceModalStore((s) => s.open);
+  const setIsAudiencesFilterModalOpen = useAudienceModalStore((s) => s.setOpen);
+
+  const confirmQuestion =
+    locale === "fr"
+      ? "Confirmes-tu que c’est correct pour que je remplisse le formulaire ?"
+      : "Can you confirm this is correct so I can fill in the form?";
+
   const form = useAssistantForm({
     defaultValues: {
       name: "",
@@ -83,7 +101,6 @@ When (and only when) you have ALL info above:
       assumptions: "",
       audiences: "",
       targetSampleSize: undefined,
-
       sampleSummary: "",
       preliminaryRecommendations: "",
       studyStructure: "",
@@ -99,15 +116,20 @@ When (and only when) you have ALL info above:
         },
         open_audiences_modal: {
           render: () => (
-            <button
-              type="button"
-              onClick={() => setIsAudiencesFilterModalOpen(true)}
-              className="underline text-blue-600 hover:text-blue-700 font-medium"
-            >
-              {locale === "fr"
-                ? "Cliquez ici pour choisir votre audience"
-                : "Click here to choose your audience"}
-            </button>
+            <div className="pointer-events-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  console.log("[open_audiences_modal] click");
+                  setIsAudiencesFilterModalOpen(true);
+                }}
+                className="pointer-events-auto underline text-blue-600 hover:text-blue-700 font-medium"
+              >
+                {locale === "fr"
+                  ? "Sélectionner votre audience"
+                  : "Select your audience"}
+              </button>
+            </div>
           ),
         },
       },
@@ -121,6 +143,8 @@ When (and only when) you have ALL info above:
         workspaceId={workspace.id}
         missionId={null}
       >
+        <AssistantRules locale={locale} confirmQuestion={confirmQuestion} />
+
         <div className="flex h-full min-h-0 w-full">
           {/* Colonne formulaire */}
           <div className="flex flex-col border-r border-gray-200 bg-white flex-1 min-w-0 min-h-0">
@@ -139,11 +163,12 @@ When (and only when) you have ALL info above:
             <ProgressSidebar />
           </div>
         </div>
+
         <AudiencesFilterModal
           isOpen={isAudiencesFilterModalOpen}
-          onOpenChange={(open) => setIsAudiencesFilterModalOpen(open)}
+          onOpenChange={setIsAudiencesFilterModalOpen}
           orgId={organization.id}
-          missionId={undefined}
+          missionId={undefined as any}
           currentUserId={undefined}
         />
       </AudiencesFilterProvider>

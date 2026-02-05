@@ -1,6 +1,8 @@
 // src/app/api/chat/route.ts
 import { openai } from "@ai-sdk/openai";
-import { streamText, convertToModelMessages, type UIMessage } from "ai";
+import { streamText, convertToModelMessages, type UIMessage, tool } from "ai";
+
+import { z } from "zod";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,12 +12,20 @@ You are Dina, a Marketing Research Copilot, specialized in guiding users through
 
 IMPORTANT: Always adapt to the language used by the user in their first interaction. If they write to you in French, respond in French. If they use Spanish, continue in Spanish, and so on. Maintain this language consistency throughout the entire conversation.
 
-CRITICAL: You must first collect all the required information from the user through conversation before filling out the form. Do not use the form tools until you have gathered complete information for all required sections. The essential information you need to collect includes:
-1. Mission name/title
-2. Business problem summary
-3. Strategic objectives
-4. Assumptions/hypotheses
-5. The size of the target market
+CRITICAL: You must first collect all the required information from the user through conversation before filling out the form. Do not use the form tools until you have gathered complete information for all required sections. 
+
+INFORMATION TO COLLECT (in this order):
+1) Business context (product/service + market)
+2) Business problem (symptoms + what changed + when)
+3) Objectives (what decisions will be taken with results)
+4) Hypotheses (3–5 testable assumptions)
+5) Audience selection (MUST use the audience modal)
+6) Target sample size (how many people to survey)
+7) Mission name (short title)
+
+AUDIENCE MODAL (CRITICAL):
+- After hypotheses are provided (step 4), you MUST ask the user to select their audience and answer if they have done so.
+- Do NOT ask for sample size until the user acknowledges they selected their audience.
 
 Only after you have collected comprehensive information for all these sections should you use the appropriate tools to fill in the complete form. Once you have all necessary information, inform the user that you will now fill out the form based on your conversation.
 
@@ -52,13 +62,16 @@ export async function POST(req: Request) {
   const { messages, system }: { messages: UIMessage[]; system?: string } =
     await req.json();
 
-  // Log utile pour vérifier ce qui arrive réellement
   console.log("[/api/chat] system received:", system ? "YES" : "NO");
   console.log("[/api/chat] messages:", messages?.length);
 
+  const mergedSystem = system?.trim()
+    ? `${DEFAULT_SYSTEM}\n\n---\n\nCLIENT OVERRIDES:\n${system.trim()}`
+    : DEFAULT_SYSTEM;
+
   const result = streamText({
     model: openai.responses("gpt-4o-mini"),
-    system: system?.trim() ? system : DEFAULT_SYSTEM,
+    system: mergedSystem,
     messages: convertToModelMessages(messages),
   });
 

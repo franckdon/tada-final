@@ -33,7 +33,9 @@ const formatDate = (d?: Date | string | null) => {
 };
 
 // ------------------------------
-// ✅ Helper UI typé LimitValue
+// ✅ Helper UI: 2 choix seulement
+// - "unlimited"
+// - "number" (personnalisé => input)
 // ------------------------------
 function LimitOverrideField({
   label,
@@ -46,14 +48,10 @@ function LimitOverrideField({
   onChange: (v: LimitValue) => void;
   placeholder?: string;
 }) {
-  const mode: "custom" | "unlimited" | "number" =
-    value === "unlimited"
-      ? "unlimited"
-      : value === "custom"
-        ? "custom"
-        : "number";
+  const mode: "unlimited" | "number" =
+    value === "unlimited" ? "unlimited" : "number";
 
-  const num = typeof value === "number" ? value : "";
+  const num = typeof value === "number" ? value : 0;
 
   return (
     <div className="mt-4">
@@ -63,7 +61,6 @@ function LimitOverrideField({
         <Select
           value={mode}
           onValueChange={(v) => {
-            if (v === "custom") onChange("custom");
             if (v === "unlimited") onChange("unlimited");
             if (v === "number") onChange(0);
           }}
@@ -72,7 +69,6 @@ function LimitOverrideField({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="custom">Sur devis</SelectItem>
             <SelectItem value="unlimited">Illimité</SelectItem>
             <SelectItem value="number">Personnalisé</SelectItem>
           </SelectContent>
@@ -83,23 +79,21 @@ function LimitOverrideField({
             className="h-11"
             type="number"
             min={0}
-            value={num}
+            value={Number.isFinite(num) ? num : 0}
             onChange={(e) => onChange(Number(e.target.value))}
             placeholder={placeholder ?? "Ex: 10"}
           />
         ) : (
           <div className="h-11 rounded-md border border-gray-200 bg-gray-50 px-3 flex items-center text-sm text-gray-600">
-            {mode === "unlimited" ? "Illimité" : "Sur devis"}
+            Illimité
           </div>
         )}
       </div>
 
       <div className="mt-2 text-xs text-gray-500">
-        {mode === "custom"
-          ? "Sur devis = valeur négociée (non chiffrée) pour ce workspace."
-          : mode === "unlimited"
-            ? "Illimité = aucune limite appliquée sur cette dimension."
-            : "Personnalisé = valeur numérique fixe négociée."}
+        {mode === "unlimited"
+          ? "Illimité = aucune limite appliquée sur cette dimension."
+          : "Personnalisé = valeur numérique fixe négociée."}
       </div>
     </div>
   );
@@ -149,6 +143,8 @@ export default function WorkspaceSubscriptionTab({
 
   // --------- LIMITS ----------
   const selectedDefaults = getPlanLimits(planCode);
+
+  // ✅ ENTREPRISE uniquement: overrides appliqués (unlimited / number)
   const selectedEffective = applyOverrides(
     selectedDefaults,
     planCode === "entreprise" ? overrides : null,
@@ -402,11 +398,11 @@ export default function WorkspaceSubscriptionTab({
                     Personnalisation ENTREPRISE
                   </div>
                   <div className="mt-1 text-xs text-gray-600">
-                    Personnalise les limites négociées (custom / unlimited /
-                    nombre).
+                    Personnalise les limites négociées (illimité ou valeur
+                    numérique).
                   </div>
                 </div>
-                <Badge variant="outline">Custom</Badge>
+                <Badge variant="outline">Overrides</Badge>
               </div>
 
               <LimitOverrideField
@@ -514,7 +510,7 @@ export default function WorkspaceSubscriptionTab({
                 variant="secondary"
                 className="h-10"
                 onClick={renew}
-                disabled={!canRenew || isSaving}
+                disabled={canRenew === false || isSaving}
               >
                 Renouveler (+1 mois)
               </Button>
@@ -655,9 +651,7 @@ export default function WorkspaceSubscriptionTab({
                   label: "Dashboards TADA",
                   value: formatLimit(
                     currentEffective.proprietaryDashboardsAccess,
-                    {
-                      locale: "fr",
-                    },
+                    { locale: "fr" },
                   ),
                 },
               ].map((row) => (

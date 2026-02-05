@@ -55,6 +55,8 @@ import { CreditsOverviewModal } from "./credits-overview-modal";
 
 import { countries } from "@/constants/countries";
 
+import { useCreditsPurchaseFlowStore } from "@/stores/useCreditsPurchaseFlowStore";
+
 interface HeaderProps {
   title?: string;
   className?: string;
@@ -128,7 +130,28 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
   const creditsLoading = useWorkspaceCreditsStore((s) => s.loading);
 
   // Payment
-  const [preparedPurchase, setPreparedPurchase] = useState<any | null>(null);
+  const creditsModalOpen = useCreditsPurchaseFlowStore(
+    (s) => s.creditsModalOpen,
+  );
+  const paymentModalOpen = useCreditsPurchaseFlowStore(
+    (s) => s.paymentModalOpen,
+  );
+  const preparedPurchase = useCreditsPurchaseFlowStore(
+    (s) => s.preparedPurchase,
+  );
+
+  const openCreditsModal = useCreditsPurchaseFlowStore(
+    (s) => s.openCreditsModal,
+  );
+  const openPaymentModal = useCreditsPurchaseFlowStore(
+    (s) => s.openPaymentModal,
+  );
+  const closeCreditsModal = useCreditsPurchaseFlowStore(
+    (s) => s.closeCreditsModal,
+  );
+  const closePaymentModal = useCreditsPurchaseFlowStore(
+    (s) => s.closePaymentModal,
+  );
 
   const handleSignOut = async () => {
     await signOut();
@@ -136,27 +159,24 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
   };
 
   const handleAsYouGo = (prepared?: any) => {
-    if (prepared) setPreparedPurchase(prepared);
-    creditModal.onFalse();
-    paymentModal.onTrue();
+    closeCreditsModal();
+    openPaymentModal(prepared ?? preparedPurchase);
   };
 
-  // ✅ Click sur "Credits" : si 0 -> purchase modal, sinon -> overview modal
   const handleCreditsClick = () => {
     if (creditsLoading) return;
 
     if (balance === 0) {
-      creditModal.onTrue();
+      openCreditsModal();
       return;
     }
 
     creditsOverviewModal.onTrue();
   };
 
-  // ✅ Bouton "Add credits" dans l’overview : ferme overview puis ouvre purchase
   const openPurchaseFromOverview = () => {
     creditsOverviewModal.onFalse();
-    creditModal.onTrue();
+    openCreditsModal();
   };
 
   // Guard org
@@ -432,18 +452,19 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
 
       {/* Purchase modal */}
       <CreditsModal
-        open={creditModal.value}
-        toggleOpen={creditModal.onToggle}
+        open={creditsModalOpen}
+        toggleOpen={() =>
+          creditsModalOpen ? closeCreditsModal() : openCreditsModal()
+        }
         handleAsYouGo={handleAsYouGo}
         organizationId={orgId ?? undefined}
         workspaceId={workspaceId ?? ""}
         workspacePlanCode={(subscription?.planCode as any) ?? null}
       />
 
-      {/* Payment modal */}
       <PaymentModal
-        open={paymentModal.value}
-        onOpenChange={paymentModal.onFalse}
+        open={paymentModalOpen}
+        onOpenChange={closePaymentModal}
         inComingredits={balance}
         workspaceId={workspaceId ?? ""}
         prepared={preparedPurchase}
