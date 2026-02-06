@@ -1,14 +1,16 @@
 import { cn } from "@tada/ui/lib/utils";
 import "@tada/ui/globals.css";
-import { DM_Sans } from "next/font/google";
 import type { Metadata } from "next";
 import { ClientProviders } from "./client-providers";
+import { Sora } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 
 // Configuration de la police DM Sans
-const dmSans = DM_Sans({
+const sora = Sora({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-dm-sans",
+  weight: ["400", "600", "700", "800"],
+  variable: "--font-sora",
   display: "swap",
 });
 
@@ -42,13 +44,11 @@ export default function RootLayout({
     <html lang={params.locale} suppressHydrationWarning>
       <body
         className={cn(
-          dmSans.variable,
-          "whitespace-pre-line overscroll-none antialiased font-sans"
+          `${GeistSans.variable} ${GeistMono.variable} ${sora.variable}`,
+          "whitespace-pre-line overscroll-none antialiased",
         )}
       >
-        <ClientProviders locale={params.locale}>
-          {children}
-        </ClientProviders>
+        <ClientProviders locale={params.locale}>{children}</ClientProviders>
       </body>
     </html>
   );

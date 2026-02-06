@@ -55,14 +55,17 @@ model User {
   validationComments ValidationComment[]
 
   // Data
-  contributorData                 ContributorData[]
-  missionAssignmentsAsContributor MissionAssignment[]         @relation("MissionAssignmentContributor")
-  missionAssignmentsAsAssigner    MissionAssignment[]         @relation("MissionAssignmentAssignedBy")
-  members                         Member[]
-  surveyResponses                 SurveyResponse[]
-  missionPermissions              MissionPermission[]
-  subDashboards                   SubDashboard[]
-  workspacePlanSubscriptions      WorkspacePlanSubscription[]
+  contributorData                    ContributorData[]
+  missionAssignmentsAsContributor    MissionAssignment[]                @relation("MissionAssignmentContributor")
+  missionAssignmentsAsAssigner       MissionAssignment[]                @relation("MissionAssignmentAssignedBy")
+  members                            Member[]
+  surveyResponses                    SurveyResponse[]
+  missionPermissions                 MissionPermission[]
+  subDashboards                      SubDashboard[]
+  workspacePlanSubscriptions         WorkspacePlanSubscription[]
+  contributorProfile                 ContributorProfile?
+  contributorAttributeValues         ContributorAttributeValue[]
+  contributorProfileModuleProgresses ContributorProfileModuleProgress[]
 
   @@map("user")
 }
@@ -1524,4 +1527,299 @@ enum validation_action {
   pending
   approved
   rejected
+}
+
+// --------------------
+// ENUMS (core 20)
+// --------------------
+enum Gender {
+  male
+  female
+  other
+  prefer_not_to_say
+
+  @@map("gender")
+}
+
+enum MaritalStatus {
+  single
+  married
+  divorced
+  widowed
+  prefer_not_to_say
+
+  @@map("marital_status")
+}
+
+enum AreaType {
+  urban
+  rural
+  peri_urban
+
+  @@map("area_type")
+}
+
+enum ResidenceDuration {
+  lt_1y
+  y_1_3
+  y_3_5
+  gt_5y
+
+  @@map("residence_duration")
+}
+
+enum EducationLevel {
+  primary
+  secondary
+  higher
+  self_taught
+  other
+  prefer_not_to_say
+
+  @@map("education_level")
+}
+
+enum DegreeLevel {
+  bepc
+  bac
+  licence
+  master
+  doctorate
+  other
+  prefer_not_to_say
+
+  @@map("degree_level")
+}
+
+enum EmploymentStatus {
+  employee
+  self_employed
+  unemployed
+  student
+  retired
+  other
+  prefer_not_to_say
+
+  @@map("employment_status")
+}
+
+enum ExperienceDuration {
+  lt_1y
+  y_1_3
+  y_3_5
+  gt_5y
+
+  @@map("experience_duration")
+}
+
+enum IncomeBracketXof {
+  lt_50k
+  xof_50k_200k
+  xof_200k_500k
+  gt_500k
+  prefer_not_to_say
+
+  @@map("income_bracket_xof")
+}
+
+// --------------------
+// CORE PROFILE (20)
+// --------------------
+model ContributorProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 1) gender
+  gender Gender?
+
+  // 2) birthDate (age computed in app)
+  birthDate DateTime? @db.Date
+
+  // 3) maritalStatus
+  maritalStatus MaritalStatus?
+
+  // 4) hasChildren + childrenCount
+  hasChildren   Boolean?
+  childrenCount Int?
+
+  // 5) residenceCountryCode (ISO2)
+  residenceCountryCode String? @db.VarChar(2)
+
+  // 6) residenceCity (normalized string)
+  residenceCity String?
+
+  // 7) areaType
+  areaType AreaType?
+
+  // 8) cityResidenceDuration
+  cityResidenceDuration ResidenceDuration?
+
+  // 9) nationality1Code
+  nationality1Code String? @db.VarChar(2)
+
+  // 10) hasValidIdOrPassport
+  hasValidIdOrPassport Boolean?
+
+  // 11) educationLevel
+  educationLevel EducationLevel?
+
+  // 12) lastDegree
+  lastDegree DegreeLevel?
+
+  // 13) speaksMultipleLanguages + languagesJson
+  speaksMultipleLanguages Boolean?
+  // format recommandé:
+  // [{ code:"fr", level:"bilingual" }, { code:"di", level:"advanced" }]
+  languagesJson           Json?
+
+  // 14) employmentStatus
+  employmentStatus EmploymentStatus?
+
+  // 15) sector
+  sector String?
+
+  // 16) jobTitle
+  jobTitle String?
+
+  // 17) experienceDuration
+  experienceDuration ExperienceDuration?
+
+  // 18) incomeBracketXof
+  incomeBracketXof IncomeBracketXof?
+
+  // 19) hasBankAccount
+  hasBankAccount Boolean?
+
+  // 20) hasMobileMoney + operatorsJson
+  hasMobileMoney           Boolean?
+  // format recommandé: ["orange_money","mtn_momo","moov_money"]
+  mobileMoneyOperatorsJson Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Index pratiques pour ciblage
+  @@index([residenceCountryCode, residenceCity])
+  @@index([gender, birthDate])
+  @@index([employmentStatus, sector])
+  @@index([incomeBracketXof, hasBankAccount, hasMobileMoney])
+  @@map("contributor_profile")
+}
+
+enum ContributorAttributeType {
+  boolean
+  number
+  string
+  date
+  single_select
+  multi_select
+  json
+
+  @@map("contributor_attribute_type")
+}
+
+model ContributorAttributeDefinition {
+  id     String                   @id @default(uuid())
+  key    String                   @unique // ex: "social.networks_used"
+  label  String // label FR
+  family String // ex: "Réseaux Sociaux"
+  type   ContributorAttributeType
+
+  // pour select(s): options en keys stables (reco)
+  // ex: { options: [{key:"daily", label:"Quotidiennement"}, ...] }
+  optionsJson Json?
+
+  // gouvernance
+  isFilterable    Boolean @default(true)
+  isSensitive     Boolean @default(false)
+  requiresConsent Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  values ContributorAttributeValue[]
+
+  @@index([family])
+  @@index([isFilterable])
+  @@map("contributor_attribute_definition")
+}
+
+model ContributorAttributeValue {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  definitionId String
+  definition   ContributorAttributeDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+
+  valueBoolean Boolean?
+  valueNumber  Float?
+  valueString  String?
+  valueDate    DateTime? @db.Date
+  valueJson    Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, definitionId])
+  @@index([definitionId])
+  @@index([definitionId, valueBoolean])
+  @@index([definitionId, valueNumber])
+  @@index([definitionId, valueString])
+  @@map("contributor_attribute_value")
+}
+
+// --------------------
+// Checkpoint Modules
+// --------------------
+
+enum ProfileModuleStatus {
+  locked
+  in_progress
+  completed
+  quality
+
+  @@map("profile_module_status")
+}
+
+model ContributorProfileModuleProgress {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // clé stable du module, ex: "demography", "finance", "social_networks"
+  moduleKey String
+
+  // label FR affichable (facultatif mais pratique pour backoffice)
+  moduleLabel String?
+
+  // état
+  status ProfileModuleStatus @default(in_progress)
+
+  // progression (0..100) optionnel mais très utile pour l’UI
+  completionPercent Int @default(0)
+
+  // nombre de champs complétés / attendus (optionnels)
+  answeredCount Int @default(0)
+  totalCount    Int @default(0)
+
+  // points
+  pointsAwarded Int @default(0) // cumul attribué pour ce module (anti-double reward)
+
+  // dates
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  qualityAt   DateTime?
+
+  updatedAt DateTime @updatedAt
+
+  // 1 ligne par user et par module
+  @@unique([userId, moduleKey])
+  @@index([userId])
+  @@index([moduleKey])
+  @@index([status])
+  @@map("contributor_profile_module_progress")
 }
