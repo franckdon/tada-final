@@ -2,6 +2,77 @@
 import { db } from "../../../../../lib/db";
 import type { ModuleKey, ProfileModuleStatus } from "./modules.config";
 
+// ---------- Reward config (DB dynamic) ----------
+
+export type ContributorModuleRewardConfigRow = {
+  id: string;
+  moduleKey: string;
+  moduleLabel: string;
+  order: number;
+  rewardXof: number;
+  isActive: boolean;
+  dependsOn: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/**
+ * Récupère toutes les configs de rewards (admin-driven)
+ */
+export async function getAllModuleRewardConfigs(): Promise<
+  Record<string, ContributorModuleRewardConfigRow>
+> {
+  const r = await db.query(
+    `
+    select
+      id::text as id,
+      module_key as "moduleKey",
+      module_label as "moduleLabel",
+      "order"::int as "order",
+      reward_xof::int as "rewardXof",
+      is_active as "isActive",
+      depends_on as "dependsOn",
+      created_at::text as "createdAt",
+      updated_at::text as "updatedAt"
+    from contributor_module_reward_config
+    `,
+  );
+
+  const out: Record<string, ContributorModuleRewardConfigRow> = {};
+  for (const row of r.rows as ContributorModuleRewardConfigRow[]) {
+    out[row.moduleKey] = row;
+  }
+  return out;
+}
+
+/**
+ * Récupère la config d’un module (admin-driven)
+ */
+export async function getModuleRewardConfig(
+  moduleKey: ModuleKey,
+): Promise<ContributorModuleRewardConfigRow | null> {
+  const r = await db.query(
+    `
+    select
+      id::text as id,
+      module_key as "moduleKey",
+      module_label as "moduleLabel",
+      "order"::int as "order",
+      reward_xof::int as "rewardXof",
+      is_active as "isActive",
+      depends_on as "dependsOn",
+      created_at::text as "createdAt",
+      updated_at::text as "updatedAt"
+    from contributor_module_reward_config
+    where module_key = $1::text
+    limit 1
+    `,
+    [moduleKey],
+  );
+
+  return (r.rows[0] as ContributorModuleRewardConfigRow | undefined) ?? null;
+}
+
 // ---------- Progress ----------
 
 export type ModuleProgressRow = {
@@ -196,7 +267,9 @@ export type ContributorProfileRow = {
   updatedAt: string;
 };
 
-export async function getContributorProfile(userId: string): Promise<ContributorProfileRow | null> {
+export async function getContributorProfile(
+  userId: string,
+): Promise<ContributorProfileRow | null> {
   const r = await db.query(
     `
     select
@@ -226,7 +299,10 @@ export async function getContributorProfile(userId: string): Promise<Contributor
   return (r.rows[0] as ContributorProfileRow | undefined) ?? null;
 }
 
-export async function upsertContributorProfile(userId: string, patch: Partial<ContributorProfileRow>) {
+export async function upsertContributorProfile(
+  userId: string,
+  patch: Partial<ContributorProfileRow>,
+) {
   await db.query(
     `
     insert into contributor_profile
@@ -279,12 +355,21 @@ export async function upsertContributorProfile(userId: string, patch: Partial<Co
       patch.nationality1Code ?? null,
       patch.nationality2Code ?? null,
 
-      typeof patch.hasValidIdOrPassport === "undefined" ? null : patch.hasValidIdOrPassport,
+      typeof patch.hasValidIdOrPassport === "undefined"
+        ? null
+        : patch.hasValidIdOrPassport,
     ],
   );
 }
 
-type AttrType = "boolean" | "number" | "string" | "date" | "single_select" | "multi_select" | "json";
+type AttrType =
+  | "boolean"
+  | "number"
+  | "string"
+  | "date"
+  | "single_select"
+  | "multi_select"
+  | "json";
 
 export async function ensureAttributeDefinition(params: {
   key: string;
@@ -322,7 +407,6 @@ export async function ensureAttributeDefinition(params: {
   return r.rows[0]?.id ?? null;
 }
 
-
 export async function upsertAttributeValue(params: {
   userId: string; // TEXT in contributor_attribute_value
   key: string;
@@ -339,11 +423,17 @@ export async function upsertAttributeValue(params: {
 
   const v = params.value;
 
-  const valueBoolean = params.type === "boolean" ? (typeof v === "boolean" ? v : null) : null;
-  const valueNumber = params.type === "number" ? (typeof v === "number" ? v : null) : null;
+  const valueBoolean =
+    params.type === "boolean" ? (typeof v === "boolean" ? v : null) : null;
+  const valueNumber =
+    params.type === "number" ? (typeof v === "number" ? v : null) : null;
 
   const valueString =
-    params.type === "string" || params.type === "single_select" ? (typeof v === "string" ? v : null) : null;
+    params.type === "string" || params.type === "single_select"
+      ? typeof v === "string"
+        ? v
+        : null
+      : null;
 
   const valueDate = params.type === "date" && typeof v === "string" ? v : null;
 
@@ -377,7 +467,10 @@ export async function upsertAttributeValue(params: {
   );
 }
 
-export async function readAttributeValueByKey(params: { userId: string; key: string }) {
+export async function readAttributeValueByKey(params: {
+  userId: string;
+  key: string;
+}) {
   const r = await db.query<{
     valueBoolean: boolean | null;
     valueNumber: number | null;
@@ -412,14 +505,10 @@ export type WalletAccountRow = {
   currency: string;
 };
 
-/**
- * account.userId is very likely UUID in your DB (NextAuth-style).
- * So we cast userId to uuid here only.
- */
 const PROVIDER_PRIORITY = ["mobile_credentials", "mobile", "credential", "google"] as const;
 
 export async function findWalletAccount(params: {
-  userId: string; // UUID string (user.id)
+  userId: string; // peut être UUID string, mais en DB c’est parfois TEXT
   providerId?: string;
 }): Promise<WalletAccountRow | null> {
   const { userId, providerId } = params;
@@ -433,7 +522,8 @@ export async function findWalletAccount(params: {
         a."balance"::text as balance,
         a."currency" as currency
       from "account" a
-      where a."userId" = $1::text and a."providerId" = $2::text
+      where a."userId"::text = $1::text
+        and a."providerId" = $2::text
       limit 1
       `,
       [userId, providerId],
@@ -449,7 +539,8 @@ export async function findWalletAccount(params: {
       a."balance"::text as balance,
       a."currency" as currency
     from "account" a
-    where a."userId" = $1::uuid and a."providerId" = any($2::text[])
+    where a."userId"::text = $1::text
+      and a."providerId" = any($2::text[])
     order by array_position($2::text[], a."providerId") asc
     limit 1
     `,
@@ -458,6 +549,7 @@ export async function findWalletAccount(params: {
 
   return res.rows[0] ?? null;
 }
+
 
 // ---------- Debug helper ----------
 
@@ -481,4 +573,3 @@ export async function dbQueryUser(userId: string): Promise<any | null> {
 
   return r.rows[0] ?? null;
 }
-

@@ -1,23 +1,19 @@
+// apps/admin/src/app/[locale]/(dashboard)/settings/rewards/page.tsx
 import { prisma } from "@/lib/prisma";
-import { RewardsManagement } from "@/components/rewards/rewards-management";
+import { ContributorModuleRewardsManagement } from "@/components/rewards/contributor-module-rewards-management";
 
 export const metadata = {
-  title: "Gestion des Récompenses | Tada",
+  title: "Récompenses Modules Contributeurs | Tada",
 };
 
 export default async function RewardsPage() {
-  const rewards = await prisma.rewardConfig.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      _count: {
-        select: { history: true },
-      },
-    },
+  const modules = await prisma.contributorModuleRewardConfig.findMany({
+    orderBy: [{ order: "asc" }, { createdAt: "desc" }],
   });
 
   return (
     <div className="p-6">
-      <RewardsManagement initialRewards={rewards} />
+      <ContributorModuleRewardsManagement initialModules={modules} />
     </div>
   );
 }

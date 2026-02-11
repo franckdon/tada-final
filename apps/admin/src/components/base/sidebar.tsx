@@ -44,6 +44,7 @@ import {
   MonitorCloud,
   FolderKanban,
   MessageCircleQuestionMark,
+  Newspaper,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -132,6 +133,11 @@ export function Sidebar() {
           icon: <UserCog className="h-5 w-5" />,
           text: "Utilisateurs",
           href: "/users",
+        },
+        {
+          icon: <Newspaper className="h-5 w-5" />,
+          text: "Blogs & Topics",
+          href: "/blog",
         },
       ],
     },

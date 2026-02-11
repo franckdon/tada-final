@@ -14,7 +14,7 @@ import { mobileSurveyResponsesRoutes } from "./routes/v1/mobile/surveys/response
 import { mobileSupportRoutes } from "./routes/v1/mobile/support/support.routes";
 import { mobileAccountRoutes } from "./routes/v1/mobile/account/account.routes";
 import { mobilePayoutAccountsRoutes } from "./routes/v1/mobile/payout-accounts/payout-accounts.routes";
-import { profileModuleRewardsRoutes } from "./routes/v1/mobile/rewards/reward.routes";
+import { profileModulesRewardsRoutes } from "./routes/v1/mobile/rewards/profile-modules/reward.routes";
 import { contributorModulesRoutes } from "./routes/v1/mobile/contributor/modules/modules.routes";
 
 export const app = openapi;
@@ -48,7 +48,7 @@ app.route("/v1/mobile/payout-accounts", mobilePayoutAccountsRoutes);
 
 // rewards
 app.route("/v1/mobile/contributor/modules", contributorModulesRoutes);
-app.route("/v1/mobile/rewards/profile-modules", profileModuleRewardsRoutes);
+app.route("/v1/mobile/rewards/profile-modules", profileModulesRewardsRoutes);
 
 // Swagger UI
 app.get(

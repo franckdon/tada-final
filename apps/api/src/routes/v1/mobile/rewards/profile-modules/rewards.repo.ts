@@ -1,26 +1,16 @@
-// apps/api/src/routes/v1/mobile/rewards/profile-modules/rewards.repo.ts
-import { db } from "../../../../lib/db";
+import { db } from "../../../../../lib/db";
 
 export async function insertLedgerCredit(params: {
   accountPkId: string; // on le traite comme string, même si c'est un uuid "texte"
   amount: string; // bigint string
   currency: string;
-  reason: string;
+  reason: string; // (optionnel: utile pour logs; pas forcément persisté si colonne absente)
   description?: string;
   referenceType?: string;
   referenceId: string; // uuid string (valide)
   idempotencyKey: string;
 }): Promise<{ kind: "inserted" | "exists"; txId: string; balanceAfter: string }> {
-  const {
-    accountPkId,
-    amount,
-    currency,
-    reason,
-    description,
-    referenceType,
-    referenceId,
-    idempotencyKey,
-  } = params;
+  const { accountPkId, amount, currency, description, referenceType, referenceId, idempotencyKey } = params;
 
   const sql = `
     WITH computed AS (
@@ -28,11 +18,10 @@ export async function insertLedgerCredit(params: {
         a.id::text AS account_id,
         $2::bigint AS amount,
         $3::text AS currency,
-        $4::text AS reason,
-        $5::text AS description,
-        $6::text AS reference_type,
-        $7::uuid AS reference_id,
-        $8::text AS idempotency_key,
+        $4::text AS description,
+        $5::text AS reference_type,
+        $6::uuid AS reference_id,
+        $7::text AS idempotency_key,
         (a.balance + $2::bigint)::bigint AS balance_after
       FROM "account" a
       WHERE a.id::text = $1::text
@@ -44,7 +33,7 @@ export async function insertLedgerCredit(params: {
          "referenceType", "referenceId", "idempotencyKey", "balanceAfter", "createdAt")
       SELECT
         gen_random_uuid(),
-        account_id,               -- ✅ text
+        account_id,
         amount,
         currency,
         'credit',
@@ -62,20 +51,18 @@ export async function insertLedgerCredit(params: {
   `;
 
   const ins = await db.query<{ txId: string; balanceAfter: string }>(sql, [
-    accountPkId,                 // $1::text
-    amount,
-    currency,
-    reason,
-    description ?? null,
-    referenceType ?? null,
-    referenceId,                 // $7::uuid (doit être un vrai uuid)
-    idempotencyKey,
+    accountPkId,               // $1::text
+    amount,                    // $2::bigint
+    currency,                  // $3::text
+    description ?? null,       // $4::text
+    referenceType ?? null,     // $5::text
+    referenceId,               // $6::uuid
+    idempotencyKey,            // $7::text
   ]);
 
   const inserted = ins.rows[0];
 
   if (inserted) {
-    // ✅ update balance - même stratégie: comparaison en text
     await db.query(
       `update "account" set "balance" = $2::bigint where id::text = $1::text`,
       [accountPkId, inserted.balanceAfter],

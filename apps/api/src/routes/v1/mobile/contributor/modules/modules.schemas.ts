@@ -18,7 +18,10 @@ export const personalInfoSchema = z.object({
   birthDate: birthDateSchema.optional().nullable(),
 
   // contributor_profile
-  maritalStatus: z.enum(["single", "married", "divorced", "widowed", "prefer_not_to_say"]).optional().nullable(),
+  maritalStatus: z
+    .enum(["single", "married", "divorced", "widowed", "prefer_not_to_say"])
+    .optional()
+    .nullable(),
   hasChildren: z.boolean().optional().nullable(),
   childrenCount: z.number().int().min(0).optional().nullable(),
   nationality1Code: iso2Schema.optional().nullable(),
@@ -29,7 +32,10 @@ export const personalInfoSchema = z.object({
 export const locationSchema = z.object({
   residenceCountryCode: iso2Schema.optional().nullable(),
   residenceCity: z.string().min(1).optional().nullable(),
-  cityResidenceDuration: z.enum(["lt_1y", "y_1_3", "y_3_5", "gt_5y"]).optional().nullable(),
+  cityResidenceDuration: z
+    .enum(["lt_1y", "y_1_3", "y_3_5", "gt_5y"])
+    .optional()
+    .nullable(),
   areaType: z.enum(["urban", "rural", "peri_urban"]).optional().nullable(),
 
   // dynamiques (attrs)
@@ -60,7 +66,10 @@ export const ethnicitySchema = z.object({
   culturalPractices: z.boolean().optional().nullable(),
   culturalPracticesDetails: z.string().optional().nullable(),
 
-  travelToVillageFrequency: z.enum(["regularly", "sometimes", "rarely", "never"]).optional().nullable(),
+  travelToVillageFrequency: z
+    .enum(["regularly", "sometimes", "rarely", "never"])
+    .optional()
+    .nullable(),
 
   traditionalFoods: z.boolean().optional().nullable(),
   traditionalFoodsDetails: z.string().optional().nullable(),

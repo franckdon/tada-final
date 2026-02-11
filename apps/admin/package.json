@@ -22,6 +22,8 @@
     "@tada/supabase": "workspace:*",
     "@tada/ui": "workspace:*",
     "@tanstack/react-table": "^8.21.2",
+    "@tiptap/react": "^3.19.0",
+    "@tiptap/starter-kit": "^3.19.0",
     "@types/lodash": "^4.17.16",
     "@types/mapbox-gl": "^3.4.1",
     "@types/react-color": "^3.0.13",

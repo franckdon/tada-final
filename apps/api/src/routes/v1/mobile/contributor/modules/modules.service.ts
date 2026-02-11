@@ -1,9 +1,18 @@
 // apps/api/src/routes/v1/mobile/contributor/modules/modules.service.ts
 import * as repo from "./modules.repo";
-import { MODULES, ORDERED_MODULE_KEYS, type ModuleKey, type ProfileModuleStatus } from "./modules.config";
+import { DEFAULT_MODULES, ORDERED_MODULE_KEYS, type ModuleKey, type ProfileModuleStatus } from "./modules.config";
 import type { PersonalInfoInput, LocationInput, EthnicityInput } from "./modules.schemas";
 
 type ServiceResult<T> = { ok: true; data: T } | { ok: false; status: number; message: string };
+
+type RuntimeModuleConfig = {
+  key: ModuleKey;
+  label: string;
+  order: number;
+  rewardXof: number;
+  dependsOn?: ModuleKey;
+  isActive: boolean;
+};
 
 function isFilled(v: any) {
   if (v === null || typeof v === "undefined") return false;
@@ -12,20 +21,63 @@ function isFilled(v: any) {
   return true; // boolean/number/date/json
 }
 
-async function assertModuleUnlocked(userId: string, moduleKey: ModuleKey): Promise<ServiceResult<true>> {
-  const cfg = MODULES[moduleKey];
-  if (!cfg.dependsOn) return { ok: true, data: true };
+/**
+ * Charge la config DB et construit une config runtime
+ * (fallback sur MODULES si DB vide ou module absent)
+ */
+async function getRuntimeModulesConfig(): Promise<{
+  modulesByKey: Record<ModuleKey, RuntimeModuleConfig>;
+  orderedKeys: ModuleKey[];
+}> {
+  const dbConfigs = await repo.getAllModuleRewardConfigs();
 
-  const dep = await repo.getModuleProgress(userId, cfg.dependsOn);
+  const modulesByKey = {} as Record<ModuleKey, RuntimeModuleConfig>;
+
+  for (const key of ORDERED_MODULE_KEYS) {
+    const base = DEFAULT_MODULES[key];
+    const db = dbConfigs[key];
+
+    // dependsOn : DB > base
+    const dependsOnRaw = (db?.dependsOn ?? base.dependsOn) ?? undefined;
+
+    modulesByKey[key] = {
+      key,
+      label: db?.moduleLabel ?? base.label,
+      order: typeof db?.order === "number" ? db.order : base.order,
+      rewardXof: typeof db?.rewardXof === "number" ? db.rewardXof : base.rewardXof,
+      dependsOn: (dependsOnRaw as ModuleKey | undefined) ?? undefined,
+      isActive: typeof db?.isActive === "boolean" ? db.isActive : true,
+    };
+  }
+
+  // ordre : si DB fournit des "order" cohérents => tri asc, sinon fallback ORDERED_MODULE_KEYS
+  const orderedKeys = [...ORDERED_MODULE_KEYS].sort((a, b) => {
+    const oa = modulesByKey[a]?.order ?? 9999;
+    const ob = modulesByKey[b]?.order ?? 9999;
+    return oa - ob;
+  });
+
+  return { modulesByKey, orderedKeys };
+}
+
+async function assertModuleUnlocked(
+  userId: string,
+  moduleKey: ModuleKey,
+  cfgByKey: Record<ModuleKey, RuntimeModuleConfig>,
+): Promise<ServiceResult<true>> {
+  const cfg = cfgByKey[moduleKey];
+  if (!cfg?.dependsOn) return { ok: true, data: true };
+
+  const depKey = cfg.dependsOn;
+  const dep = await repo.getModuleProgress(userId, depKey);
   if (!dep || dep.completionPercent < 100 || dep.status !== "completed") {
-    return { ok: false, status: 423, message: `Module verrouillé. Complète d'abord: ${cfg.dependsOn}` };
+    return { ok: false, status: 423, message: `Module verrouillé. Complète d'abord: ${depKey}` };
   }
 
   return { ok: true, data: true };
 }
 
 async function computePersonalInfoProgress(userId: string) {
-  // lecture user + profile (minimale, sans ajouter un "findUser" ici: on déduit via DB directement)
   const userRes = await repo.dbQueryUser(userId);
   const profile = await repo.getContributorProfile(userId);
 
@@ -41,7 +93,6 @@ async function computePersonalInfoProgress(userId: string) {
     typeof profile?.hasValidIdOrPassport === "boolean",
   ];
 
-  // conditionnels
   if (profile?.hasChildren === true) required.push(isFilled(profile.childrenCount));
 
   const total = required.length;
@@ -73,7 +124,6 @@ async function computeLocationProgress(userId: string) {
 }
 
 async function computeEthnicityProgress(userId: string) {
-  // required keys
   const requiredKeys = [
     { key: "ethnicity.main", type: "single_select" as const },
     { key: "ethnicity.speaks_ethnic_language", type: "boolean" as const },
@@ -84,7 +134,8 @@ async function computeEthnicityProgress(userId: string) {
   const values: Record<string, any> = {};
   for (const rk of requiredKeys) {
     const row = await repo.readAttributeValueByKey({ userId, key: rk.key });
-    values[rk.key] = row?.valueString ?? row?.valueBoolean ?? row?.valueJson ?? row?.valueNumber ?? row?.valueDate ?? null;
+    values[rk.key] =
+      row?.valueString ?? row?.valueBoolean ?? row?.valueJson ?? row?.valueNumber ?? row?.valueDate ?? null;
   }
 
   const checks: boolean[] = [
@@ -94,7 +145,6 @@ async function computeEthnicityProgress(userId: string) {
     typeof values["ethnicity.consumption_influenced"] === "boolean",
   ];
 
-  // conditionnels (si speaks_ethnic_language true -> require ethnic_language)
   const speaks = values["ethnicity.speaks_ethnic_language"];
   if (speaks === true) {
     const row = await repo.readAttributeValueByKey({ userId, key: "ethnicity.ethnic_language" });
@@ -118,11 +168,16 @@ async function computeEthnicityProgress(userId: string) {
 // ---- PUBLIC API ----
 
 export async function getAllProgress(userId: string): Promise<ServiceResult<{ modules: any[] }>> {
-  // calc/refresh each module progress + lock logic
+  const { modulesByKey, orderedKeys } = await getRuntimeModulesConfig();
+
   const out: any[] = [];
 
-  for (const key of ORDERED_MODULE_KEYS) {
-    const cfg = MODULES[key];
+  for (const key of orderedKeys) {
+    const cfg = modulesByKey[key];
+
+    // si module désactivé côté admin, on le renvoie quand même (pour UI) mais en locked
+    // (tu peux changer ce choix plus tard)
+    const isDisabled = !cfg.isActive;
 
     // compute progress
     let computed;
@@ -130,11 +185,14 @@ export async function getAllProgress(userId: string): Promise<ServiceResult<{ mo
     else if (key === "location") computed = await computeLocationProgress(userId);
     else computed = await computeEthnicityProgress(userId);
 
-    // lock rule: if dependsOn not completed => locked (even if some data exists)
+    // lock rule: if dependsOn not completed => locked
     let status: ProfileModuleStatus = computed.status;
     let locked = false;
 
-    if (cfg.dependsOn) {
+    if (isDisabled) {
+      locked = true;
+      status = "locked";
+    } else if (cfg.dependsOn) {
       const dep = await repo.getModuleProgress(userId, cfg.dependsOn);
       if (!dep || dep.status !== "completed" || dep.completionPercent < 100) {
         locked = true;
@@ -158,6 +216,8 @@ export async function getAllProgress(userId: string): Promise<ServiceResult<{ mo
       label: cfg.label,
       order: cfg.order,
       rewardXof: cfg.rewardXof,
+      isActive: cfg.isActive,
+      dependsOn: cfg.dependsOn ?? null,
       ...row,
       isLocked: locked,
     });
@@ -167,7 +227,6 @@ export async function getAllProgress(userId: string): Promise<ServiceResult<{ mo
 }
 
 export async function updatePersonalInfo(userId: string, input: PersonalInfoInput): Promise<ServiceResult<any>> {
-  // personal_info toujours accessible (module 1)
   await repo.updateUserBasics({
     userId,
     name: input.name,
@@ -186,13 +245,14 @@ export async function updatePersonalInfo(userId: string, input: PersonalInfoInpu
     hasValidIdOrPassport: typeof input.hasValidIdOrPassport === "undefined" ? null : input.hasValidIdOrPassport,
   });
 
-  // refresh progress + unlock next
   await getAllProgress(userId);
   return { ok: true, data: { ok: true } };
 }
 
 export async function updateLocation(userId: string, input: LocationInput): Promise<ServiceResult<any>> {
-  const unlocked = await assertModuleUnlocked(userId, "location");
+  const { modulesByKey } = await getRuntimeModulesConfig();
+
+  const unlocked = await assertModuleUnlocked(userId, "location", modulesByKey);
   if (!unlocked.ok) return unlocked;
 
   await repo.upsertContributorProfile(userId, {
@@ -202,7 +262,6 @@ export async function updateLocation(userId: string, input: LocationInput): Prom
     areaType: input.areaType ?? null,
   });
 
-  // attrs
   const attrPairs: Array<{ key: string; type: any; value: any }> = [
     { key: "location.neighborhood", type: "string", value: input.neighborhood },
     { key: "location.address", type: "string", value: input.address },
@@ -226,7 +285,9 @@ export async function updateLocation(userId: string, input: LocationInput): Prom
 }
 
 export async function updateEthnicity(userId: string, input: EthnicityInput): Promise<ServiceResult<any>> {
-  const unlocked = await assertModuleUnlocked(userId, "ethnicity");
+  const { modulesByKey } = await getRuntimeModulesConfig();
+
+  const unlocked = await assertModuleUnlocked(userId, "ethnicity", modulesByKey);
   if (!unlocked.ok) return unlocked;
 
   const attrPairs: Array<{ key: string; type: any; value: any }> = [
