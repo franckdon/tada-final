@@ -1646,3 +1646,67 @@ model ContributorProfileModuleProgress {
   @@index([status])
   @@map("contributor_profile_module_progress")
 }
+
+//dynamisation des points et des règles de complétion
+model ContributorModuleRewardConfig {
+  id String @id @default(uuid())
+
+  moduleKey   String @unique @map("module_key")
+  moduleLabel String @map("module_label")
+  order       Int    @map("order")
+
+  rewardXof Int     @default(0) @map("reward_xof")
+  isActive  Boolean @default(true) @map("is_active")
+
+  dependsOn String? @map("depends_on")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([order])
+  @@index([isActive])
+  @@map("contributor_module_reward_config")
+}
+
+// enums optionnels
+enum BlogPostStatus {
+  draft
+  published
+  archived
+}
+
+model BlogTopic {
+  id       String  @id @default(uuid())
+  key      String  @unique @map("key") // ex: "fundamentals"
+  label    String  @map("label") // ex: "Fundamentals"
+  isActive Boolean @default(true) @map("is_active")
+  order    Int     @default(0) @map("order")
+
+  posts BlogPost[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("blog_topic")
+}
+
+model BlogPost {
+  id      String    @id @default(uuid())
+  topicId String    @map("topic_id")
+  topic   BlogTopic @relation(fields: [topicId], references: [id])
+
+  title       String         @map("title")
+  slug        String         @unique @map("slug") // ex: "5-short-interest-metrics"
+  excerpt     String?        @map("excerpt")
+  content     String         @map("content") // markdown ou html (simple)
+  coverPath   String?        @map("cover_path") // ✅ on stocke le path storage
+  status      BlogPostStatus @default(draft) @map("status")
+  publishedAt DateTime?      @map("published_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([topicId])
+  @@index([status, publishedAt])
+  @@map("blog_post")
+}

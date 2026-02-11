@@ -21,6 +21,7 @@ import {
   Users,
   Contact,
   Bot,
+  Settings,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -155,12 +156,12 @@ export function Sidebar() {
           target: "_self",
           disabled: true,
         },
-        {
-          icon: <Users className="h-5 w-5" />,
-          text: t("navigation.userManagement"),
-          href: `/${currentLocale}/settings/users`,
-          target: "_self",
-        },
+        // {
+        //   icon: <Users className="h-5 w-5" />,
+        //   text: t("navigation.userManagement"),
+        //   href: `/${currentLocale}/settings/users`,
+        //   target: "_self",
+        // },
       ],
     },
     {
@@ -182,6 +183,7 @@ export function Sidebar() {
             organizations ? organizations[0]?.id : "dev-org"
           }`,
           target: "_self",
+          disabled: true,
         },
       ],
     },
@@ -199,6 +201,17 @@ export function Sidebar() {
           text: t("navigation.contactUs"),
           href: "https://chat.whatsapp.com/GCQzxT0DYS81eMzse5l9Pa?mode=r_t",
           target: "_blank",
+        },
+      ],
+    },
+    {
+      title: t("navigation.settings"),
+      items: [
+        {
+          icon: <Settings className="h-5 w-5" />,
+          text: t("navigation.accountSettings"),
+          href: `/${currentLocale}/settings/profile`,
+          target: "_self",
         },
       ],
     },

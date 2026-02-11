@@ -1,7 +1,40 @@
 import { remove } from "lodash";
+import { settings } from "survey-core";
 import { title } from "vega-lite/types_unstable/channeldef.js";
 
 export default {
+  home: {
+    greeting: {
+          title: "Bonjour {name}, bienvenue de retour sur Tada !",
+        },
+    quickActions: {
+      title: "Actions rapides",
+      subtitle: "Accès direct aux fonctionnalités principales",
+      cta: "Créer une mission",
+      open: "Ouvrir",
+      badges: {
+        new: "Nouveau",
+        recommended: "Recommandé",
+      },
+
+      addCredits: {
+        title: "Ajouter des crédits",
+        desc: "Recharge ton solde pour lancer plus de missions.",
+      },
+      chatWithData: {
+        title: "Chat avec tes données",
+        desc: "Pose des questions et génère des insights instantanément.",
+      },
+      marketBeat: {
+        title: "Market beat",
+        desc: "Suis les tendances et signaux clés du marché.",
+      },
+      addMission: {
+        title: "Ajouter une mission",
+        desc: "Crée une mission et définis tes objectifs.",
+      },
+    },
+  },
   common: {
     formSaving: "Génération des questions...",
     search: {
@@ -400,6 +433,7 @@ export default {
     help: "Centre d'aide",
     analysis: "Discuter avec vos données",
     contactUs: "Contactez-nous",
+    accountSettings: "Paramètres",
     userManagement: "Gestion utilisateur",
   },
   user: {

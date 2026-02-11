@@ -1,18 +1,38 @@
-import { primary } from "@/constants/chart";
-import { createWorkspace } from "@/lib/workspaces";
-import { upload } from "@tada/supabase/storage";
-import { image } from "@uiw/react-markdown-editor";
-import { maxSize } from "better-auth";
-import { organization } from "better-auth/plugins";
-import { allTasks } from "better-auth/react";
-import { add, max, min, some } from "lodash";
-import { arch } from "os";
-import { send } from "process";
-import { settings } from "survey-core";
-import { title } from "vega-lite/types_unstable/channeldef.js";
-import { no } from "zod/v4/locales";
+import { set } from "lodash";
 
 export default {
+  home: {
+    greeting: {
+      title: "Hello {name}, welcome back to Tada!",
+    },
+    quickActions: {
+      title: "Quick Actions",
+      subtitle: "Direct access to main features",
+      cta: "Create a mission",
+      open: "Open",
+      badges: {
+        new: "New",
+        recommended: "Recommended",
+      },
+
+      addCredits: {
+        title: "Add Credits",
+        desc: "Recharge your balance to launch more missions.",
+      },
+      chatWithData: {
+        title: "Chat with your data",
+        desc: "Ask questions and generate insights instantly.",
+      },
+      marketBeat: {
+        title: "Market beat",
+        desc: "Follow market trends and key signals.",
+      },
+      addMission: {
+        title: "Add a mission",
+        desc: "Create a mission and set your objectives.",
+      },
+    },
+  },
   common: {
     search: {
       placeholder: "Search...",
@@ -409,6 +429,7 @@ export default {
     help: "Help center",
     analysis: "Chat with your data",
     contactUs: "Contact us",
+    accountSettings: "Settings",
     userManagement: "User management",
   },
   user: {
