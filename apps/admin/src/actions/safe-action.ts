@@ -6,6 +6,20 @@ import {
 import { headers, cookies } from "next/headers";
 import { z } from "zod";
 
+function errorToLog(e: unknown) {
+  if (e instanceof Error) {
+    return {
+      name: e.name,
+      message: e.message,
+      stack: e.stack,
+      // cause (Node >=16)
+      cause: (e as any).cause ? String((e as any).cause) : undefined,
+    };
+  }
+  return { message: String(e) };
+}
+
+
 async function getNativeHeadersWithCookies(): Promise<Headers> {
   const h = await headers();
   const native = new Headers();
@@ -20,7 +34,7 @@ async function getNativeHeadersWithCookies(): Promise<Headers> {
 }
 
 const handleServerError = (e: Error) => {
-  console.error("Action error:", e);
+  console.error("Action error:", errorToLog(e));
   return e instanceof Error ? e.message : DEFAULT_SERVER_ERROR_MESSAGE;
 };
 

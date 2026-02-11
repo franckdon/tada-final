@@ -19,6 +19,7 @@ const config = {
     },
     extend: {
       fontFamily: {
+        sans: ["var(--font-sora)", "sans-serif"],
         departure: ["var(--font-departure-mono)"],
         sora: ["var(--font-sora)", "sans-serif"],
       },

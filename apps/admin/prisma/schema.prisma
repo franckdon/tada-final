@@ -1198,8 +1198,8 @@ model payout_account {
   @@index([userId, isDefault], map: "idx_payout_account_user_default")
 }
 
-model quality_analysis_log {
-  id                 String    @id
+model QualityAnalysisLog {
+  id                 String    @id @default(uuid())
   batchId            String?
   surveyResponseId   String
   analysisType       String
@@ -1219,6 +1219,7 @@ model quality_analysis_log {
   @@index([analyzer, analyzerVersion])
   @@index([batchId])
   @@index([surveyResponseId])
+  @@map("quality_analysis_log")
 }
 
 model quality_configuration {

@@ -25,6 +25,16 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@tada/ui/components/dropdown-menu";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@tada/ui/components/dialog";
+
 import { cn } from "@tada/ui/lib/utils";
 import {
   flexRender,
@@ -45,9 +55,12 @@ import {
   Search,
   RotateCcw,
   Clock,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import type { WorkspaceListItem, SubscriptionState } from "./type";
 
 const PagerButton = ({
@@ -120,6 +133,7 @@ export function ListWorkspaces({
   workspaces: WorkspaceListItem[];
   locale: string;
 }) {
+  const router = useRouter();
   const pageSize = 10;
 
   // Search + filters
@@ -129,6 +143,13 @@ export function ListWorkspaces({
   );
   const [planFilter, setPlanFilter] = useState<"all" | string>("all");
   const [expiringSoon, setExpiringSoon] = useState<"all" | "yes" | "no">("all");
+
+  const [deleteWorkspaceId, setDeleteWorkspaceId] = useState<string | null>(
+    null,
+  );
+
+  // UX delete
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const uniquePlans = useMemo(() => {
     const set = new Set<string>();
@@ -197,6 +218,25 @@ export function ListWorkspaces({
     const expSoon = initialWorkspaces.filter((w) => w.isExpiringSoon).length;
     return { total, active, inactive, none, expSoon };
   }, [initialWorkspaces]);
+
+  async function handleDelete(id: string) {
+    try {
+      setDeletingId(id);
+
+      const res = await fetch(`/api/workspaces/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error();
+
+      setDeleteWorkspaceId(null);
+      router.refresh();
+    } catch (e) {
+      alert("Erreur lors de la suppression");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const columns = useMemo(
     () => [
@@ -338,8 +378,7 @@ export function ListWorkspaces({
           );
         },
       },
-
-      // ✅ NOUVELLE COLONNE CRÉDITS
+      // ✅ CRÉDITS
       {
         header: "Réponses",
         accessorKey: "creditsBalance",
@@ -358,7 +397,6 @@ export function ListWorkspaces({
           );
         },
       },
-
       {
         header: "Créé le",
         accessorKey: "createdAt",
@@ -375,15 +413,32 @@ export function ListWorkspaces({
         meta: { align: "text-right" },
         cell: ({ row }: { row: Row<WorkspaceListItem> }) => {
           const w = row.original;
+          const isDeleting = deletingId === w.id;
 
           return (
             <div className="flex items-center justify-end gap-2">
+              {/* VIEW */}
               <Link href={`/${locale}/workspaces/${w.id}`}>
                 <UIButton variant="ghost" size="sm">
                   <EyeIcon className="h-4 w-4" />
                 </UIButton>
               </Link>
 
+              <UIButton
+                variant="ghost"
+                size="sm"
+                className="text-red-600 hover:text-red-700"
+                onClick={() => setDeleteWorkspaceId(w.id)}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+              </UIButton>
+
+              {/* MENU */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <UIButton variant="ghost" size="sm">
@@ -413,7 +468,7 @@ export function ListWorkspaces({
         },
       },
     ],
-    [locale],
+    [locale, deletingId],
   );
 
   const table = useReactTable<WorkspaceListItem>({
@@ -430,6 +485,10 @@ export function ListWorkspaces({
     setPlanFilter("all");
     setExpiringSoon("all");
   };
+
+  const dialogIsDeleting = Boolean(
+    deleteWorkspaceId && deletingId === deleteWorkspaceId,
+  );
 
   return (
     <div className="w-full rounded-lg border border-gray-100 bg-white shadow-sm p-5">
@@ -630,6 +689,48 @@ export function ListWorkspaces({
           </PagerButton>
         </div>
       </div>
+
+      {/* DELETE DIALOG */}
+      <Dialog
+        open={!!deleteWorkspaceId}
+        onOpenChange={() => setDeleteWorkspaceId(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Supprimer workspace ?</DialogTitle>
+            <DialogDescription>
+              Cette action est irréversible.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <UIButton
+              variant="ghost"
+              onClick={() => setDeleteWorkspaceId(null)}
+              disabled={dialogIsDeleting}
+            >
+              Annuler
+            </UIButton>
+
+            <UIButton
+              className="bg-red-600 hover:bg-red-700 inline-flex items-center gap-2"
+              disabled={dialogIsDeleting}
+              onClick={() =>
+                deleteWorkspaceId && handleDelete(deleteWorkspaceId)
+              }
+            >
+              {dialogIsDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Suppression...
+                </>
+              ) : (
+                "Supprimer"
+              )}
+            </UIButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

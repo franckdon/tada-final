@@ -6,7 +6,6 @@ import { Sora } from "next/font/google";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 
-// Configuration de la police DM Sans
 const sora = Sora({
   subsets: ["latin"],
   weight: ["400", "600", "700", "800"],

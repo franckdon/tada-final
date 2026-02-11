@@ -6,6 +6,20 @@ import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
 
+
+function errorToLog(e: unknown) {
+  if (e instanceof Error) {
+    return {
+      name: e.name,
+      message: e.message,
+      stack: e.stack,
+      // cause (Node >=16)
+      cause: (e as any).cause ? String((e as any).cause) : undefined,
+    };
+  }
+  return { message: String(e) };
+}
+
 /**
  * Input
  */
@@ -47,7 +61,7 @@ const QualityAnalysisResultSchema = z.object({
   decisionReason: z.string(),
   summary: z.string(),
   recommendations: z.array(z.string()),
-  flagsForHumanReview: z.boolean(),
+  flagsForHumanReview: z.boolean().optional().default(false),
 });
 
 type QualityDecision = z.infer<typeof QualityAnalysisResultSchema>["decision"];
@@ -80,7 +94,7 @@ async function safeQualityAnalysisLogCreate(data: any) {
     }
     return await delegate.create({ data });
   } catch (e) {
-    console.error("[autoQualityLLM] Failed to create qualityAnalysisLog:", e);
+    console.error("[autoQualityLLM] Failed to create qualityAnalysisLog:", errorToLog(e));
     return null;
   }
 }
@@ -146,6 +160,7 @@ export const autoQualityLLMAction = authActionClient
       /**
        * 2) LLM analysis
        */
+      
       const { object } = await generateObject({
         model: openai("gpt-4o-mini"),
         schema: QualityAnalysisResultSchema,
@@ -237,6 +252,8 @@ You are an expert in mobile survey data quality control and validation.
         `,
         temperature: 0.3,
       });
+
+      const flagsForHumanReview = object.flagsForHumanReview ?? false;
 
       /**
        * 3) Upsert quality control
@@ -351,14 +368,15 @@ You are an expert in mobile survey data quality control and validation.
           decisionReason: object.decisionReason,
           summary: object.summary,
           issuesCount: object.issues.length,
-          flagsForHumanReview: object.flagsForHumanReview,
+          flagsForHumanReview,
           recommendations: object.recommendations,
         },
         qualityControl: finalResult,
         message: `Automatic analysis completed - Score: ${object.overallScore}/100 - Decision: ${object.decision}`,
       };
     } catch (error) {
-      console.error("Error in automatic quality analysis:", error);
+
+      console.error("Error in automatic quality analysis:", errorToLog(error));
 
       // safe error log (won't crash if delegate missing)
       await safeQualityAnalysisLogCreate({
