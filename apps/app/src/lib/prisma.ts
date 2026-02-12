@@ -1,3 +1,5 @@
+// src/lib/prisma.ts
+import "server-only";
 import { PrismaClient } from "@prisma/client";
 
 const connectionString = process.env.DATABASE_URL;
@@ -10,11 +12,7 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-/**
- * Redact DATABASE_URL to avoid leaking credentials in logs.
- */
 function redactDatabaseUrl(url: string) {
-  // ex: postgresql://user:pass@host:5432/db?schema=public
   return url.replace(/:\/\/([^@]+)@/, "://***@");
 }
 
@@ -22,30 +20,10 @@ function shouldDebug() {
   return process.env.NODE_ENV !== "production" || process.env.PRISMA_DEBUG === "1";
 }
 
-/**
- * Identify if the query is relevant to the current investigation.
- * You can extend this list as needed.
- */
-function isRelevantQuery(qLower: string) {
-  return (
-    qLower.includes('"workspace_credit_purchase"') ||
-    qLower.includes("workspace_credit_purchase") ||
-    qLower.includes('"workspacecreditpurchase"') ||
-    qLower.includes("workspacecreditpurchase") ||
-    qLower.includes("credits/purchase") ||
-    // Keep your existing filters if you still want them:
-    qLower.includes('"mission"') ||
-    qLower.includes('"survey"') ||
-    qLower.includes('"response"')
-  );
-}
-
 const prismaClient =
   global.prisma ??
   new PrismaClient({
-    datasources: {
-      db: { url: connectionString },
-    },
+    datasources: { db: { url: connectionString } },
     log:
       process.env.NODE_ENV === "production"
         ? [{ emit: "stdout", level: "error" }]
@@ -56,21 +34,20 @@ const prismaClient =
           ],
   });
 
-/**
- * One-time DB context dump at boot (dev only)
- * Helps confirm: DB name, schema, user, search_path (common source of weirdness).
- */
+// ✅ IMPORTANT : cache global en dev (sinon nouveau client à chaque HMR)
+if (process.env.NODE_ENV !== "production") {
+  global.prisma = prismaClient;
+}
+
+// (optionnel) un seul dump au boot pour debug
+let didDump = false;
 async function dumpDbContextOnce() {
-  if (!shouldDebug()) return;
+  if (!shouldDebug() || didDump) return;
+  didDump = true;
 
   try {
     const rows = await prismaClient.$queryRaw<
-      Array<{
-        db: string;
-        schema: string;
-        user: string;
-        search_path: string;
-      }>
+      Array<{ db: string; schema: string; user: string; search_path: string }>
     >`
       select
         current_database() as db,
@@ -78,11 +55,12 @@ async function dumpDbContextOnce() {
         current_user as user,
         current_setting('search_path') as search_path
     `;
-
-    console.log("[prisma][db-context]", rows?.[0]);
+    console.log("[prisma][db-context]", rows?.[0], redactDatabaseUrl(connectionString));
   } catch (err) {
     console.log("[prisma][db-context] failed", err);
   }
 }
+
+dumpDbContextOnce().catch(() => {});
 
 export const prisma = prismaClient;

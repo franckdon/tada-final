@@ -23,6 +23,7 @@ import {
 } from "@/lib/plans/plan-limits";
 import type { PlanOverrides } from "@/lib/plans/plan-overrides";
 import { applyOverrides } from "@/lib/plans/plan-overrides";
+import SubscriptionInvoiceDownloadButton from "./subscription-invoice-download";
 
 const PLAN_CODES = ["starter", "growth", "business", "entreprise"] as const;
 
@@ -506,6 +507,11 @@ export default function WorkspaceSubscriptionTab({
 
             {/* ACTIONS */}
             <div className="flex flex-wrap items-center gap-2">
+              <SubscriptionInvoiceDownloadButton
+                workspaceId={workspaceId}
+                enabled={computedIsActive}
+              />
+
               <Button
                 variant="secondary"
                 className="h-10"

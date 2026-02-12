@@ -648,6 +648,7 @@ model Workspace {
   invitations               WorkspaceInvitation[]
   members                   WorkspaceMember[]
   workspacePlanSubscription WorkspacePlanSubscription?
+  invoices                  Invoice[]
 
   @@index([country])
   @@index([industry])
@@ -1339,6 +1340,7 @@ model workspace_credit_transaction {
   user                          User?                          @relation(fields: [actor_user_id], references: [id], onUpdate: NoAction, map: "fk_wct_actor_user")
   workspace_credit_account      workspace_credit_account       @relation(fields: [credit_account_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_wct_credit_account")
   workspace_credit_subscription workspace_credit_subscription? @relation(fields: [subscription_id], references: [id], onUpdate: NoAction, map: "fk_wct_subscription")
+  invoice                       Invoice?
 
   @@unique([credit_account_id, reference_id, reason, direction], map: "uniq_credit_tx_ref")
   @@index([actor_user_id], map: "idx_wct_actor_user_id")
@@ -1369,6 +1371,7 @@ model WorkspacePlanSubscription {
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  invoice   Invoice?
 
   @@map("workspace_plan_subscription")
 }
@@ -1887,4 +1890,34 @@ model BlogPost {
   @@index([topicId])
   @@index([status, publishedAt])
   @@map("blog_post")
+}
+
+model Invoice {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  invoiceNumber String @unique @default(dbgenerated("public.next_invoice_number()")) @map("invoice_number")
+  status        String @default("issued")
+
+  workspaceId String    @map("workspace_id") @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  // ✅ Montant
+  amountCents Int    @default(0) @map("amount_cents")
+  currency    String @default("EUR") @map("currency")
+
+  workspaceCreditTransactionId String? @map("workspace_credit_transaction_id") @db.Uuid
+  workspacePlanSubscriptionId  String? @map("workspace_plan_subscription_id") @db.Uuid
+
+  workspaceCreditTransaction workspace_credit_transaction? @relation(fields: [workspaceCreditTransactionId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  workspacePlanSubscription  WorkspacePlanSubscription?    @relation(fields: [workspacePlanSubscriptionId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  issuedAt  DateTime @default(now()) @map("issued_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  metadata Json?
+
+  @@unique([workspaceCreditTransactionId], map: "uniq_invoice_wct")
+  @@unique([workspacePlanSubscriptionId], map: "uniq_invoice_wps")
+  @@map("invoice")
 }

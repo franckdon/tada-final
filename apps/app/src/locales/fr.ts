@@ -5,7 +5,7 @@ import { title } from "vega-lite/types_unstable/channeldef.js";
 export default {
   home: {
     greeting: {
-          title: "Bonjour {name}, bienvenue de retour sur Tada !",
+          title: "Bonjour {name}, bienvenue sur Tada !",
         },
     quickActions: {
       title: "Actions rapides",

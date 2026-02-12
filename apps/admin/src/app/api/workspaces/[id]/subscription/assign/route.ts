@@ -7,6 +7,7 @@ import { addMonths } from "@/lib/dates";
 import type { PlanOverrides } from "@/lib/plans/plan-overrides";
 import { getMonthlyCredits } from "@/lib/plans/credits";
 import type { PlanCode, LimitValue, BoolValue } from "@/lib/plans/plan-limits";
+import { ensureInvoiceForPlanSubscription } from "@/lib/billing/invoice-service";
 
 /**
  * Validation alignée sur plan-limits.ts
@@ -121,7 +122,7 @@ export async function POST(
         endsAt,
         source: "manual",
         note,
-        overrides: safeOverrides, // ✅ persist
+        overrides: safeOverrides,
         assignedByUser: { connect: { id: assignedByUserId } },
       },
       update: {
@@ -147,6 +148,21 @@ export async function POST(
         assignedByUser: { select: { id: true, name: true, email: true } },
         createdAt: true,
         updatedAt: true,
+      },
+    });
+
+    const invoice = await ensureInvoiceForPlanSubscription({
+      workspaceId,
+      workspacePlanSubscriptionId: sub.id,
+      currency: "XOF",
+      amountCents: 1, // montant symbolique pour générer une facture (non facturée)
+      metadata: {
+        source: "manual_plan_assign",
+        planCode,
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString(),
+        overrides: safeOverrides ?? null,
+        note,
       },
     });
 
@@ -228,6 +244,7 @@ export async function POST(
     return NextResponse.json(
       {
         subscription: sub,
+        invoice,
         creditsGranted: creditTx?.amount ?? 0,
         creditBalanceAfter,
       },

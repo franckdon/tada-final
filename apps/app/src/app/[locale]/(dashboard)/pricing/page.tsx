@@ -5,11 +5,14 @@ import { Check } from "lucide-react";
 import { cn } from "@tada/ui/lib/utils";
 import { Button } from "@tada/ui/components/button";
 
+import { auth } from "@/lib/auth";
+
 import {
   PLAN_LIMITS,
   formatLimit,
   type PlanCode,
 } from "@/lib/plans/plan-limits";
+import { headers } from "next/headers";
 
 type Locale = "fr" | "en";
 
@@ -30,6 +33,24 @@ function isPlanCode(value: string): value is PlanCode {
   );
 }
 
+function prettifyPlanCode(code: string) {
+  const c = (code ?? "").trim();
+  if (!c) return "—";
+  return c.charAt(0).toUpperCase() + c.slice(1).toLowerCase();
+}
+
+function formatDateShort(date: Date, locale: Locale) {
+  try {
+    return new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }).format(date);
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
+}
+
 export default async function PricingPage({
   params,
 }: {
@@ -37,6 +58,7 @@ export default async function PricingPage({
 }) {
   const { locale = "fr" } = await params;
 
+  // 1) Plans visibles (cards)
   const plans = await prisma.plan.findMany({
     where: { isActive: true },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
@@ -56,6 +78,73 @@ export default async function PricingPage({
     0,
   );
 
+  // 2) Déterminer si l'utilisateur a un plan actif
+  //    (on prend le premier workspace "actif" du user)
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+  if (!session?.user) {
+    throw new Error("Non authentifié");
+  }
+
+  let activePlanCode: string | null = null;
+  let activePlanStatus: string | null = null;
+  let activePlanEndsAt: Date | null = null;
+  let activePlanStartsAt: Date | null = null;
+  let activePlanLabel: string | null = null; // label affichable
+
+  if (session?.user?.id) {
+    const membership = await prisma.workspaceMember.findFirst({
+      where: { userId: session.user.id, status: "active" },
+      orderBy: [{ createdAt: "asc" }],
+      select: { workspaceId: true },
+    });
+
+    if (membership?.workspaceId) {
+      const sub = await prisma.workspacePlanSubscription.findUnique({
+        where: { workspaceId: membership.workspaceId },
+        select: {
+          planCode: true,
+          status: true,
+          startsAt: true,
+          endsAt: true,
+        },
+      });
+
+      // On considère "actif" si status=active et pas expiré (endsAt null ou > now)
+      const now = new Date();
+      const isActive =
+        !!sub &&
+        (sub.status ?? "").toLowerCase() === "active" &&
+        (!sub.endsAt || sub.endsAt > now);
+
+      if (isActive) {
+        activePlanCode = sub!.planCode ?? null;
+        activePlanStatus = sub!.status ?? null;
+        activePlanEndsAt = sub!.endsAt ?? null;
+        activePlanStartsAt = sub!.startsAt ?? null;
+
+        // récupérer le "name" du plan en DB si possible (sinon fallback code)
+        const planRow = activePlanCode
+          ? await prisma.plan.findFirst({
+              where: { code: activePlanCode },
+              select: { name: true },
+            })
+          : null;
+
+        activePlanLabel =
+          planRow?.name ?? prettifyPlanCode(activePlanCode ?? "");
+      }
+    }
+  }
+
+  // Helper: Plan limits
+  const getPlanLimits = (rawCode: string) => {
+    const code: PlanCode = isPlanCode(rawCode) ? rawCode : "starter";
+    return PLAN_LIMITS[code];
+  };
+
+  // 3) UI
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-10">
       {/* Header */}
@@ -72,7 +161,53 @@ export default async function PricingPage({
         </p>
       </div>
 
-      {/* Grid */}
+      {/* ✅ Current Plan (col-12) */}
+      {activePlanCode ? (
+        <div className="mb-8">
+          <div className="text-sm font-medium text-gray-700 mb-3">
+            {locale === "fr" ? "Plan actuel" : "Current Plan"}
+          </div>
+
+          <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+            <div className="p-6 md:p-7 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-2xl font-bold">{activePlanLabel}</h2>
+                </div>
+
+                <div className="text-sm text-gray-600">
+                  {activePlanEndsAt ? (
+                    <>
+                      {locale === "fr"
+                        ? "Prochaine échéance :"
+                        : "Next billing:"}{" "}
+                      <span className="font-medium">
+                        {formatDateShort(activePlanEndsAt, locale)}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      {locale === "fr"
+                        ? "Abonnement en cours"
+                        : "Subscription in progress"}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* on ne touche pas CTA : tu peux même le supprimer ici si tu veux.
+                  Je te laisse un accès pricing/scopes */}
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                  {locale === "fr" ? "Actif" : "Active"}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Plans Grid (CTA inchangé) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {plans.map((plan) => {
           const bullets = splitBullets(
@@ -83,9 +218,11 @@ export default async function PricingPage({
             plan.sortOrder === maxSortOrder ||
             plan.name.toLowerCase().includes("enterprise");
 
-          const code: PlanCode = isPlanCode(plan.code) ? plan.code : "starter";
+          const limits = getPlanLimits(plan.code);
 
-          const limits = PLAN_LIMITS[code];
+          const isCurrent =
+            !!activePlanCode &&
+            plan.code?.toLowerCase() === activePlanCode.toLowerCase();
 
           return (
             <PlanCard
@@ -100,6 +237,7 @@ export default async function PricingPage({
               }}
               featured={isFeatured}
               locale={locale}
+              isCurrent={isCurrent}
             />
           );
         })}
@@ -112,6 +250,7 @@ function PlanCard({
   plan,
   featured,
   locale,
+  isCurrent,
 }: {
   plan: {
     name: string;
@@ -121,6 +260,7 @@ function PlanCard({
   };
   featured: boolean;
   locale: Locale;
+  isCurrent?: boolean;
 }) {
   return (
     <div
@@ -128,8 +268,20 @@ function PlanCard({
         "relative rounded-2xl border bg-white shadow-sm overflow-hidden",
         "flex flex-col min-h-[520px]",
         featured && "border-transparent",
+        isCurrent &&
+          !featured &&
+          "ring-2 ring-emerald-500/40 border-emerald-200",
       )}
     >
+      {/* Badge Current (sans toucher le CTA) */}
+      {isCurrent ? (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20">
+          <span className="text-[11px] font-semibold px-3 py-1 rounded-full bg-emerald-600 text-white shadow">
+            {locale === "fr" ? "Actuel" : "Current"}
+          </span>
+        </div>
+      ) : null}
+
       {featured && (
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-700 via-purple-700 to-orange-500 opacity-95" />
       )}
@@ -169,6 +321,7 @@ function PlanCard({
           ))}
         </ul>
 
+        {/* ✅ CTA inchangé */}
         <div className="mt-auto pt-7">
           <Button
             asChild

@@ -33,7 +33,6 @@ export function CreditsActivitiesClient({
 }: {
   workspaceId: string;
 }) {
-  // ✅ fetch credits (balance + subscription) via ton hook unique
   useWorkspaceCredits(workspaceId);
 
   const balance = useWorkspaceCreditsStore((s) => s.balance);

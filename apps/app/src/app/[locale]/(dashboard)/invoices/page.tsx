@@ -1,6 +1,17 @@
-import InvoicesList from "@/components/invoices/invoice-list";
-import React from "react";
+import { WorkspaceInvoicesClient } from "@/components/invoices/workspace-invoices-client";
 
-export default async function InvoicesPage() {
-  return <InvoicesList />;
+export const metadata = { title: "Factures | Tada" };
+
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ workspaceId: string }>;
+}) {
+  const { workspaceId } = await params;
+
+  return (
+    <div className="p-8 bg-white">
+      <WorkspaceInvoicesClient workspaceId={workspaceId} />
+    </div>
+  );
 }

@@ -1,3 +1,4 @@
+//src/app/[locale]/(dashboard)/workspaces/[workspaceId]/activities/page.tsx
 import { CreditsActivitiesClient } from "@/components/credits/credits-activities-client";
 
 export const metadata = {

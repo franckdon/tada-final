@@ -179,6 +179,21 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
     openCreditsModal();
   };
 
+  const planLabel = useMemo(() => {
+    if (!subscription || subscription.status !== "active") return null;
+
+    // priorité au label humain
+    const label = subscription.planLabel?.trim();
+    if (label) return label;
+
+    // fallback : code plan (Starter, Pro...) si tu veux
+    const code = subscription.planCode?.trim();
+    if (!code) return null;
+
+    // format sympa
+    return code.charAt(0).toUpperCase() + code.slice(1).toLowerCase();
+  }, [subscription]);
+
   // Guard org
   useEffect(() => {
     if (organizations && organizations.length <= 0) {
@@ -245,8 +260,16 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
             {creditsLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <span className="text-sm font-medium">
-                {balance} {headerT("credits")}
+              <span className="text-sm font-medium flex items-center gap-2">
+                <span>
+                  {balance} {headerT("credits")}
+                </span>
+
+                {planLabel ? (
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                    {planLabel}
+                  </span>
+                ) : null}
               </span>
             )}
           </Button>
