@@ -1,6 +1,7 @@
 // src/actions/missions/validation-mission-action.ts
 "use server";
 
+import { notifyMissionValidated } from "@/lib/notifications/missionNotifications";
 import { prisma } from "@/lib/prisma";
 import { action } from "@/lib/safe-action";
 import { z } from "zod";
@@ -26,14 +27,12 @@ export const validateMissionAction = action
       );
     }
 
-    // ✅ Update payload
     const data: Record<string, any> = {
       validationStatus,
       validationComment: comment ?? null,
       validatedAt: new Date(),
     };
 
-    // ✅ Cahier des charges: si approuvée => mission devient LIVE
     if (validationStatus === "approved") {
       data.status = "live";
     }
@@ -50,8 +49,7 @@ export const validateMissionAction = action
       },
     });
 
-    // ✅ "Envoyer au client" via notification (MVP)
-    // Hypothèse: client = owner du workspace de la mission
+  
     if (updatedMission.workspaceId) {
       const ws = await prisma.workspace.findUnique({
         where: { id: updatedMission.workspaceId },
@@ -59,30 +57,12 @@ export const validateMissionAction = action
       });
 
       if (ws?.ownerId) {
-        const title =
-          validationStatus === "approved"
-            ? "Mission approuvée"
-            : validationStatus === "rejected"
-              ? "Mission rejetée"
-              : "Modifications demandées";
-
-        const body =
-          validationStatus === "approved"
-            ? `Votre mission "${updatedMission.name}" a été approuvée et est maintenant en ligne (live).`
-            : validationStatus === "rejected"
-              ? `Votre mission "${updatedMission.name}" a été rejetée.\n\nCommentaire: ${comment}`
-              : `Des modifications sont demandées pour "${updatedMission.name}".\n\nCommentaire: ${comment}`;
-
-        await prisma.notification.create({
-          data: {
-            userId: ws.ownerId,
-            type: "system",
-            title,
-            body,
-            data: { missionId: updatedMission.id, validationStatus },
-            entityType: "mission",
-            entityId: updatedMission.id,
-          },
+        await notifyMissionValidated({
+          userId: ws.ownerId,
+          missionId: updatedMission.id,
+          missionName: updatedMission.name ?? "Mission",
+          validationStatus,
+          comment: comment ?? null,
         });
       }
     }

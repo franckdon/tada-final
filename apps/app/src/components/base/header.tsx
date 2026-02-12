@@ -1,6 +1,5 @@
 "use client";
 
-import { Inbox } from "@novu/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -28,7 +27,6 @@ import { Avatar, AvatarImage } from "@tada/ui/components/avatar";
 import { cn } from "@tada/ui/lib/utils";
 
 import {
-  Bell,
   ChevronDown,
   CircleDollarSign,
   CreditCard,
@@ -56,6 +54,7 @@ import { CreditsOverviewModal } from "./credits-overview-modal";
 import { countries } from "@/constants/countries";
 
 import { useCreditsPurchaseFlowStore } from "@/stores/useCreditsPurchaseFlowStore";
+import { NotificationsBell } from "../notifications/notifications-bell";
 
 interface HeaderProps {
   title?: string;
@@ -383,17 +382,7 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Inbox (Novu) */}
-          <Inbox
-            applicationIdentifier="rkwq3JiGAl2y"
-            subscriber={"685ed8ca56253bc5d63e4329"}
-            appearance={novuAppearance}
-            renderBell={() => (
-              <button className="relative flex h-8 w-8 items-center justify-center rounded-full hover:bg-blue-100">
-                <Bell className="h-4 w-4 text-blue-600" />
-              </button>
-            )}
-          />
+          <NotificationsBell />
 
           {/* User menu */}
           <DropdownMenu>

@@ -164,10 +164,6 @@ export default async function PricingPage({
       {/* ✅ Current Plan (col-12) */}
       {activePlanCode ? (
         <div className="mb-8">
-          <div className="text-sm font-medium text-gray-700 mb-3">
-            {locale === "fr" ? "Plan actuel" : "Current Plan"}
-          </div>
-
           <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
             <div className="p-6 md:p-7 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="space-y-1">
