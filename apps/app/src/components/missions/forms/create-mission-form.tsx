@@ -638,7 +638,7 @@ export function CreateMissionForm({
                       setEditingTitle(false);
                     }}
                   >
-                    {t("common.save")}
+                    {t("common.generate")}
                   </Button>
                 </div>
               </div>
@@ -687,7 +687,7 @@ export function CreateMissionForm({
                   <span>{t("common.formSaving")}</span>
                 </span>
               ) : (
-                t("common.save")
+                t("common.generate")
               )}
             </Button>
           </div>

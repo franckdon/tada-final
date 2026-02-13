@@ -1,9 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { getUnitPriceUSD, type PlanCode } from "@/lib/plans/plan-limits";
+import { getUnitPriceXOF, type PlanCode } from "@/lib/plans/plan-limits";
 import { buildPaystackReference } from "@/lib/payments/paystack/reference";
-import {
-  buildWorkspaceCreditsPurchaseMetadata,
-} from "@/lib/credits/purchase-metadata";
+import { buildWorkspaceCreditsPurchaseMetadata } from "@/lib/credits/purchase-metadata";
 import {
   buildPaystackInitializePayload,
   type PaystackInitializePayload,
@@ -38,10 +36,10 @@ type PrepareOutput = {
 
     credits: number;
 
-    unitPriceUsdCents: number;
-    totalAmountUsdCents: number;
+    unitPriceXof: number;
+    totalAmountXof: number;
 
-    currency: "USD";
+    currency: "XOF";
     provider: "paystack";
     providerRef: string;
     providerStatus: "pending";
@@ -76,18 +74,23 @@ export async function prepareWorkspaceCreditsPurchase(
     throw new Error("credits must be > 0");
   }
 
-  // 1) compute unit price (USD) -> cents
-  const unitPriceUsd = getUnitPriceUSD({
+  // 1) compute unit price (XOF)
+  const unitPriceXof = getUnitPriceXOF({
     planCode: input.workspacePlanCode,
     credits,
   });
 
-  if (!Number.isFinite(unitPriceUsd) || unitPriceUsd <= 0) {
+  if (!Number.isFinite(unitPriceXof) || unitPriceXof <= 0) {
     throw new Error("Invalid unit price computed");
   }
 
-  const unitPriceUsdCents = Math.round(unitPriceUsd * 100);
-  const totalAmountUsdCents = unitPriceUsdCents * credits;
+  // int safety
+  const safeUnitPriceXof = Math.trunc(unitPriceXof);
+  const totalAmountXof = safeUnitPriceXof * credits;
+
+  if (!Number.isFinite(totalAmountXof) || totalAmountXof <= 0) {
+    throw new Error("Invalid total amount computed");
+  }
 
   // 2) build paystack reference (idempotency key on provider side)
   const providerRef = buildPaystackReference({
@@ -97,24 +100,24 @@ export async function prepareWorkspaceCreditsPurchase(
   });
 
   // 3) metadata snapshot (also used later when crediting the ledger)
+  // ⚠️ ton helper doit accepter les champs XOF ci-dessous
   const metadata = buildWorkspaceCreditsPurchaseMetadata({
     workspaceId: input.workspaceId,
     organizationId: input.organizationId,
     credits,
-    unitPriceUsdCents,
-    totalAmountUsdCents,
+    unitPriceXof: safeUnitPriceXof,
+    totalAmountXof,
+    currency: "XOF",
     workspacePlanCode: input.workspacePlanCode,
     pricingTier: input.pricingTier ?? null,
     providerRef,
   });
 
-  // 4) callback URL (front page OR api route later)
-  // Here we point to a *page* route you can create later; for now it's just a predictable URL.
+  // 4) callback URL
   const callbackUrl = `${input.appOrigin}/billing/paystack/callback?reference=${encodeURIComponent(
     providerRef,
   )}`;
 
-  // 5) Persist purchase intent as PENDING
   // 5) Persist purchase intent as PENDING (idempotent)
   const row = await prisma.workspaceCreditPurchase.upsert({
     where: { providerRef },
@@ -123,21 +126,21 @@ export async function prepareWorkspaceCreditsPurchase(
       organizationId: input.organizationId,
       planCode: input.workspacePlanCode,
       credits,
-      unitPriceUsd: unitPriceUsdCents,
-      totalAmountUsd: totalAmountUsdCents,
-      currency: "USD",
+      unitPriceXof: safeUnitPriceXof,
+      totalAmountXof,
+      currency: "XOF",
       provider: "paystack",
       providerRef,
       providerStatus: "pending",
       metadata,
     },
     update: {
-      // On met à jour le snapshot (au cas où credits/plan/pricingTier change)
       planCode: input.workspacePlanCode,
       credits,
-      unitPriceUsd: unitPriceUsdCents,
-      totalAmountUsd: totalAmountUsdCents,
-      providerStatus: "pending", // si tu veux forcer pending tant que pas payé
+      unitPriceXof: safeUnitPriceXof,
+      totalAmountXof,
+      currency: "XOF",
+      providerStatus: "pending",
       metadata,
     },
     select: {
@@ -146,8 +149,8 @@ export async function prepareWorkspaceCreditsPurchase(
       organizationId: true,
       planCode: true,
       credits: true,
-      unitPriceUsd: true,
-      totalAmountUsd: true,
+      unitPriceXof: true,
+      totalAmountXof: true,
       currency: true,
       provider: true,
       providerRef: true,
@@ -158,13 +161,16 @@ export async function prepareWorkspaceCreditsPurchase(
     },
   });
 
-
   // 6) Build Paystack initialize payload (no HTTP call here)
+  // Paystack expects amount in subunits => XOF * 100
+  const paystackAmount = Math.trunc(totalAmountXof * 100);
+
   const payload = buildPaystackInitializePayload({
     customerEmail: input.customerEmail,
     reference: providerRef,
     callbackUrl,
-    totalAmountUsdCents,
+    amount: paystackAmount,
+    currency: "XOF",
     metadata,
   });
 
@@ -175,9 +181,9 @@ export async function prepareWorkspaceCreditsPurchase(
       organizationId: row.organizationId,
       planCode: (row.planCode as PlanCode | null) ?? null,
       credits: row.credits,
-      unitPriceUsdCents: row.unitPriceUsd,
-      totalAmountUsdCents: row.totalAmountUsd,
-      currency: "USD",
+      unitPriceXof: row.unitPriceXof,
+      totalAmountXof: row.totalAmountXof,
+      currency: "XOF",
       provider: "paystack",
       providerRef: row.providerRef,
       providerStatus: "pending",

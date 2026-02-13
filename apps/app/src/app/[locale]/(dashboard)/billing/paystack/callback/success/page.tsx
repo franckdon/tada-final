@@ -41,7 +41,7 @@ export default function PaystackBillingSuccessPage() {
   const orgId = organizations?.[0]?.id ?? null;
 
   const dashboardHref = useMemo(() => {
-    if (orgId) return `/market-beats/${orgId}`;
+    if (orgId) return `/`;
     return "/";
   }, [orgId]);
 

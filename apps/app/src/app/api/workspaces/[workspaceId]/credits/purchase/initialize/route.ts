@@ -26,8 +26,10 @@ export async function POST(
   const { workspaceId } = await ctx.params;
   const body = (await req.json().catch(() => ({}))) as Body;
 
-  const purchaseId = typeof body.purchaseId === "string" ? body.purchaseId : null;
-  const reference = typeof body.reference === "string" ? body.reference : null;
+  const purchaseId =
+    typeof body.purchaseId === "string" ? body.purchaseId : null;
+  const reference =
+    typeof body.reference === "string" ? body.reference : null;
 
   if (!purchaseId && !reference) {
     return jsonError("purchaseId or reference is required");
@@ -44,7 +46,7 @@ export async function POST(
 
   if (!purchase) return jsonError("Purchase not found", 404);
 
-  // (Optionnel) empêcher relance si déjà payé
+  // empêcher relance si déjà payé
   if (purchase.providerStatus === "paid") {
     return jsonError("Purchase already paid", 409);
   }
@@ -59,11 +61,29 @@ export async function POST(
     purchase.providerRef,
   )}`;
 
+  // ✅ IMPORTANT: On paie en XOF, donc on doit envoyer un montant XOF (subunit)
+  // Assumptions (aligné avec ton PrepareResponse):
+  // - purchase.totalAmountXof existe en DB/Prisma et représente le total en XOF (ex: 510000)
+  // - Paystack attend amount en subunit => XOF * 100
+  const totalAmountXof = Number((purchase as any).totalAmountXof);
+  if (!Number.isFinite(totalAmountXof) || totalAmountXof <= 0) {
+    return jsonError("Invalid purchase totalAmountXof", 400);
+  }
+
+  // Paystack expects subunits (x100)
+  const paystackAmount = Math.trunc(totalAmountXof * 100);
+
+  const email =
+    (purchase.metadata as any)?.customerEmail ??
+    session.user.email ??
+    undefined;
+
+  if (!email) return jsonError("Missing customer email", 400);
+
   const payload = {
-    email: (purchase.metadata as any)?.customerEmail ?? session.user.email,
-    amount: purchase.totalAmountUsd, // cents
-    //currency: purchase.currency ?? "USD",
-    currency: "XOF", 
+    email,
+    amount: paystackAmount,
+    currency: "XOF",
     reference: purchase.providerRef,
     callback_url: callbackUrl,
     metadata: {
@@ -72,10 +92,13 @@ export async function POST(
       organizationId: purchase.organizationId,
       planCode: purchase.planCode,
       credits: purchase.credits,
+      // debug / audit (optionnel)
+      totalAmountXof,
+      paystackAmount,
     },
   };
 
-  // 3) Appeler Paystack initialize (exemple)
+  // 3) Appeler Paystack initialize
   const secret = process.env.PAYSTACK_SECRET_KEY;
   if (!secret) return jsonError("Missing PAYSTACK_SECRET_KEY", 500);
 
@@ -91,12 +114,19 @@ export async function POST(
   const json = await res.json().catch(() => ({} as any));
 
   if (!res.ok || !json?.status) {
-    // log utile
-    console.error("[paystack.initialize] failed", { status: res.status, json });
+    console.error("[paystack.initialize] failed", {
+      status: res.status,
+      json,
+      payload: {
+        ...payload,
+        // évite de leak l’email dans les logs si tu veux
+        email: email ? "[redacted]" : null,
+      },
+    });
     return jsonError(json?.message || "Paystack initialize failed", 502);
   }
 
-  // 4) Optionnel: marquer “initialized” + stocker réponse
+  // 4) Marquer “pending” + stocker réponse
   const prevMeta =
     purchase.metadata && typeof purchase.metadata === "object"
       ? (purchase.metadata as Record<string, any>)
@@ -111,6 +141,7 @@ export async function POST(
         paystack: {
           ...(prevMeta.paystack ?? {}),
           initialize: json,
+          payload, // optionnel: garder le payload exact envoyé
         },
       },
     },

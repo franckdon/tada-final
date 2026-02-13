@@ -123,7 +123,7 @@ export function PaymentModal({
 
   const {
     credits,
-    unitPrice, // ✅ unitPrice = XOF / crédit
+    unitPrice,
     currency,
     workspaceId: storeWorkspaceId,
     setCurrency,
@@ -131,10 +131,7 @@ export function PaymentModal({
 
   const effectiveWorkspaceId = (storeWorkspaceId || workspaceId || "").trim();
 
-  // force XOF
   if (currency !== "XOF") {
-    // évite des effets de bord : on aligne dès l’ouverture
-    // (si tu préfères, tu peux déplacer dans un useEffect)
     setCurrency("XOF");
   }
 

@@ -36,6 +36,7 @@ export default {
     },
   },
   common: {
+    generate: "Générer les questions",
     formSaving: "Génération des questions...",
     search: {
       placeholder: "Rechercher...",

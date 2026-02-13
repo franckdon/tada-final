@@ -1280,12 +1280,13 @@ model WorkspaceCreditPurchase {
   workspaceId    String @db.Uuid
   organizationId String @db.Text
 
-  planCode       String? @db.VarChar(32)
-  credits        Int
-  unitPriceUsd   Int
-  totalAmountUsd Int
+  planCode String? @db.VarChar(32)
+  credits  Int
 
-  currency String @default("USD") @db.VarChar(3)
+  unitPriceXof   Int @map("unit_price_xof")
+  totalAmountXof Int @map("total_amount_xof")
+
+  currency String @default("XOF") @db.VarChar(3)
 
   provider       String @default("paystack") @db.VarChar(32)
   providerRef    String @unique @db.VarChar(80)

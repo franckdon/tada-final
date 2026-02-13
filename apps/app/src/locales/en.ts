@@ -34,6 +34,7 @@ export default {
     },
   },
   common: {
+    generate: "Generate questions",
     search: {
       placeholder: "Search...",
     },

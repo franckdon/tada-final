@@ -6,7 +6,7 @@ import { actionClient } from "../safe-action";
 
 const schema = z.object({
   limit: z.number().min(1).max(50).default(10),
-  cursor: z.string().optional(), // pagination cursor sur id
+  cursor: z.string().optional(),
 });
 
 export const getNotificationsAction = actionClient

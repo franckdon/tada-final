@@ -125,12 +125,6 @@ export function CreditsModal({
     storeWorkspaceId || workspaceIdProp || "",
   ).trim();
 
-  // ✅ credits safe
-  const safeCredits =
-    typeof credits === "number" && Number.isFinite(credits)
-      ? Math.max(0, Math.trunc(credits))
-      : 0;
-
   const pathname = usePathname();
   const locale = React.useMemo<"fr" | "en">(() => {
     const seg = pathname.split("/")[1] || "fr";
@@ -151,6 +145,17 @@ export function CreditsModal({
       setWorkspaceId(workspaceIdProp);
     }
   }, [workspaceIdProp, storeWorkspaceId, setWorkspaceId]);
+
+  React.useEffect(() => {
+    if (
+      credits == null ||
+      !Number.isFinite(Number(credits)) ||
+      Number(credits) < MIN_CREDITS
+    ) {
+      setCredits(MIN_CREDITS);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fetch plans list (display only)
   React.useEffect(() => {
@@ -178,9 +183,21 @@ export function CreditsModal({
     };
   }, [locale]);
 
+  const MIN_CREDITS = 1;
+
+  // ✅ credits safe (>= 1)
+  const safeCredits =
+    typeof credits === "number" && Number.isFinite(credits)
+      ? Math.max(MIN_CREDITS, Math.trunc(credits))
+      : MIN_CREDITS;
+
+  // ✅ au changement
   const handleCreditsChange = (value: string) => {
     const n = Number(value);
-    setCredits(Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0);
+    const next = Number.isFinite(n)
+      ? Math.max(MIN_CREDITS, Math.trunc(n))
+      : MIN_CREDITS;
+    setCredits(next);
   };
 
   // ✅ UI pricing (client-only preview) — XOF
@@ -283,7 +300,26 @@ export function CreditsModal({
                 {t("researchAsYouGo.title")}
               </h3>
 
-              <div className="space-y-2">
+              {/* ✅ Sticky pricing summary */}
+              <div className="sticky top-0 z-10 -mx-4 px-4 pt-2 pb-3 bg-white border-b">
+                <div className="text-xs text-gray-500">
+                  Tarif: <strong>{planLabel}</strong>
+                  {planHint ? <span className="ml-1">— {planHint}</span> : null}
+                </div>
+
+                <div className="mt-1 text-sm text-gray-600">
+                  {t("researchAsYouGo.totalHT")}{" "}
+                  <strong>{formatMoneyXOF(totalXof, locale)}</strong>
+                </div>
+
+                <div className="mt-1 text-xs text-gray-500">
+                  Prix unitaire :{" "}
+                  <strong>{formatMoneyXOF(unitPrice, locale)}</strong> / crédit
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="pt-3 space-y-2">
                 <label className="text-sm text-gray-600">
                   {t("researchAsYouGo.creditCount")}
                 </label>
@@ -293,29 +329,9 @@ export function CreditsModal({
                   value={safeCredits}
                   onChange={(e) => handleCreditsChange(e.target.value)}
                   className="h-9"
-                  min={0}
+                  min={1}
                   step={1}
                 />
-
-                <div className="text-xs text-gray-500">
-                  Tarif: <strong>{planLabel}</strong>
-                  {planHint ? <span className="ml-1">— {planHint}</span> : null}
-                </div>
-
-                <div className="text-sm text-gray-600">
-                  {t("researchAsYouGo.totalHT")}{" "}
-                  <strong>{formatMoneyXOF(totalXof, locale)}</strong>
-                </div>
-
-                {safeCredits > 0 ? (
-                  <div className="text-xs text-gray-500 space-y-1">
-                    <div>
-                      Prix unitaire :{" "}
-                      <strong>{formatMoneyXOF(unitPrice, locale)}</strong> /
-                      crédit
-                    </div>
-                  </div>
-                ) : null}
 
                 {prepareError ? (
                   <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
@@ -329,24 +345,20 @@ export function CreditsModal({
                     <strong>{prepared.purchase.providerRef}</strong>
                   </div>
                 ) : null}
-              </div>
 
-              <Button
-                className="mt-4 w-full"
-                onClick={async () => {
-                  try {
-                    const preparedData = await preparePurchase();
-                    handleAsYouGo(preparedData);
-                  } catch {
-                    // error déjà affichée
-                  }
-                }}
-                disabled={
-                  safeCredits <= 0 || isPreparing || !effectiveWorkspaceId
-                }
-              >
-                {isPreparing ? "Préparation..." : commonT("next")}
-              </Button>
+                <Button
+                  className="mt-2 w-full"
+                  onClick={async () => {
+                    try {
+                      const preparedData = await preparePurchase();
+                      handleAsYouGo(preparedData);
+                    } catch {}
+                  }}
+                  disabled={isPreparing || !effectiveWorkspaceId}
+                >
+                  {isPreparing ? "Préparation..." : commonT("next")}
+                </Button>
+              </div>
             </div>
 
             {/* Plans */}

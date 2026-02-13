@@ -5,8 +5,8 @@ import { applyWorkspaceCreditsFromPurchase } from "@/utils/apply-workspace-credi
 
 export const runtime = "nodejs";
 
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
+function jsonError(message: string, status = 400, extra?: Record<string, any>) {
+  return NextResponse.json({ ok: false, error: message, ...extra }, { status });
 }
 
 type PaystackVerifyResponse = {
@@ -41,18 +41,19 @@ async function handleVerify(reference: string) {
       workspaceId: true,
       organizationId: true,
       credits: true,
-      currency: true,
-      totalAmountUsd: true,
       providerStatus: true,
       metadata: true,
       createdAt: true,
-      updatedAt: true,
+
+      // ✅ XOF columns
+      totalAmountXof: true,
+      unitPriceXof: true,
     },
   });
 
   if (!purchase) return jsonError("Purchase not found", 404);
 
-  // ✅ If already paid, still ensure credits are applied (idempotent)
+  // Idempotent: if already marked paid, still apply credits safely
   if (purchase.providerStatus === "paid") {
     const applied = await applyWorkspaceCreditsFromPurchase({
       purchaseId: purchase.id,
@@ -70,9 +71,8 @@ async function handleVerify(reference: string) {
     });
   }
 
-  const url = `https://api.paystack.co/transaction/verify/${encodeURIComponent(
-    reference,
-  )}`;
+  // ---- Call Paystack verify
+  const url = `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`;
 
   const psRes = await fetch(url, {
     method: "GET",
@@ -86,23 +86,29 @@ async function handleVerify(reference: string) {
   const psJson = (await psRes.json().catch(() => ({}))) as PaystackVerifyResponse;
 
   if (!psRes.ok || !psJson?.status) {
-    console.error("[paystack.verify] failed", { http: psRes.status, psJson });
-    return jsonError(psJson?.message || "Paystack verify failed", 502);
+    console.error("[paystack.verify] failed", { reference, http: psRes.status, psJson });
+    return jsonError(psJson?.message || "Paystack verify failed", 502, {
+      reference,
+      paystackHttp: psRes.status,
+      paystack: psJson,
+    });
   }
 
   const data = psJson.data;
-  if (!data) return jsonError("Paystack response missing data", 502);
+  if (!data) return jsonError("Paystack response missing data", 502, { reference, paystack: psJson });
 
   const paystackStatus = data.status;
-  const paystackAmount = Number(data.amount);
+  const paystackAmount = Number(data.amount); // subunits
   const paystackCurrency = (data.currency ?? "").toUpperCase();
 
-  const expectedAmount = purchase.totalAmountUsd;
-  const expectedCurrency = (purchase.currency ?? "USD").toUpperCase();
+  // ✅ Expected: XOF subunits = XOF * 100
+  const expectedCurrency = "XOF";
+  const expectedAmount = Number(purchase.totalAmountXof ?? 0) * 100;
 
   const amountOk = paystackAmount === expectedAmount;
   const currencyOk = paystackCurrency === expectedCurrency;
 
+  // Persist verify payload for audit/debug
   const prevMeta =
     purchase.metadata && typeof purchase.metadata === "object"
       ? (purchase.metadata as Record<string, any>)
@@ -124,6 +130,22 @@ async function handleVerify(reference: string) {
     },
   });
 
+  // ✅ If paid but mismatch, we STOP (security)
+  if (isPaid && (!amountOk || !currencyOk)) {
+    return jsonError("payment_mismatch", 409, {
+      reference,
+      checks: {
+        amountOk,
+        currencyOk,
+        expectedAmount,
+        paystackAmount,
+        expectedCurrency,
+        paystackCurrency,
+      },
+    });
+  }
+
+  // Apply credits if paid + OK
   let applied: any = null;
   if (isPaid) {
     applied = await applyWorkspaceCreditsFromPurchase({
@@ -132,6 +154,9 @@ async function handleVerify(reference: string) {
       actorUserId: null,
       paystackVerifyPayload: psJson,
     });
+  } else {
+    // Not paid => return 409 so callback redirects to error with reason
+    return jsonError("not_paid", 409, { reference, status: paystackStatus });
   }
 
   return NextResponse.json({
@@ -139,7 +164,7 @@ async function handleVerify(reference: string) {
     reference,
     purchaseId: purchase.id,
     status: paystackStatus,
-    applied, // ✅ return it so you can see if credits were applied
+    applied,
     checks: {
       amountOk,
       currencyOk,
@@ -157,7 +182,8 @@ async function handleVerify(reference: string) {
       workspaceId: purchase.workspaceId,
       organizationId: purchase.organizationId,
       credits: purchase.credits,
-      providerStatusBefore: purchase.providerStatus,
+      totalAmountXof: purchase.totalAmountXof,
+      unitPriceXof: purchase.unitPriceXof,
       createdAt: purchase.createdAt.toISOString(),
     },
   });
