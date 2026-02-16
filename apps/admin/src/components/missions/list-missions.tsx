@@ -55,6 +55,12 @@ export function ListMissions({
     }
   }, [inView]);
 
+  console.log(
+    "soumisions",
+    missions.map((mission) =>
+      mission.surveys.map((survey) => survey.responses),
+    ),
+  );
   return (
     <div className="flex flex-col space-y-4 items-end">
       <div className="w-full rounded-lg border border-gray-100 bg-white dark:bg-gray-900 shadow-sm p-5">

@@ -66,9 +66,16 @@ Rules for form filling:
   field="targetSampleSize" and value=<number>
 - For the audience step, you MUST call the tool open_audiences_modal to display a "Click here" button.
 
-When (and only when) you have ALL info above:
-- Ask: "${confirmQuestion}"
-- End that message with exactly: [[READY_TO_FILL_FORM]]
+Form filling behavior (incremental):
+- As soon as the user provides a clear answer for a field, you MUST call the tool set_form_field.
+- Fields mapping:
+  - Business context + problem => problemSummary
+  - Objectives => objectives
+  - Hypotheses => assumptions
+  - Mission name => name
+  - Target sample size => targetSampleSize (number)
+- If the user is uncertain, ask 1–2 clarifying questions BEFORE setting the field.
+- You may revise a field later if the user corrects it (call set_form_field again).
 `);
 
   return null;
@@ -130,6 +137,44 @@ export function CreateMissionCard({
                   : "Select your audience"}
               </button>
             </div>
+          ),
+        },
+        set_form_field: {
+          description: "Set a form field value",
+          parameters: {
+            type: "object",
+            properties: {
+              field: { type: "string" },
+              value: {},
+            },
+            required: ["field", "value"],
+          },
+          execute: async ({ field, value }: { field: string; value: any }) => {
+            const allowed = new Set([
+              "name",
+              "problemSummary",
+              "objectives",
+              "assumptions",
+              "targetSampleSize",
+              "sampleSummary",
+              "preliminaryRecommendations",
+              "studyStructure",
+            ]);
+            if (!allowed.has(field)) return;
+
+            const normalized =
+              field === "targetSampleSize"
+                ? value === "" || value == null
+                  ? undefined
+                  : Number(value)
+                : String(value ?? "");
+
+            form.setValue(field as any, normalized, { shouldDirty: true });
+          },
+          render: ({ field, value }: any) => (
+            <p className="text-xs text-gray-500">
+              Field updated: <b>{field}</b>
+            </p>
           ),
         },
       },

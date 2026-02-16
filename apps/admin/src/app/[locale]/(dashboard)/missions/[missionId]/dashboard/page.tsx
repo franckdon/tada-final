@@ -29,17 +29,14 @@ export const metadata = {
 export default async function Page({
   params,
 }: {
-  params: { orgId: string; missionId: string };
+  params: { missionId: string };
 }) {
-  const missionIdMock = "e7e2c79d-9a07-400b-8aac-458d96e3aae0";
   const mission = await prisma.mission.findUnique({
-    where: { id: missionIdMock },
+    where: { id: params.missionId },
     select: {
       id: true,
       name: true,
       status: true,
-      createdAt: true,
-      updatedAt: true,
       surveys: {
         select: {
           questions: true,

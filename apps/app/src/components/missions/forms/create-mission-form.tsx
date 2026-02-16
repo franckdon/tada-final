@@ -1,3 +1,6 @@
+// src/app/[locale]/(dashboard)/missions/create/forms/create-mission-form.tsx
+"use client";
+
 import { createMissionAction } from "@/actions/missions/create-mission-action";
 import { generateMissionBriefAIAction } from "@/actions/missions/generate-mission-brief-ai";
 import { createMissionSchema } from "@/actions/missions/schema";
@@ -7,19 +10,18 @@ import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/locales/client";
 import { Button } from "@tada/ui/components/button";
 import { FormControl, FormField, FormItem } from "@tada/ui/components/form";
+import { Input } from "@tada/ui/components/input";
 import { useThread } from "@assistant-ui/react";
 import { Edit } from "lucide-react";
 import { useAction } from "next-safe-action/hooks";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useFormContext } from "react-hook-form";
-import { Input } from "@tada/ui/components/input";
 
 import { useBoolean } from "@/hooks/use-boolean";
 import { useWorkspaceCredits } from "@/hooks/use-workspace-credits";
 import { useWorkspaceCreditsStore } from "@/hooks/use-workspace-credit-store";
 import { InsufficientCreditsModal } from "../modals/insufficient-credits-modal";
-
 import { useCreditsPurchaseFlowStore } from "@/stores/useCreditsPurchaseFlowStore";
 
 interface Section {
@@ -35,7 +37,7 @@ interface Section {
 
 type ThreadMessage = {
   role: "user" | "assistant" | string;
-  content?: Array<{ type: string; text?: string }>;
+  content?: any; // assistant-ui can store parts here
   id?: string;
   messageId?: string;
 };
@@ -63,18 +65,6 @@ const extractTextFromMessage = (msg: any): string => {
 
   return "";
 };
-
-function buildTranscript(messages: readonly ThreadMessage[]) {
-  return messages
-    .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m) => {
-      const txt = extractTextFromMessage(m).trim();
-      if (!txt) return null;
-      return `${m.role.toUpperCase()}: ${txt}`;
-    })
-    .filter((x): x is string => Boolean(x))
-    .join("\n\n");
-}
 
 function renderBulletedList(text: string): JSX.Element {
   if (!text) return <></>;
@@ -104,6 +94,99 @@ function renderBulletedList(text: string): JSX.Element {
   );
 }
 
+/**
+ * ✅ Robust tool-events extractor.
+ * Supports several ai-sdk / assistant-ui formats:
+ * - { type: "tool-result", toolName, result }
+ * - { type: "tool-call", toolName, args }
+ * - { type: "tool", name, input } / { type: "tool", toolName, args }
+ */
+function extractToolEvents(messages: readonly ThreadMessage[]) {
+  const events: Array<{
+    name: string;
+    args?: any;
+    result?: any;
+    _id?: string;
+  }> = [];
+
+  for (const m of messages) {
+    if (m.role !== "assistant") continue;
+
+    // ✅ assistant-ui format
+    const inv = (m as any).toolInvocations;
+    if (Array.isArray(inv)) {
+      for (const t of inv) {
+        const name = t?.toolName ?? t?.name;
+        if (!name) continue;
+        events.push({
+          name,
+          args: t.args ?? t.input,
+          result: t.result ?? t.output ?? t.data,
+          _id: t.toolCallId ?? t.id,
+        });
+      }
+    }
+
+    // ✅ fallback content[] formats
+    const parts = (m as any).content;
+    if (!Array.isArray(parts)) continue;
+
+    for (const p of parts) {
+      const name = p?.toolName ?? p?.name ?? p?.tool?.name ?? p?.call?.name;
+      if (!name) continue;
+
+      if (p.type === "tool-result") {
+        events.push({
+          name,
+          result: p.result ?? p.output ?? p.data,
+          _id: p.toolCallId ?? p.id,
+        });
+      } else if (p.type === "tool-call") {
+        events.push({
+          name,
+          args: p.args ?? p.input,
+          _id: p.toolCallId ?? p.id,
+        });
+      }
+    }
+  }
+
+  return events;
+}
+
+function parseDirectives(text: string) {
+  const actions: Array<
+    | { type: "set"; field: string; value: any }
+    | { type: "open_audiences_modal" }
+  > = [];
+
+  if (!text) return actions;
+
+  // [[OPEN_AUDIENCES_MODAL]]
+  if (text.includes("[[OPEN_AUDIENCES_MODAL]]")) {
+    actions.push({ type: "open_audiences_modal" });
+  }
+
+  // [[SET_FIELD field="xxx" value="yyy"]]
+  // value peut être "..." ou un number sans quotes
+  const re =
+    /\[\[SET_FIELD\s+field="([^"]+)"\s+value=(?:"([^"]*)"|([0-9]+))\s*\]\]/g;
+
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const field = m[1];
+    const strVal = m[2];
+    const numVal = m[3];
+    const value =
+      typeof numVal === "string" && numVal.length
+        ? Number(numVal)
+        : (strVal ?? "");
+    actions.push({ type: "set", field, value });
+  }
+
+  return actions;
+}
+
 export function CreateMissionForm({
   organization,
   workspaceId,
@@ -119,6 +202,7 @@ export function CreateMissionForm({
   const { toast } = useToast();
   const router = useRouter();
   const form = useFormContext();
+
   const searchParams = useSearchParams();
   const templateId = searchParams.get("t");
   const mode = searchParams.get("mode");
@@ -134,29 +218,15 @@ export function CreateMissionForm({
   const [editingSection, setEditingSection] = useState<number | null>(null);
   const [tempContent, setTempContent] = useState("");
 
-  const [lastSyncedAssistantId, setLastSyncedAssistantId] = useState<
-    string | null
-  >(null);
-
   // Credits
   useWorkspaceCredits(workspaceId);
-
   const balance = useWorkspaceCreditsStore((s) => s.balance);
   const subscription = useWorkspaceCreditsStore((s) => s.subscription);
   const loadingCredits = useWorkspaceCreditsStore((s) => s.loading);
 
-  /**
-   * ✅ IMPORTANT: ne jamais mettre "true" par défaut si status est null/undefined
-   * Sinon tu bypass le check crédits sans le vouloir.
-   *
-   * Règle métier:
-   * - plan actif payant => pas de check crédits
-   * - sinon => check crédits (balance)
-   */
   const planCode = (subscription?.planCode ?? "").toLowerCase();
   const planLabel = (subscription?.planLabel ?? "").toLowerCase();
 
-  // adapte ces valeurs à tes vrais codes/labels
   const isFreePlan =
     planCode === "free" ||
     planCode === "trial" ||
@@ -204,6 +274,10 @@ export function CreateMissionForm({
     },
   });
 
+  /**
+   * Optional: keep the batch generator only if you want a "Generate full brief" button later.
+   * IMPORTANT: we do NOT auto-run it from chat anymore, otherwise it will fill everything at the end.
+   */
   const generateBrief = useAction(generateMissionBriefAIAction, {
     onSuccess: (res) => {
       const brief = res.data?.data;
@@ -215,7 +289,6 @@ export function CreateMissionForm({
       });
       form.setValue("objectives", brief.objectives, { shouldDirty: true });
       form.setValue("assumptions", brief.assumptions, { shouldDirty: true });
-
       form.setValue("sampleSummary", brief.sampleSummary, {
         shouldDirty: true,
       });
@@ -225,23 +298,11 @@ export function CreateMissionForm({
       form.setValue(
         "preliminaryRecommendations",
         brief.preliminaryRecommendations,
-        {
-          shouldDirty: true,
-        },
+        { shouldDirty: true },
       );
       form.setValue("studyStructure", brief.studyStructure, {
         shouldDirty: true,
       });
-
-      setSections((prev) =>
-        prev.map((s) => {
-          if (["problemSummary", "objectives", "assumptions"].includes(s.key)) {
-            const v = (form.getValues(s.key) as string) ?? "";
-            return { ...s, content: v, status: v ? "completed" : "pending" };
-          }
-          return s;
-        }),
-      );
 
       toast({
         title: t("missions.createMission.form.aiBriefFilled"),
@@ -334,6 +395,7 @@ export function CreateMissionForm({
   };
 
   const hasAnyAudiences = activeFiltersCount > 0 || suggestions.length > 0;
+
   const onSubmit = async (values: any) => {
     if (!hasAnyAudiences) {
       toast({
@@ -345,38 +407,25 @@ export function CreateMissionForm({
         variant: "destructive",
       });
 
-      onOpenAudiencesModal(); // ✅ ouvre direct le modal
+      onOpenAudiencesModal();
       return;
     }
-    // 1) Récupérer sample depuis values (plus fiable que getValues ici)
+
     const sample = Number(values?.targetSampleSize ?? 0);
     const available = typeof balance === "number" ? balance : 0;
 
-    // 2) Si crédits encore en chargement => on bloque strictement (anti bypass)
     if (loadingCredits) {
       toast({
         title:
           locale === "fr" ? "Vérification des crédits…" : "Checking credits…",
         description:
-          locale === "fr"
-            ? "Réessaie dans un instant."
-            : "Try again in a moment.",
+          locale === "fr" ? "Réessaie dans un instant." : "Try again.",
       });
       return;
     }
 
-    // 3) Si pas de plan payant actif => check crédits
     if (!hasPaidActivePlan && sample > 0) {
       const required = sample * CREDITS_PER_SAMPLE;
-
-      // DEBUG (à garder 1 minute, puis enlever)
-      // console.log("[MISSION CREDITS CHECK]", {
-      //   sample,
-      //   required,
-      //   available,
-      //   hasPaidActivePlan,
-      //   subscription,
-      // });
 
       if (required > available) {
         setRequestedSample(sample);
@@ -393,20 +442,16 @@ export function CreateMissionForm({
           variant: "destructive",
         });
 
-        // ✅ ouvre le flow d’achat (dans le Header)
         openCreditsModal({
           requiredCredits: required,
           requestedSample: sample,
         });
 
-        // (optionnel) ton modal “InsufficientCreditsModal” local, si tu veux garder le récap
         insufficientCreditsModal.onTrue();
-
         return;
       }
     }
 
-    // 4) OK => création mission
     createMission.execute(
       createMissionSchema.parse({
         ...values,
@@ -423,103 +468,50 @@ export function CreateMissionForm({
   const thread = useThread();
   const threadMessages = (thread?.messages ?? []) as readonly ThreadMessage[];
 
-  const lastAssistant = useMemo(() => {
-    return [...threadMessages].reverse().find((m) => m.role === "assistant");
-  }, [threadMessages]);
-
-  const lastAssistantText = useMemo(() => {
-    return lastAssistant ? extractTextFromMessage(lastAssistant) : "";
-  }, [lastAssistant]);
+  // ✅ INCREMENTAL APPLY (dedupe) — useRef to avoid infinite re-render loop
+  // ✅ DEDUPE : éviter de ré-appliquer les mêmes directives
+  const appliedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    const log = (...args: any[]) => console.log("[AI FILL]", ...args);
+    if (!isAiMode) return;
+    if (!threadMessages.length) return;
 
-    if (!isAiMode) return log("skip: not AI mode");
-    if (!threadMessages.length) return log("skip: no thread messages yet");
-
-    const READY_RE = /\[\[READY_TO_FILL_FORM\]\]/i;
-
-    const CONFIRM_RE =
-      /\b(yes|yeah|yep|ok|okay|sure|confirmed|go ahead|do it|sounds good|looks good|oui|d['’]accord|ok|vas-y|c['’]est bon|parfait)\b/i;
-
-    let askedIndex = -1;
-    for (let i = threadMessages.length - 1; i >= 0; i--) {
-      const msg = threadMessages[i];
+    // on parcourt les messages assistant
+    for (const msg of threadMessages) {
       if (msg.role !== "assistant") continue;
-      const text = extractTextFromMessage(msg);
-      if (READY_RE.test(text)) {
-        askedIndex = i;
-        break;
+
+      const txt = extractTextFromMessage(msg);
+      if (!txt) continue;
+
+      const actions = parseDirectives(txt);
+      for (const a of actions) {
+        const key = JSON.stringify({ id: msg.id ?? msg.messageId, a });
+        if (appliedRef.current.has(key)) continue;
+
+        if (a.type === "open_audiences_modal") {
+          onOpenAudiencesModal();
+        } else if (a.type === "set") {
+          const { field, value } = a;
+
+          if (field === "targetSampleSize") {
+            form.setValue(
+              field as any,
+              value == null || value === "" ? undefined : Number(value),
+              { shouldDirty: true },
+            );
+          } else {
+            form.setValue(field as any, String(value ?? ""), {
+              shouldDirty: true,
+            });
+          }
+        }
+
+        appliedRef.current.add(key);
       }
     }
+  }, [isAiMode, threadMessages, form, onOpenAudiencesModal]);
 
-    if (askedIndex === -1) return log("skip: READY token not found");
-
-    const after = threadMessages.slice(askedIndex + 1);
-
-    const confirmMsg = after.find((m) => {
-      if (m.role !== "user") return false;
-      const userText = extractTextFromMessage(m).trim();
-      return CONFIRM_RE.test(userText);
-    });
-
-    if (!confirmMsg) return log("skip: no user confirmation after READY");
-
-    const assistantMsg = threadMessages[askedIndex];
-
-    const assistantId =
-      (assistantMsg as any).id ??
-      (assistantMsg as any).messageId ??
-      `assistant-${askedIndex}`;
-
-    if (assistantId === lastSyncedAssistantId) {
-      return log("already synced for assistantId:", assistantId);
-    }
-
-    if (generateBrief.status === "executing") return log("skip: executing");
-
-    const transcript = buildTranscript(threadMessages);
-
-    setLastSyncedAssistantId(assistantId);
-
-    toast({
-      title:
-        locale === "fr"
-          ? "Génération du brief en cours…"
-          : "Generating the brief…",
-      description:
-        locale === "fr"
-          ? "Je remplis automatiquement le formulaire à partir de la conversation."
-          : "I'm filling the form from the conversation.",
-    });
-
-    generateBrief.execute({
-      locale,
-      transcript,
-      currentBrief: {
-        name: form.getValues("name"),
-        problemSummary: form.getValues("problemSummary"),
-        objectives: form.getValues("objectives"),
-        assumptions: form.getValues("assumptions"),
-        sampleSummary: form.getValues("sampleSummary"),
-        preliminaryRecommendations: form.getValues(
-          "preliminaryRecommendations",
-        ),
-        studyStructure: form.getValues("studyStructure"),
-      },
-      audiences: selectedFilters,
-    });
-  }, [
-    isAiMode,
-    threadMessages,
-    lastSyncedAssistantId,
-    generateBrief.status,
-    locale,
-    toast,
-    form,
-    selectedFilters,
-  ]);
-
+  // Click outside handlers
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
@@ -550,6 +542,7 @@ export function CreateMissionForm({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [editingTitle, tempTitle]);
 
+  // Sync sections with form values
   useEffect(() => {
     const subscription = form.watch((values: any) => {
       if (values?.name) setTitle(values.name);
@@ -575,15 +568,21 @@ export function CreateMissionForm({
   }, [form]);
 
   useEffect(() => {
-    const hasAnyAudiences = activeFiltersCount > 0 || suggestions.length > 0;
+    const has = activeFiltersCount > 0 || suggestions.length > 0;
     setSections((prev) =>
       prev.map((s) =>
         s.key === "audiences"
-          ? { ...s, status: hasAnyAudiences ? "completed" : "pending" }
+          ? { ...s, status: has ? "completed" : "pending" }
           : s,
       ),
     );
   }, [activeFiltersCount, suggestions.length]);
+
+  useEffect(() => {
+    if (!isAiMode) return;
+    const last = threadMessages[threadMessages.length - 1];
+    console.log("[THREAD LAST MSG RAW]", last);
+  }, [isAiMode, threadMessages]);
 
   return (
     <>
@@ -664,10 +663,19 @@ export function CreateMissionForm({
               {t("missions.createMission.form.researchMarket")}
             </span>
 
-            {/* (Optionnel) indicateur debug */}
-            {/* <div className="mt-2 text-xs text-gray-400">
-              Plan actif payant: {String(hasPaidActivePlan)} | Balance: {balance}
-            </div> */}
+            {/* Optional: manual full brief */}
+            {/* <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => {
+                // You can still do a manual full generation if you want.
+                // generateBrief.execute({ ... })
+              }}
+            >
+              Générer le brief complet
+            </Button> */}
           </div>
 
           <div className="flex flex-col gap-2 items-end">
@@ -699,8 +707,8 @@ export function CreateMissionForm({
             <span>
               {t("missions.createMission.form.aiBriefGenerating") ??
                 (locale === "fr"
-                  ? "Brief en cours de génération à partir de la conversation…"
-                  : "Generating the brief from the conversation…")}
+                  ? "Brief en cours de génération…"
+                  : "Generating the brief…")}
             </span>
           </div>
         )}
@@ -888,7 +896,7 @@ export function CreateMissionForm({
                     <FormField
                       control={form.control}
                       defaultValue={tempContent}
-                      name={section.key}
+                      name={section.key as any}
                       render={({ field }) => (
                         <FormItem>
                           <FormControl>

@@ -1,3 +1,4 @@
+//src/app/[locale]/(dashboard)/missions/[missionId]/page.tsx
 import { ListBoardsServer } from "@/components/missions/boards/list-boards-server";
 import { NavigationBarMission } from "@/components/missions/navigation-bar-mission";
 import { ReportView } from "@/components/missions/report-view";
@@ -32,31 +33,33 @@ export default async function Page({
   }
 
   const mission = await prisma.mission.findUnique({
-    where: { id: params?.missionId },
+    where: { id: params.missionId },
     select: {
       id: true,
       name: true,
       status: true,
       createdAt: true,
       updatedAt: true,
-      surveys: true,
+      surveys: { select: { id: true, questions: true } },
+    },
+  });
+
+  if (!mission) return notFound();
+
+  const surveyIds = mission.surveys.map((s) => s.id);
+
+  const { start, end } = getDateRange("last_year");
+
+  const surveyResponses = await prisma.surveyResponse.findMany({
+    where: {
+      surveyId: { in: surveyIds },
+      createdAt: { gte: start, lte: end },
     },
   });
 
   if (!mission) {
     return notFound();
   }
-
-  const { start, end } = getDateRange("last_year");
-
-  const surveyResponses = await prisma.surveyResponse.findMany({
-    where: {
-      createdAt: {
-        gte: start,
-        lte: end,
-      },
-    },
-  });
 
   const subDashboards = await prisma.subDashboard.findMany({
     where: {
@@ -85,7 +88,8 @@ export default async function Page({
   const locationMap = new Map<string, MapLocation>();
 
   surveyResponses.forEach((resp) => {
-    const loc = resp.location as any;
+    const raw = resp.location as any;
+    const loc = typeof raw === "string" ? JSON.parse(raw) : raw;
     const label = loc.label;
     const lng = loc.lng;
     const lat = loc.lat;
