@@ -55,7 +55,7 @@ export default function MissionDashboardClient({
       ...q,
       activeFilter: "standard",
       isSorted: false,
-    }))
+    })),
   );
 
   const [activeBubbleQuestionKey, setActiveBubbleQuestionKey] = useState<
@@ -78,12 +78,12 @@ export default function MissionDashboardClient({
       window.dispatchEvent(
         new CustomEvent("scroll-to-question", {
           detail: { questionKey: question.question },
-        })
+        }),
       );
     }
 
     setActiveBubbleQuestionKey((prev) =>
-      prev === question.question ? null : question.question
+      prev === question.question ? null : question.question,
     );
   };
 
@@ -99,7 +99,7 @@ export default function MissionDashboardClient({
   const getQuestionConfig = useCallback(
     (questionId: string) => {
       const q = questions.find(
-        (q) => q.chartId === questionId || q.question === questionId
+        (q) => q.chartId === questionId || q.question === questionId,
       );
       if (!q) return undefined;
 
@@ -110,7 +110,7 @@ export default function MissionDashboardClient({
         currentSorted: q.isSorted,
       };
     },
-    [questions]
+    [questions],
   );
 
   const handleApply = useCallback(
@@ -134,11 +134,11 @@ export default function MissionDashboardClient({
                 activeFilter: filter,
                 isSorted,
               }
-            : q
-        )
+            : q,
+        ),
       );
     },
-    []
+    [],
   );
 
   const exportQuestionCsv = (q: QuestionWithView) => {
@@ -227,7 +227,7 @@ export default function MissionDashboardClient({
   return (
     <>
       {questions
-        .filter((question) => question.participants_responded > 0)
+        //.filter((question) => question.participants_responded > 0)
         .map((question, index) => {
           const commentCount =
             commentCountsByQuestion?.[question.question] ?? 0;
@@ -235,7 +235,7 @@ export default function MissionDashboardClient({
           const participationLabel = `${index + 1} de ${
             questions.length
           } | ${question.participants_responded} Participants (${Math.round(
-            (question.participants_responded / totalResponses) * 100
+            (question.participants_responded / totalResponses) * 100,
           )}%)`;
 
           const renderInsights =

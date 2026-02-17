@@ -24,12 +24,14 @@ export const metadata = {
   title: "Mission | Tada",
 };
 
-export default async function Page({
-  params,
-}: {
-  params: { locale: string; workspaceId: string; missionId: string };
-}) {
-  const { missionId, workspaceId } = params;
+type PageParams = {
+  locale: string;
+  workspaceId: string;
+  missionId: string;
+};
+
+export default async function Page({ params }: { params: PageParams }) {
+  const { missionId, workspaceId } = await params;
 
   const mission = await prisma.mission.findUnique({
     where: { id: missionId },
@@ -46,7 +48,8 @@ export default async function Page({
           id: true,
           questions: true,
           responses: {
-            where: { status: "completed" },
+            //where: { status: "completed" },
+            where: { status: { in: ["submitted", "completed"] } },
             select: {
               id: true,
               responses: true,
