@@ -1972,3 +1972,16 @@ model withdrawal_request {
   @@index([accountPkId, createdAt(sort: Desc)], map: "idx_withdrawal_account_created")
   @@map("withdrawal_request")
 }
+
+model MissionReward {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id") @db.Uuid
+  missionId        String   @map("mission_id")
+  surveyResponseId String   @unique @map("survey_response_id")
+  amount           BigInt
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId], map: "idx_mission_reward_user_id")
+  @@index([missionId], map: "idx_mission_reward_mission_id")
+  @@map("mission_reward")
+}

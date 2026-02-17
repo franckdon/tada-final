@@ -1,3 +1,4 @@
+// src/app/[locale]/(dashboard)/missions/[missionId]/submissions/page.tsx
 import { prisma } from "@/lib/prisma";
 import { MissionSurveyResponseCard } from "@/components/missions/mission-survey-response-card";
 import { NoResults } from "@/components/contributors/empty-states";
@@ -16,12 +17,35 @@ interface MissionSubmissionsPageProps {
   };
 }
 
+type ValidationStatus = "pending" | "approved" | "rejected";
+
+function getValidationStatus(response: any): ValidationStatus {
+  // On ne touche pas survey_response.status (collecte)
+  // => validation = dernier validation_comment.action (si existe), sinon pending
+  const last = response.validation_comment?.[0]; // take: 1 + orderBy desc
+  if (last?.action === "approved") return "approved";
+  if (last?.action === "rejected") return "rejected";
+
+  // fallback optionnel (si tu as ce champ dans ta DB / select)
+  if (response.validatedAt) return "approved";
+
+  return "pending";
+}
+
+function isQcDone(qc: any): boolean {
+  return (
+    qc?.status === "accepted" ||
+    qc?.status === "review_required" ||
+    qc?.status === "rejected"
+  );
+}
+
 export default async function MissionSubmissionsPage({
   params,
 }: MissionSubmissionsPageProps) {
   const { missionId } = params;
 
-  // Récupérer les informations de la mission
+  // 1) Mission
   const mission = await prisma.mission.findUnique({
     where: { id: missionId },
     select: {
@@ -36,11 +60,11 @@ export default async function MissionSubmissionsPage({
     return <div>Mission non trouvée</div>;
   }
 
-  // Récupérer toutes les soumissions de cette mission
+  // 2) Responses (toutes les soumissions)
   const responses = await prisma.surveyResponse.findMany({
     where: {
       survey: {
-        missionId: missionId,
+        missionId,
       },
     },
     include: {
@@ -63,7 +87,11 @@ export default async function MissionSubmissionsPage({
           createdAt: true,
         },
       },
+
+      // ✅ IMPORTANT: on ne charge que le dernier commentaire (source de vérité validation)
       validation_comment: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
         select: {
           id: true,
           comment: true,
@@ -77,6 +105,7 @@ export default async function MissionSubmissionsPage({
           },
         },
       },
+
       qualityControl: {
         include: {
           qualityIssues: {
@@ -96,16 +125,6 @@ export default async function MissionSubmissionsPage({
     },
   });
 
-  // Calculer les statistiques
-  const stats = {
-    total: responses.length,
-    approved: responses.filter((r) => r.status === "approved").length,
-    pending: responses.filter((r) => r.status === "pending").length,
-    rejected: responses.filter((r) => r.status === "rejected").length,
-    uniqueContributors: new Set(responses.map((r) => r.userId).filter(Boolean))
-      .size,
-  };
-
   if (responses.length === 0) {
     return (
       <div className="space-y-6">
@@ -119,6 +138,26 @@ export default async function MissionSubmissionsPage({
       </div>
     );
   }
+
+  // 3) Stats (basées sur validation_comment, PAS survey_response.status)
+  const statuses = responses.map(getValidationStatus);
+
+  const stats = {
+    total: responses.length,
+    approved: statuses.filter((s) => s === "approved").length,
+    pending: statuses.filter((s) => s === "pending").length,
+    rejected: statuses.filter((s) => s === "rejected").length,
+
+    // “à valider” = pending + QC final (actionnable)
+    toReview: responses.filter((r) => {
+      const v = getValidationStatus(r);
+      return v === "pending" && isQcDone(r.qualityControl);
+    }).length,
+
+    uniqueContributors: new Set(
+      responses.map((r: any) => r.userId).filter(Boolean),
+    ).size,
+  };
 
   return (
     <div className="space-y-6">
@@ -176,6 +215,13 @@ export default async function MissionSubmissionsPage({
                 ? Math.round((stats.pending / stats.total) * 100)
                 : 0}
               % du total
+              {stats.toReview > 0 ? (
+                <>
+                  {" "}
+                  • <span className="font-medium">{stats.toReview}</span> à
+                  valider (QC OK)
+                </>
+              ) : null}
             </p>
           </CardContent>
         </Card>
@@ -199,12 +245,18 @@ export default async function MissionSubmissionsPage({
         </Card>
       </div>
 
-      {/* Filtres et actions (optionnel - peut être ajouté plus tard) */}
+      {/* Badges */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Badge variant="outline">{stats.total} soumissions</Badge>
-          {stats.pending > 0 && (
-            <Badge variant="secondary">{stats.pending} à valider</Badge>
+          {stats.toReview > 0 ? (
+            <Badge variant="secondary">{stats.toReview} à valider</Badge>
+          ) : stats.pending > 0 ? (
+            <Badge variant="secondary">{stats.pending} en attente</Badge>
+          ) : null}
+
+          {stats.rejected > 0 && (
+            <Badge variant="destructive">{stats.rejected} rejetées</Badge>
           )}
         </div>
       </div>
@@ -213,7 +265,7 @@ export default async function MissionSubmissionsPage({
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Historique des soumissions</h2>
         <div className="space-y-3">
-          {responses.map((response) => (
+          {responses.map((response: any) => (
             <MissionSurveyResponseCard
               key={response.id}
               response={response as any}

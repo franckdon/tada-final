@@ -40,6 +40,7 @@ export function ValidationDialog({
 
   const t = useI18n();
   const { data: session } = useSession();
+  const router = useRouter();
 
   const addCommentToSubmission = useAction(addCommentToSubmissionAction, {
     onSuccess: () => {
