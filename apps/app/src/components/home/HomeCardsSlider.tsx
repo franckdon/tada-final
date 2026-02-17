@@ -21,17 +21,17 @@ export function HomeCardsSlider({ slides }: { slides: Slide[] }) {
     const el = trackRef.current;
     if (!el) return;
 
-    // scroll ~ 1 card (adaptable)
-    const cardWidth =
-      el.querySelector<HTMLElement>("[data-card]")?.offsetWidth ?? 360;
-    const gap = 16;
-    const delta = cardWidth + gap;
+    // 👉 scroll = largeur visible (donc 3 cards d'un coup)
+    const delta = el.clientWidth;
 
-    el.scrollBy({ left: dir === "left" ? -delta : delta, behavior: "smooth" });
+    el.scrollBy({
+      left: dir === "left" ? -delta : delta,
+      behavior: "smooth",
+    });
   };
 
   return (
-    <div className="relative">
+    <section className="bg-white rounded-xl p-6">
       {/* Controls */}
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">What's New</h2>
@@ -41,7 +41,6 @@ export function HomeCardsSlider({ slides }: { slides: Slide[] }) {
             type="button"
             onClick={() => scrollByCards("left")}
             className="h-9 w-9 rounded-full border bg-white hover:bg-gray-50"
-            aria-label="Scroll left"
           >
             ←
           </button>
@@ -49,7 +48,6 @@ export function HomeCardsSlider({ slides }: { slides: Slide[] }) {
             type="button"
             onClick={() => scrollByCards("right")}
             className="h-9 w-9 rounded-full border bg-white hover:bg-gray-50"
-            aria-label="Scroll right"
           >
             →
           </button>
@@ -60,11 +58,8 @@ export function HomeCardsSlider({ slides }: { slides: Slide[] }) {
       <div
         ref={trackRef}
         className="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2"
-        style={{
-          scrollbarWidth: "none",
-        }}
+        style={{ scrollbarWidth: "none" }}
       >
-        {/* hide scrollbar (webkit) */}
         <style jsx>{`
           div::-webkit-scrollbar {
             display: none;
@@ -75,7 +70,7 @@ export function HomeCardsSlider({ slides }: { slides: Slide[] }) {
           <article
             key={idx}
             data-card
-            className="snap-start shrink-0 w-[320px] md:w-[420px] lg:w-[520px] rounded-xl border bg-white p-5"
+            className="snap-start shrink-0 w-full sm:w-[calc((100%-1rem)/2)] lg:w-[calc((100%-2rem)/3)] rounded-xl border bg-white p-5"
           >
             <div className="space-y-4">
               <div className="relative h-[180px] w-full overflow-hidden rounded-lg bg-gray-100">
@@ -84,30 +79,26 @@ export function HomeCardsSlider({ slides }: { slides: Slide[] }) {
                   alt={s.imageAlt}
                   fill
                   className="object-cover"
-                  sizes="(max-width: 768px) 320px, 520px"
                 />
               </div>
 
-              <div className="space-y-2">
-                <h3 className="text-base md:text-lg font-bold text-gray-900">
-                  {s.title}
-                </h3>
-                <p className="text-sm md:text-base text-gray-600">
-                  {s.description}
-                </p>
-              </div>
+              <h3 className="text-base md:text-lg font-bold text-gray-900">
+                {s.title}
+              </h3>
 
-              {s.ctaHref && s.ctaLabel ? (
+              <p className="text-sm md:text-base text-gray-600">
+                {s.description}
+              </p>
+
+              {s.ctaHref && s.ctaLabel && (
                 <Button className="text-white">
-                  <Link href={s.ctaHref} target="_blank">
-                    {s.ctaLabel}
-                  </Link>
+                  <Link href={s.ctaHref}>{s.ctaLabel}</Link>
                 </Button>
-              ) : null}
+              )}
             </div>
           </article>
         ))}
       </div>
-    </div>
+    </section>
   );
 }

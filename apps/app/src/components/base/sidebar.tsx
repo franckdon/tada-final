@@ -185,28 +185,6 @@ export function Sidebar() {
           target: "_self",
           disabled: true,
         },
-      ],
-    },
-    {
-      title: t("navigation.knowledge"),
-      items: [
-        {
-          icon: <BadgeInfo className="h-5 w-5" />,
-          text: t("navigation.help"),
-          href: "https://helpdesk.tadaiq.com",
-          target: "_blank",
-        },
-        {
-          icon: <Contact className="h-5 w-5" />,
-          text: t("navigation.contactUs"),
-          href: "https://chat.whatsapp.com/GCQzxT0DYS81eMzse5l9Pa?mode=r_t",
-          target: "_blank",
-        },
-      ],
-    },
-    {
-      title: t("navigation.settings"),
-      items: [
         {
           icon: <Settings className="h-5 w-5" />,
           text: t("navigation.accountSettings"),
@@ -215,6 +193,34 @@ export function Sidebar() {
         },
       ],
     },
+    // {
+    //   title: t("navigation.knowledge"),
+    //   items: [
+    //     {
+    //       icon: <BadgeInfo className="h-5 w-5" />,
+    //       text: t("navigation.help"),
+    //       href: "https://helpdesk.tadaiq.com",
+    //       target: "_blank",
+    //     },
+    //     {
+    //       icon: <Contact className="h-5 w-5" />,
+    //       text: t("navigation.contactUs"),
+    //       href: "https://chat.whatsapp.com/GCQzxT0DYS81eMzse5l9Pa?mode=r_t",
+    //       target: "_blank",
+    //     },
+    //   ],
+    // },
+    // {
+    //   title: t("navigation.settings"),
+    //   items: [
+    //     {
+    //       icon: <Settings className="h-5 w-5" />,
+    //       text: t("navigation.accountSettings"),
+    //       href: `/${currentLocale}/settings/profile`,
+    //       target: "_self",
+    //     },
+    //   ],
+    // },
   ];
 
   const handleSignOut = async () => {

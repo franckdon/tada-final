@@ -10,7 +10,7 @@ const configurationSchema = z.object({
   missionId: z.string().min(1, "ID de mission requis."),
   
   // Paramètres publics et financiers
-  imageUrl: z.string().url("URL de l'image de mission invalide.").min(1, "L'image est obligatoire."),
+  imageUrl: z.string().min(1, "L'image est obligatoire."),
   publicTitle: z.string().min(5, "Le titre public est trop court."),
   publicDescription: z.string().min(20, "La description publique est trop courte."),
   gain: z.number().int().min(1, "Le gain doit être supérieur à zéro."),

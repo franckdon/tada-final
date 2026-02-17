@@ -1,3 +1,4 @@
+//src/lib/uploads.public.ts
 import { UPLOAD_CONFIG, isHttpUrl, type UploadCategory } from "./uploads.config";
 
 /**
