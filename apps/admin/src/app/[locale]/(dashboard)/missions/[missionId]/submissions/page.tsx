@@ -237,7 +237,7 @@ export default async function MissionSubmissionsPage({
             </div>
             <p className="text-xs text-muted-foreground">
               {stats.uniqueContributors > 0
-                ? (stats.total / stats.uniqueContributors).toFixed(1)
+                ? (stats.total / stats.uniqueContributors).toFixed(0)
                 : 0}{" "}
               soumissions/contributeur
             </p>

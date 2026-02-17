@@ -46,14 +46,6 @@ import { useAction } from "next-safe-action/hooks";
 import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
 
-/**
- * ✅ LOG TOP-LEVEL (si tu ne le vois pas => mauvais fichier / mauvais import)
- */
-console.log("🚨 LOADED MissionSurveyResponseCard MODULE", {
-  file: "mission-survey-response-card.tsx",
-  ts: Date.now(),
-});
-
 interface QualityControl {
   id: string;
   status: "pending" | "analyzing" | "accepted" | "review_required" | "rejected";
@@ -174,16 +166,6 @@ export function MissionSurveyResponseCard({
 }: MissionSurveyResponseCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
-
-  // ✅ logs garantis navigateur si le composant hydrate
-  useEffect(() => {
-    console.log("🔥 MissionSurveyResponseCard MOUNTED", {
-      responseId: response.id,
-      missionId,
-      collecteStatus: response.status,
-      ts: Date.now(),
-    });
-  }, [response.id, missionId, response.status]);
 
   // ✅ vrai statut validation dérivé
   const validationStatus = useMemo(

@@ -6,7 +6,7 @@ import { authActionClient } from "../safe-action";
 import { addCommentToSubmission } from "./schema";
 import { saveContributorDataAction } from "../contributor-data/save-contributor-data-action";
 
-const WALLET_PROVIDER_ID = "mobile";
+const WALLET_PROVIDER_ID = "mobile_credentials";
 
 export const addCommentToSubmissionAction = authActionClient
   .schema(addCommentToSubmission)
@@ -18,7 +18,6 @@ export const addCommentToSubmissionAction = authActionClient
     }) => {
       try {
         const txResult = await prisma.$transaction(async (tx) => {
-          // 1) Upsert last validation comment
           const existingComment = await tx.validationComment.findFirst({
             where: { survey_response_id: surveyResponseId },
             orderBy: { createdAt: "desc" },
