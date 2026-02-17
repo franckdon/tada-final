@@ -66,6 +66,7 @@ model User {
   contributorProfile                 ContributorProfile?
   contributorAttributeValues         ContributorAttributeValue[]
   contributorProfileModuleProgresses ContributorProfileModuleProgress[]
+  withdrawalRequests                 withdrawal_request[]
 
   @@map("user")
 }
@@ -886,6 +887,7 @@ model account {
   currency                    String                        @default("XOF") @db.VarChar(3)
   user                        User                          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_account_user")
   account_balance_transaction account_balance_transaction[]
+  withdrawalRequests          withdrawal_request[]
 
   @@unique([providerId, accountId], map: "uniq_account_provider_account")
   @@unique([userId, providerId], map: "uniq_account_user_provider")
@@ -1177,23 +1179,24 @@ model payemts_contibutor {
 }
 
 model payout_account {
-  id        String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  userId    String
-  type      String    @db.VarChar(20)
-  label     String    @db.VarChar(80)
-  provider  String?   @db.VarChar(40)
-  country   String?   @db.VarChar(2)
-  dialCode  String?   @db.VarChar(6)
-  phone     String?   @db.VarChar(25)
-  bankName  String?   @db.VarChar(120)
-  rib       String?   @db.VarChar(64)
-  iban      String?   @db.VarChar(34)
-  bic       String?   @db.VarChar(11)
-  isDefault Boolean   @default(false)
-  createdAt DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime  @default(now()) @db.Timestamptz(6)
-  deletedAt DateTime? @db.Timestamptz(6)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                 String               @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId             String
+  type               String               @db.VarChar(20)
+  label              String               @db.VarChar(80)
+  provider           String?              @db.VarChar(40)
+  country            String?              @db.VarChar(2)
+  dialCode           String?              @db.VarChar(6)
+  phone              String?              @db.VarChar(25)
+  bankName           String?              @db.VarChar(120)
+  rib                String?              @db.VarChar(64)
+  iban               String?              @db.VarChar(34)
+  bic                String?              @db.VarChar(11)
+  isDefault          Boolean              @default(false)
+  createdAt          DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime             @default(now()) @db.Timestamptz(6)
+  deletedAt          DateTime?            @db.Timestamptz(6)
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  withdrawalRequests withdrawal_request[]
 
   @@index([userId, createdAt(sort: Desc)], map: "idx_payout_account_user_created")
   @@index([userId, isDefault], map: "idx_payout_account_user_default")
@@ -1920,4 +1923,52 @@ model Invoice {
   @@unique([workspaceCreditTransactionId], map: "uniq_invoice_wct")
   @@unique([workspacePlanSubscriptionId], map: "uniq_invoice_wps")
   @@map("invoice")
+}
+
+// --------------------
+// Demande de retrait
+// --------------------
+
+enum WithdrawalStatus {
+  pending // créé par l’utilisateur, en attente
+  approved // validé par admin (prêt à payer)
+  rejected // refusé par admin
+  paid // payout exécuté (optionnel si tu fais le paiement plus tard)
+  canceled // annulé par user (optionnel)
+}
+
+model withdrawal_request {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  userId          String @map("user_id") @db.Uuid
+  accountPkId     String @map("account_pk_id") @db.Uuid
+  payoutAccountId String @map("payout_account_id") // adapte type si uuid en DB
+
+  amount   BigInt
+  currency String @default("XOF") @db.VarChar(3)
+
+  status WithdrawalStatus @default(pending)
+
+  payoutSnapshot Json? @map("payout_snapshot") @db.Json
+
+  reviewedById    String?   @map("reviewed_by_id")
+  reviewedAt      DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  rejectionReason String?   @map("rejection_reason") @db.VarChar(500)
+
+  paidAt      DateTime? @map("paid_at") @db.Timestamptz(6)
+  providerRef String?   @map("provider_ref") @db.VarChar(120)
+
+  idempotencyKey String? @unique @map("idempotency_key") @db.VarChar(120)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  account       account        @relation(fields: [accountPkId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  payoutAccount payout_account @relation(fields: [payoutAccountId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([userId, createdAt(sort: Desc)], map: "idx_withdrawal_user_created")
+  @@index([status, createdAt(sort: Desc)], map: "idx_withdrawal_status_created")
+  @@index([accountPkId, createdAt(sort: Desc)], map: "idx_withdrawal_account_created")
+  @@map("withdrawal_request")
 }

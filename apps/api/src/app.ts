@@ -16,6 +16,7 @@ import { mobileAccountRoutes } from "./routes/v1/mobile/account/account.routes";
 import { mobilePayoutAccountsRoutes } from "./routes/v1/mobile/payout-accounts/payout-accounts.routes";
 import { profileModulesRewardsRoutes } from "./routes/v1/mobile/rewards/profile-modules/reward.routes";
 import { contributorModulesRoutes } from "./routes/v1/mobile/contributor/modules/modules.routes";
+import { mobileWithdrawalsRoutes } from "./routes/v1/mobile/withdrawals/withdrawals.routes";
 
 export const app = openapi;
 
@@ -49,6 +50,9 @@ app.route("/v1/mobile/payout-accounts", mobilePayoutAccountsRoutes);
 // rewards
 app.route("/v1/mobile/contributor/modules", contributorModulesRoutes);
 app.route("/v1/mobile/rewards/profile-modules", profileModulesRewardsRoutes);
+
+// withdrawals
+app.route("/v1/mobile/withdrawals", mobileWithdrawalsRoutes);
 
 // Swagger UI
 app.get(

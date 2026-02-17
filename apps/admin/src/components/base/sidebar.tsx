@@ -45,6 +45,7 @@ import {
   FolderKanban,
   MessageCircleQuestionMark,
   Newspaper,
+  BanknoteArrowDown,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -138,6 +139,11 @@ export function Sidebar() {
           icon: <Newspaper className="h-5 w-5" />,
           text: "Blogs & Topics",
           href: "/blog",
+        },
+        {
+          icon: <BanknoteArrowDown className="h-5 w-5" />,
+          text: "Demande de retraits",
+          href: "/withdrawals",
         },
       ],
     },
