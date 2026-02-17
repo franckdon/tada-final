@@ -20,10 +20,10 @@ export async function GET(req: Request) {
       where: { id: missionId },
       include: {
         organization: { select: { name: true } },
-        survey: {
+        surveys: {
           select: {
             name: true,
-            response: true,
+            responses: true,
           },
         },
       },
@@ -53,8 +53,8 @@ export async function GET(req: Request) {
 
     allRows.push(missionHeaderRow);
 
-    mission.survey.forEach((survey) => {
-      survey.response.forEach((res) => {
+    mission.surveys.forEach((survey) => {
+      survey.responses.forEach((res) => {
         const baseRow = {
           [t("export.columns.mission")]: "",
           [t("export.columns.organization")]: "",

@@ -843,13 +843,13 @@ interface PrismaSurvey {
   id: string;
   name: string;
   questions: any; // JSON
-  response: PrismaSurveyResponse[];
+  responses: PrismaSurveyResponse[];
 }
 
 interface PrismaMission {
   id: string;
   name: string;
-  survey: PrismaSurvey[];
+  surveys: PrismaSurvey[];
 }
 
 export function convertPrismaSurveyToSurveyData(
@@ -857,10 +857,10 @@ export function convertPrismaSurveyToSurveyData(
 ): SurveyData {
   if (!mission.surveys || mission.surveys.length === 0) {
     throw new Error("No survey found in mission");
-  }
+  } 
 
-  const survey = mission.surveys[0]; // Assuming one survey per mission
-  const surveyResponses = survey?.response || [];
+  const survey = mission.surveys[0];
+  const surveyResponses = survey?.responses || [];
 
   if (!surveyResponses || surveyResponses.length === 0) {
     throw new Error("No responses found in survey");

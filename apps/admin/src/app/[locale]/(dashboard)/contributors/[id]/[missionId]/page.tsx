@@ -27,7 +27,7 @@ export default async function SurveyResponsesList({
           description: true,
         },
       },
-      validationComment: {
+      validation_comment: {
         select: {
           id: true,
           comment: true,

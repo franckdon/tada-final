@@ -1,3 +1,4 @@
+// src/components/workspaces/workspace-subscription-tab.tsx
 "use client";
 
 import * as React from "react";
@@ -27,11 +28,32 @@ import SubscriptionInvoiceDownloadButton from "./subscription-invoice-download";
 
 const PLAN_CODES = ["starter", "growth", "business", "entreprise"] as const;
 
+const UNIT_PRICE_XOF = 9000;
+
+type PaymentMethod = "cash" | "cheque" | "bank_transfer" | "mobile_money";
+
+const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string }> = [
+  { value: "cash", label: "Espèce" },
+  { value: "cheque", label: "Chèque" },
+  { value: "bank_transfer", label: "Virement" },
+  { value: "mobile_money", label: "Mobile Money" },
+];
+
 const formatDate = (d?: Date | string | null) => {
   if (!d) return "—";
   const date = typeof d === "string" ? new Date(d) : d;
   return date.toLocaleDateString("fr-FR");
 };
+
+function formatXof(n: number) {
+  const value = Number.isFinite(n) ? n : 0;
+  // XOF : 0 décimales
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "XOF",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
 
 // ------------------------------
 // ✅ Helper UI: 2 choix seulement
@@ -124,6 +146,15 @@ export default function WorkspaceSubscriptionTab({
     (subscription?.overrides ?? {}) as PlanOverrides,
   );
 
+  // ---- Billing (for invoice) ----
+  const [paymentMethod, setPaymentMethod] =
+    React.useState<PaymentMethod>("cash");
+
+  const [creditsQty, setCreditsQty] = React.useState<number>(1);
+
+  const [amountXof, setAmountXof] = React.useState<number>(UNIT_PRICE_XOF);
+  const [amountTouched, setAmountTouched] = React.useState(false);
+
   const [isSaving, setIsSaving] = React.useState(false);
 
   // --------- ACTIVE STATE ----------
@@ -172,18 +203,50 @@ export default function WorkspaceSubscriptionTab({
   const canDisable = hasSubscription && subscription?.status === "active";
   const canEnable = hasSubscription && subscription?.status !== "active";
 
+  // ---- Auto amount (9000 * credits) for non-entreprise unless user touched ----
+  React.useEffect(() => {
+    if (planCode === "entreprise") return;
+    if (amountTouched) return;
+
+    const qty = Number.isFinite(creditsQty) && creditsQty > 0 ? creditsQty : 1;
+    setAmountXof(qty * UNIT_PRICE_XOF);
+  }, [creditsQty, planCode, amountTouched]);
+
+  React.useEffect(() => {
+    // when switching plan: reset amountTouched logic
+    setAmountTouched(false);
+    if (planCode === "entreprise") {
+      // no default for enterprise
+      setAmountXof(0);
+    } else {
+      const qty =
+        Number.isFinite(creditsQty) && creditsQty > 0 ? creditsQty : 1;
+      setAmountXof(qty * UNIT_PRICE_XOF);
+    }
+  }, [planCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // --------- API CALLS ----------
   const callAssign = async () => {
+    const qty = Number.isFinite(creditsQty) && creditsQty > 0 ? creditsQty : 1;
+
+    const payload = {
+      planCode,
+      note: note || null,
+      overrides: planCode === "entreprise" ? overrides : null,
+      billing: {
+        paymentMethod,
+        creditsQty: qty,
+        unitPriceXof: UNIT_PRICE_XOF,
+        amountXof,
+      },
+    };
+
     const res = await fetch(
       `/api/workspaces/${workspaceId}/subscription/assign`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          planCode,
-          note: note || null,
-          overrides: planCode === "entreprise" ? overrides : null,
-        }),
+        body: JSON.stringify(payload),
       },
     );
 
@@ -194,7 +257,30 @@ export default function WorkspaceSubscriptionTab({
     return json;
   };
 
+  const validateBillingBeforeSubmit = () => {
+    const qty = Number.isFinite(creditsQty) ? creditsQty : 0;
+    if (qty <= 0) return "La quantité de crédits doit être supérieure à 0.";
+
+    if (planCode === "entreprise") {
+      if (!Number.isFinite(amountXof) || amountXof <= 0) {
+        return "Pour ENTREPRISE, le montant est obligatoire et doit être > 0.";
+      }
+    } else {
+      if (!Number.isFinite(amountXof) || amountXof <= 0) {
+        return "Le montant doit être supérieur à 0.";
+      }
+    }
+
+    return null;
+  };
+
   const assignPlan = async () => {
+    const err = validateBillingBeforeSubmit();
+    if (err) {
+      toast({ title: "Erreur", description: err, variant: "destructive" });
+      return;
+    }
+
     setIsSaving(true);
     try {
       await callAssign();
@@ -215,6 +301,12 @@ export default function WorkspaceSubscriptionTab({
   };
 
   const changePlan = async () => {
+    const err = validateBillingBeforeSubmit();
+    if (err) {
+      toast({ title: "Erreur", description: err, variant: "destructive" });
+      return;
+    }
+
     setIsSaving(true);
     try {
       await callAssign();
@@ -386,6 +478,107 @@ export default function WorkspaceSubscriptionTab({
               </div>
               <div className="mt-1 text-xs text-gray-500">
                 Quota du plan sélectionné (pas le solde “Points actuels”).
+              </div>
+            </div>
+          </div>
+
+          {/* BILLING (FACTURE) */}
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-gray-900">
+                  Facturation (facture PDF)
+                </div>
+                <div className="mt-1 text-xs text-gray-600">
+                  Quantité = crédits, PU = 9 000 XOF. Montant modifiable avant
+                  attribution.
+                </div>
+              </div>
+              <Badge variant="outline">Invoice</Badge>
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              <div>
+                <div className="mb-2 text-sm text-gray-700">
+                  Mode de paiement
+                </div>
+                <Select
+                  value={paymentMethod}
+                  onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Choisir" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_METHODS.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <div className="mb-2 text-sm text-gray-700">
+                    Quantité (crédits)
+                  </div>
+                  <Input
+                    className="h-11"
+                    type="number"
+                    min={1}
+                    value={creditsQty}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setCreditsQty(Number.isFinite(v) ? v : 1);
+                    }}
+                  />
+                  <div className="mt-1 text-xs text-gray-500">
+                    Crédits ajoutés au workspace après attribution.
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-2 text-sm text-gray-700">
+                    Prix unitaire (XOF)
+                  </div>
+                  <Input
+                    className="h-11"
+                    value={formatXof(UNIT_PRICE_XOF)}
+                    readOnly
+                  />
+                  <div className="mt-1 text-xs text-gray-500">
+                    Fixé à 9 000 XOF / crédit.
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 text-sm text-gray-700">
+                  Montant total (XOF)
+                  {planCode === "entreprise" ? " — obligatoire" : ""}
+                </div>
+                <Input
+                  className="h-11"
+                  type="number"
+                  min={0}
+                  value={amountXof}
+                  onChange={(e) => {
+                    setAmountTouched(true);
+                    const v = Number(e.target.value);
+                    setAmountXof(Number.isFinite(v) ? v : 0);
+                  }}
+                  placeholder={
+                    planCode === "entreprise" ? "Ex: 250000" : undefined
+                  }
+                />
+                <div className="mt-1 text-xs text-gray-500">
+                  Affiché sur la facture. Valeur actuelle:{" "}
+                  <span className="font-semibold text-gray-900">
+                    {formatXof(amountXof)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>

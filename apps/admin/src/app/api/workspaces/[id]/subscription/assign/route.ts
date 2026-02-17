@@ -5,14 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { addMonths } from "@/lib/dates";
 import type { PlanOverrides } from "@/lib/plans/plan-overrides";
-import { getMonthlyCredits } from "@/lib/plans/credits";
 import type { PlanCode, LimitValue, BoolValue } from "@/lib/plans/plan-limits";
 import { ensureInvoiceForPlanSubscription } from "@/lib/billing/invoice-service";
 
 /**
  * Validation alignée sur plan-limits.ts
- * LimitValue = number | "unlimited" | "custom"
- * BoolValue  = boolean | "custom"
  */
 function isLimitValue(v: unknown): v is LimitValue {
   return (
@@ -23,7 +20,7 @@ function isLimitValue(v: unknown): v is LimitValue {
 }
 
 function assertLimitValue(name: string, v: unknown) {
-  if (v === undefined) return; // override absent => ok
+  if (v === undefined) return;
   if (!isLimitValue(v)) {
     throw new Error(`${name} must be number>=0 | "unlimited" | "custom"`);
   }
@@ -39,6 +36,19 @@ function assertBoolValue(name: string, v: unknown) {
     throw new Error(`${name} must be boolean | "custom"`);
   }
 }
+
+type PaymentMethod = "cash" | "cheque" | "bank_transfer" | "mobile_money";
+
+function isPaymentMethod(v: unknown): v is PaymentMethod {
+  return (
+    v === "cash" ||
+    v === "cheque" ||
+    v === "bank_transfer" ||
+    v === "mobile_money"
+  );
+}
+
+const UNIT_PRICE_XOF = 9000;
 
 export async function POST(
   req: Request,
@@ -57,8 +67,43 @@ export async function POST(
     const overrides = (body.overrides ?? null) as PlanOverrides | null;
     const note = body.note ? String(body.note).trim() : null;
 
+    const billing = body.billing ?? null;
+    const paymentMethod = billing?.paymentMethod as unknown;
+    const creditsQty = Number(billing?.creditsQty ?? 0);
+    const unitPriceXof = Number(billing?.unitPriceXof ?? UNIT_PRICE_XOF);
+    const amountXof = Number(billing?.amountXof ?? 0);
+
     if (!planCode) {
       return NextResponse.json({ error: "planCode is required" }, { status: 400 });
+    }
+
+    // billing validation
+    if (!isPaymentMethod(paymentMethod)) {
+      return NextResponse.json({ error: "paymentMethod is invalid" }, { status: 400 });
+    }
+    if (!Number.isFinite(creditsQty) || creditsQty <= 0) {
+      return NextResponse.json({ error: "creditsQty must be > 0" }, { status: 400 });
+    }
+    if (!Number.isFinite(unitPriceXof) || unitPriceXof <= 0) {
+      return NextResponse.json({ error: "unitPriceXof must be > 0" }, { status: 400 });
+    }
+
+    if (planCode === "entreprise") {
+      if (!Number.isFinite(amountXof) || amountXof <= 0) {
+        return NextResponse.json(
+          { error: "For entreprise, amountXof is required and must be > 0" },
+          { status: 400 },
+        );
+      }
+    } else {
+      // non entreprise: if amountXof missing, compute default (unitPrice * qty)
+      // but you also allow custom amount.
+      if (!Number.isFinite(amountXof) || amountXof <= 0) {
+        return NextResponse.json(
+          { error: "amountXof must be > 0 (you can override default in UI)" },
+          { status: 400 },
+        );
+      }
     }
 
     // ✅ sécurité : overrides uniquement pour entreprise
@@ -68,37 +113,21 @@ export async function POST(
     if (planCode === "entreprise" && safeOverrides) {
       assertLimitValue("overrides.respondentCompletes", safeOverrides.respondentCompletes);
       assertLimitValue("overrides.deploymentLocations", safeOverrides.deploymentLocations);
-      assertLimitValue(
-        "overrides.surveyVerificationRounds",
-        safeOverrides.surveyVerificationRounds,
-      );
+      assertLimitValue("overrides.surveyVerificationRounds", safeOverrides.surveyVerificationRounds);
       assertLimitValue("overrides.questionsPerSurvey", safeOverrides.questionsPerSurvey);
-      assertLimitValue(
-        "overrides.segmentationDimensions",
-        safeOverrides.segmentationDimensions,
-      );
+      assertLimitValue("overrides.segmentationDimensions", safeOverrides.segmentationDimensions);
       assertLimitValue("overrides.userSeats", safeOverrides.userSeats);
-      assertLimitValue(
-        "overrides.proprietaryDashboardsAccess",
-        safeOverrides.proprietaryDashboardsAccess,
-      );
+      assertLimitValue("overrides.proprietaryDashboardsAccess", safeOverrides.proprietaryDashboardsAccess);
 
-      assertBoolValue(
-        "overrides.surveyTemplateLibraryAndImport",
-        safeOverrides.surveyTemplateLibraryAndImport,
-      );
+      assertBoolValue("overrides.surveyTemplateLibraryAndImport", safeOverrides.surveyTemplateLibraryAndImport);
     }
 
     // Mensuel: dates
     const startsAt = body.startsAt ? new Date(body.startsAt) : new Date();
     const endsAt = addMonths(startsAt, 1);
 
-    // Crédit mensuel selon plan + overrides
-    const creditsToGrant = getMonthlyCredits(planCode, safeOverrides);
-
     const assignedByUserId = session.user.id;
 
-    // Vérifier workspace (sans charger account ici pour éviter état stale)
     const ws = await prisma.workspace.findUnique({
       where: { id: workspaceId },
       select: { id: true },
@@ -108,10 +137,7 @@ export async function POST(
       return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
     }
 
-    /**
-     * ✅ RECOMMANDÉ : Upsert subscription HORS transaction
-     * -> évite de faire expirer une transaction interactive sur un simple upsert.
-     */
+    // 1) upsert subscription
     const sub = await prisma.workspacePlanSubscription.upsert({
       where: { workspaceId },
       create: {
@@ -132,7 +158,7 @@ export async function POST(
         endsAt,
         source: "manual",
         note,
-        overrides: safeOverrides, // ✅ persist
+        overrides: safeOverrides,
         assignedByUserId,
         updatedAt: new Date(),
       },
@@ -151,11 +177,12 @@ export async function POST(
       },
     });
 
+    // 2) invoice upsert/update (XOF)
     const invoice = await ensureInvoiceForPlanSubscription({
       workspaceId,
       workspacePlanSubscriptionId: sub.id,
       currency: "XOF",
-      amountCents: 1, // montant symbolique pour générer une facture (non facturée)
+      amountCents: amountXof, // treated as XOF integer
       metadata: {
         source: "manual_plan_assign",
         planCode,
@@ -163,20 +190,22 @@ export async function POST(
         endsAt: endsAt.toISOString(),
         overrides: safeOverrides ?? null,
         note,
+        billing: {
+          paymentMethod,
+          creditsQty,
+          unitPriceXof,
+          amountXof,
+        },
       },
     });
 
-    /**
-     * ✅ Crédit : transaction courte, timeout augmenté
-     * -> limite fortement le risque "Transaction already closed"
-     */
+    // 3) credits grant = creditsQty
     let creditTx: any = null;
     let creditBalanceAfter: number | null = null;
 
-    if (typeof creditsToGrant === "number" && creditsToGrant > 0) {
+    if (creditsQty > 0) {
       const creditResult = await prisma.$transaction(
         async (tx) => {
-          // Récupérer (ou créer) le compte crédits du workspace DANS la transaction
           let creditAccount = await tx.workspace_credit_account.findUnique({
             where: { workspace_id: workspaceId },
             select: { id: true, balance: true },
@@ -187,7 +216,7 @@ export async function POST(
               data: {
                 workspace: { connect: { id: workspaceId } },
                 balance: 0,
-                currency: "EUR",
+                currency: "XOF",
                 overdraft_allowed: false,
                 overdraft_limit: 0,
               },
@@ -195,7 +224,7 @@ export async function POST(
             });
           }
 
-          const newBalance = (creditAccount.balance ?? 0) + creditsToGrant;
+          const newBalance = (creditAccount.balance ?? 0) + creditsQty;
 
           await tx.workspace_credit_account.update({
             where: { id: creditAccount.id },
@@ -207,17 +236,23 @@ export async function POST(
               credit_account_id: creditAccount.id,
               subscription_id: null,
               direction: "credit",
-              amount: creditsToGrant,
-              reason: "subscription_grant",
+              amount: creditsQty,
+              reason: "manual_credit_grant",
               reference_id: sub.id,
-              description: `Monthly grant for plan ${planCode}`,
+              description: `Manual credit grant (${creditsQty}) for plan ${planCode}`,
               balance_after: newBalance,
               actor_user_id: assignedByUserId,
               metadata: {
                 planCode,
                 startsAt: startsAt.toISOString(),
                 endsAt: endsAt.toISOString(),
-                overrides: safeOverrides ?? null,
+                invoiceId: invoice.id,
+                billing: {
+                  paymentMethod,
+                  creditsQty,
+                  unitPriceXof,
+                  amountXof,
+                },
               },
             },
             select: {
@@ -231,10 +266,7 @@ export async function POST(
 
           return { createdTx, newBalance };
         },
-        {
-          timeout: 20_000,
-          maxWait: 20_000,
-        },
+        { timeout: 20_000, maxWait: 20_000 },
       );
 
       creditTx = creditResult.createdTx;

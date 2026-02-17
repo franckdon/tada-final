@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Card,
   CardContent,
@@ -16,8 +16,6 @@ import {
   ChevronUp,
   MapPin,
   Calendar,
-  Monitor,
-  Globe,
   Check,
   X,
   Shield,
@@ -38,19 +36,20 @@ import { useAction } from "next-safe-action/hooks";
 import { useRouter } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
 
+/**
+ * =========================
+ * Types (keep minimal)
+ * =========================
+ */
+
 interface QualityControl {
   id: string;
   status: "pending" | "analyzing" | "accepted" | "review_required" | "rejected";
   overallScore: number;
-  consistencyScore?: number;
-  mediaScore?: number;
-  geoScore?: number;
-  temporalScore?: number;
-  completenessScore?: number;
   summary?: string;
   decision?: string;
   decisionReason?: string;
-  analyzedAt?: Date;
+  analyzedAt?: Date | string;
   qualityIssues?: Array<{
     id: string;
     type: string;
@@ -60,48 +59,71 @@ interface QualityControl {
   }>;
 }
 
-interface SurveyResponse {
-  id: string;
-  responses: Record<string, any>;
-  location: any;
-  ipAddress?: string;
-  userAgent?: string;
-  submittedAt: Date;
-  userId: string | null;
-  surveyId: string;
-  age: number;
-  gender: string;
-  status: string;
-  validationComment?: ValidationComment[];
-  validatedAt?: Date;
-  validatedBy?: {
-    id: string;
-    name: string;
-  };
-  survey: {
-    name: string;
-    description: string | null;
-    questions?: any;
-  };
-  qualityControl?: QualityControl;
-}
-
 interface ValidationComment {
   id: string;
   comment: string;
   action: "approved" | "rejected" | "pending";
-  createdAt: Date;
+  createdAt: Date | string;
   validator: {
     id: string;
     name: string;
   };
 }
 
+interface SurveyResponse {
+  id: string;
+  responses: Record<string, any>;
+  location: any;
+  submittedAt: Date | string;
+
+  // statut "collecte" (submitted/completed etc.)
+  status: string;
+
+  age: number;
+  gender: string;
+
+  validationComment?: ValidationComment[];
+  validatedAt?: Date | string;
+  validatedBy?: { id: string; name: string };
+
+  survey: {
+    name: string;
+    description: string | null;
+    questions?: any;
+  };
+
+  qualityControl?: QualityControl | null;
+}
+
 interface SurveyResponseCardProps {
   response: SurveyResponse;
-  canValidate?: boolean;
-  currentUserId?: string;
   missionId: string;
+}
+
+type ValidationStatus = "pending" | "approved" | "rejected";
+
+function getValidationStatus(response: SurveyResponse): ValidationStatus {
+  const comments = response.validationComment ?? [];
+
+  if (comments.length > 0) {
+    const sorted = [...comments].sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+    const last = sorted[sorted.length - 1];
+
+    if (last?.action === "rejected") return "rejected";
+    if (last?.action === "approved") return "approved";
+  }
+
+  if (response.validatedAt) return "approved";
+  return "pending";
+}
+
+function safeDate(d: Date | string | undefined | null) {
+  if (!d) return null;
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? null : dt;
 }
 
 export function SurveyResponseCard({
@@ -111,41 +133,133 @@ export function SurveyResponseCard({
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
 
+  /**
+   * ✅ Log "inratable" : on saura si CE composant tourne réellement.
+   */
+  useEffect(() => {
+    console.log("🔥 SurveyResponseCard MOUNTED", {
+      responseId: response.id,
+      missionId,
+      ts: Date.now(),
+    });
+  }, [response.id, missionId]);
+
+  const validationStatus = useMemo(
+    () => getValidationStatus(response),
+    [response],
+  );
+
+  /**
+   * ✅ IMPORTANT:
+   * Après analyse, on override localement le QC pour ne pas dépendre de router.refresh() / cache serveur.
+   */
+  const [qcOverride, setQcOverride] = useState<QualityControl | null>(null);
+  const qcEffective: QualityControl | null =
+    qcOverride ?? response.qualityControl ?? null;
+
+  /**
+   * ✅ Analyse terminée ?
+   * On considère "done" uniquement sur les statuts finaux.
+   */
+  const isQcDone =
+    qcEffective?.status === "accepted" ||
+    qcEffective?.status === "review_required" ||
+    qcEffective?.status === "rejected";
+
+  /**
+   * ✅ Règle métier :
+   * actions visibles seulement si :
+   *  - validationStatus = pending
+   *  - analyse QC terminée
+   */
+  const canShowValidationActions = validationStatus === "pending" && isQcDone;
+
+  /**
+   * ✅ Log principal demandé
+   * (si tu ne le vois pas => mauvais fichier importé OU logs supprimés)
+   */
+  console.log("[SurveyResponseCard] render", {
+    responseId: response.id,
+    collecteStatus: response.status,
+    validationStatus,
+    qcFromProps: response.qualityControl?.status ?? null,
+    qcOverride: qcOverride?.status ?? null,
+    qcEffective: qcEffective?.status ?? null,
+    isQcDone,
+    canShowValidationActions,
+  });
+
   const { execute: runQualityAnalysis, isExecuting: isAnalyzing } = useAction(
     autoQualityLLMAction,
     {
       onSuccess: (result) => {
-        console.log("✅ Analyse terminée:", result);
+        console.log("✅ Analyse terminée (raw):", result);
 
-        setTimeout(() => {
-          router.refresh();
-        }, 100); // Petit délai pour s'assurer que l'action est terminée
+        // ✅ Essaye de récupérer QC depuis la réponse action
+        const qcFromAction = (result as any)?.data?.qualityControl as
+          | QualityControl
+          | undefined;
+
+        console.log("✅ Analyse terminée (qcFromAction):", qcFromAction);
+
+        if (qcFromAction?.id) {
+          setQcOverride(qcFromAction);
+        } else {
+          console.warn(
+            "⚠️ Pas de qualityControl dans le retour action. Vérifie result.data.qualityControl.",
+          );
+        }
+
+        // ✅ Resync serveur (optionnel)
+        setTimeout(() => router.refresh(), 100);
       },
       onError: (error) => {
         console.error("❌ Erreur lors de l'analyse:", error);
-
         toast({
           title: "Erreur lors de l'analyse",
           description: "Une erreur inattendue s'est produite",
           variant: "destructive",
         });
       },
-    }
+    },
   );
 
+  const handleQualityAnalysis = () => {
+    console.log("🟦 Click Analyser", { responseId: response.id });
+    runQualityAnalysis({ surveyResponseId: response.id });
+  };
+
   const formatLocation = (location: any) => {
-    if (typeof location === "object" && location.label) {
-      return location.label;
-    }
+    if (typeof location === "object" && location?.label) return location.label;
     return "Non spécifié";
   };
 
+  const deduceQuestionType = (answer: any) => {
+    if (!answer) return "text";
+    if (typeof answer === "object" && answer.type) return answer.type;
+    if (typeof answer === "boolean") return "boolean";
+    if (Array.isArray(answer)) return "checkbox";
+    if (typeof answer === "string") return "text";
+    if (typeof answer === "number") return "rating";
+    return "text";
+  };
+
   const getQuestionInfo = (questionName: string) => {
-    if (response.survey.questions) {
-      const question = response.survey.questions.find(
-        (q: any) => q.name === questionName
-      );
-      return question || { name: questionName, type: "unknown" };
+    // Si questions = objet JSON (SurveyJS), ton find() peut ne pas marcher.
+    // On garde un fallback robuste.
+    const qs: any = response.survey.questions;
+
+    // Cas array classique
+    if (Array.isArray(qs)) {
+      const q = qs.find((x: any) => x.name === questionName);
+      return q || { name: questionName, type: "unknown", title: questionName };
+    }
+
+    // Cas SurveyJS (questions.pages[].elements[])
+    if (qs?.pages?.length) {
+      const all = qs.pages.flatMap((p: any) => p.elements ?? []);
+      const q = all.find((x: any) => x.name === questionName);
+      return q || { name: questionName, type: "unknown", title: questionName };
     }
 
     const answer = response.responses[questionName];
@@ -156,25 +270,8 @@ export function SurveyResponseCard({
     };
   };
 
-  const deduceQuestionType = (answer: any) => {
-    if (!answer) return "text";
-    if (typeof answer === "object" && answer.type) {
-      return answer.type;
-    }
-    if (typeof answer === "boolean") return "boolean";
-    if (Array.isArray(answer)) return "checkbox";
-    if (typeof answer === "string") return "text";
-    if (typeof answer === "number") return "rating";
-    return "text";
-  };
-
-  const handleQualityAnalysis = () => {
-    runQualityAnalysis({ surveyResponseId: response.id });
-  };
-
   const getQualityBadge = () => {
-    const qc = response.qualityControl;
-    if (!qc) {
+    if (!qcEffective) {
       return (
         <Badge variant="outline" className="text-xs">
           <Shield className="h-3 w-3 mr-1" />
@@ -183,7 +280,10 @@ export function SurveyResponseCard({
       );
     }
 
-    if (qc.status === "analyzing") {
+    if (
+      qcEffective.status === "analyzing" ||
+      qcEffective.status === "pending"
+    ) {
       return (
         <Badge variant="secondary" className="text-xs">
           <Loader2 className="h-3 w-3 mr-1 animate-spin" />
@@ -192,7 +292,7 @@ export function SurveyResponseCard({
       );
     }
 
-    const score = qc.overallScore;
+    const score = qcEffective.overallScore;
     if (score >= 80) {
       return (
         <Badge
@@ -203,7 +303,8 @@ export function SurveyResponseCard({
           Qualité: {score}/100
         </Badge>
       );
-    } else if (score >= 50) {
+    }
+    if (score >= 50) {
       return (
         <Badge
           variant="secondary"
@@ -212,18 +313,17 @@ export function SurveyResponseCard({
           <AlertTriangle className="h-3 w-3 mr-1" />À réviser: {score}/100
         </Badge>
       );
-    } else {
-      return (
-        <Badge variant="destructive" className="text-xs">
-          <X className="h-3 w-3 mr-1" />
-          Faible: {score}/100
-        </Badge>
-      );
     }
+    return (
+      <Badge variant="destructive" className="text-xs">
+        <X className="h-3 w-3 mr-1" />
+        Faible: {score}/100
+      </Badge>
+    );
   };
 
-  const getStatusBadge = () => {
-    switch (response.status) {
+  const getValidationBadge = () => {
+    switch (validationStatus) {
       case "approved":
         return (
           <Badge variant="success" className="bg-green-100 text-green-800">
@@ -239,11 +339,12 @@ export function SurveyResponseCard({
           </Badge>
         );
       case "pending":
-        return <Badge variant="secondary">En attente</Badge>;
       default:
-        return <Badge variant="outline">{response.status}</Badge>;
+        return <Badge variant="secondary">En attente</Badge>;
     }
   };
+
+  const submittedAt = safeDate(response.submittedAt);
 
   return (
     <Card className="border-l-4 border-l-primary shadow-none border-y-0 border-r-0">
@@ -252,29 +353,42 @@ export function SurveyResponseCard({
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <CardTitle className="text-base flex items-center gap-2">
+                {/* ✅ Marqueur visuel inratable : si tu ne vois pas ça, tu n'es pas sur le bon fichier */}
+                <span className="text-[10px] px-2 py-0.5 rounded bg-red-100 text-red-800">
+                  DEBUG CARD
+                </span>
+
                 {response.survey.name}
-                {getStatusBadge()}
+                {getValidationBadge()}
                 {getQualityBadge()}
               </CardTitle>
+
               <CardDescription className="flex items-center gap-4 mt-1">
                 <span className="flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
-                  {new Date(response.submittedAt).toLocaleString("fr-FR")}
+                  {submittedAt ? submittedAt.toLocaleString("fr-FR") : "—"}
                 </span>
                 <span className="flex items-center gap-1">
                   <MapPin className="h-3 w-3" />
                   {formatLocation(response.location)}
                 </span>
+
+                {/* debug collecte */}
+                <span className="text-xs text-muted-foreground">
+                  collecte: {String(response.status)}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  qc: {qcEffective?.status ?? "none"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  validation: {validationStatus}
+                </span>
               </CardDescription>
-              {response.validatedAt && response.validatedBy && (
-                <div className="text-xs text-muted-foreground mt-1">
-                  Validé par {response.validatedBy.name} le{" "}
-                  {new Date(response.validatedAt).toLocaleString("fr-FR")}
-                </div>
-              )}
             </div>
+
             <div className="flex items-center gap-2">
-              {!response.qualityControl && (
+              {/* ✅ Bouton analyser tant que QC pas final */}
+              {!isQcDone && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -292,13 +406,16 @@ export function SurveyResponseCard({
                   {isAnalyzing ? "Analyse en cours..." : "Analyser"}
                 </Button>
               )}
-              {response.status === "pending" && (
+
+              {/* ✅ Actions seulement après analyse terminée */}
+              {canShowValidationActions && (
                 <ValidationActions
                   responseId={response.id}
-                  currentStatus={response.status}
+                  currentStatus={validationStatus} // "pending"
                   missionId={missionId}
                 />
               )}
+
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" size="sm">
                   {isOpen ? (
@@ -311,16 +428,18 @@ export function SurveyResponseCard({
             </div>
           </div>
         </CardHeader>
+
         <CollapsibleContent>
           <CardContent className="pt-0">
             <div className="space-y-4 p-5">
-              {response.qualityControl && (
+              {qcEffective && (
                 <>
                   <div>
                     <h5 className="font-medium text-sm mb-3 flex items-center gap-2">
                       <Shield className="h-4 w-4" />
                       Contrôle Qualité Automatique
                     </h5>
+
                     <div className="bg-gray-50 rounded-lg p-4 space-y-3">
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
@@ -328,7 +447,7 @@ export function SurveyResponseCard({
                             Score global:
                           </span>{" "}
                           <span className="font-medium">
-                            {response.qualityControl.overallScore}/100
+                            {qcEffective.overallScore}/100
                           </span>
                         </div>
                         <div>
@@ -336,138 +455,74 @@ export function SurveyResponseCard({
                             Décision:
                           </span>{" "}
                           <span className="font-medium">
-                            {response.qualityControl.decision || "En cours"}
+                            {qcEffective.decision || "—"}
                           </span>
                         </div>
                       </div>
 
-                      {response.qualityControl.summary && (
+                      {qcEffective.decisionReason && (
+                        <div className="text-sm">
+                          <span className="text-muted-foreground">Raison:</span>{" "}
+                          {qcEffective.decisionReason}
+                        </div>
+                      )}
+
+                      {qcEffective.summary && (
                         <div>
                           <span className="text-muted-foreground text-sm">
                             Résumé:
                           </span>
-                          <p className="text-sm mt-1">
-                            {response.qualityControl.summary}
-                          </p>
+                          <p className="text-sm mt-1">{qcEffective.summary}</p>
                         </div>
                       )}
 
-                      {response.qualityControl.qualityIssues &&
-                        response.qualityControl.qualityIssues.length > 0 && (
-                          <div>
-                            <span className="text-muted-foreground text-sm">
-                              Problèmes détectés:
-                            </span>
-                            <div className="mt-2 space-y-2">
-                              {response.qualityControl.qualityIssues.map(
-                                (issue) => (
-                                  <div
-                                    key={issue.id}
-                                    className="flex items-start gap-2 text-sm"
-                                  >
-                                    <AlertTriangle
-                                      className={`h-3 w-3 mt-0.5 ${
-                                        issue.level === "critical"
-                                          ? "text-red-500"
-                                          : issue.level === "high"
-                                          ? "text-orange-500"
-                                          : issue.level === "medium"
-                                          ? "text-yellow-500"
-                                          : "text-blue-500"
-                                      }`}
-                                    />
-                                    <div>
-                                      <div className="font-medium">
-                                        {issue.title}
-                                      </div>
-                                      <div className="text-muted-foreground">
-                                        {issue.description}
-                                      </div>
-                                    </div>
+                      {qcEffective.qualityIssues?.length ? (
+                        <div>
+                          <span className="text-muted-foreground text-sm">
+                            Problèmes détectés:
+                          </span>
+                          <div className="mt-2 space-y-2">
+                            {qcEffective.qualityIssues.map((issue) => (
+                              <div
+                                key={issue.id}
+                                className="flex items-start gap-2 text-sm"
+                              >
+                                <AlertTriangle className="h-3 w-3 mt-0.5" />
+                                <div>
+                                  <div className="font-medium">
+                                    {issue.title}
                                   </div>
-                                )
-                              )}
-                            </div>
+                                  <div className="text-muted-foreground">
+                                    {issue.description}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        )}
+                        </div>
+                      ) : null}
 
-                      {response.qualityControl.analyzedAt && (
+                      {qcEffective.analyzedAt && (
                         <div className="text-xs text-muted-foreground">
                           Analysé le{" "}
-                          {new Date(
-                            response.qualityControl.analyzedAt
-                          ).toLocaleString("fr-FR")}
+                          {new Date(qcEffective.analyzedAt).toLocaleString(
+                            "fr-FR",
+                          )}
                         </div>
                       )}
                     </div>
                   </div>
+
                   <Separator />
                 </>
               )}
 
-              {response.validationComment &&
-                response.validationComment.length > 0 && (
-                  <>
-                    <ValidationComments comments={response.validationComment} />
-                    <Separator />
-                  </>
-                )}
-
-              <div>
-                <h5 className="font-medium text-sm mb-2">
-                  Informations démographiques
-                </h5>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Âge:</span>{" "}
-                    {response.age} ans
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Genre:</span>{" "}
-                    {response.gender}
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Métadonnées techniques */}
-              <div>
-                <h5 className="font-medium text-sm mb-2">
-                  Métadonnées techniques
-                </h5>
-                <div className="space-y-2 text-sm">
-                  {response.ipAddress && (
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-3 w-3" />
-                      <span className="text-muted-foreground">IP:</span>{" "}
-                      {response.ipAddress}
-                    </div>
-                  )}
-                  {response.userAgent && (
-                    <div className="flex items-center gap-2">
-                      <Monitor className="h-3 w-3" />
-                      <span className="text-muted-foreground">
-                        Appareil:
-                      </span>{" "}
-                      {response.userAgent}
-                    </div>
-                  )}
-                  {response.location &&
-                    typeof response.location === "object" && (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-3 w-3" />
-                        <span className="text-muted-foreground">
-                          Coordonnées:
-                        </span>
-                        {response.location.lat?.toFixed(4)},{" "}
-                        {response.location.lng?.toFixed(4)}
-                      </div>
-                    )}
-                </div>
-              </div>
-
-              <Separator />
+              {response.validationComment?.length ? (
+                <>
+                  <ValidationComments comments={response.validationComment} />
+                  <Separator />
+                </>
+              ) : null}
 
               <div>
                 <h5 className="font-medium text-sm mb-3">
@@ -485,19 +540,22 @@ export function SurveyResponseCard({
                           answer={answer}
                         />
                       );
-                    }
+                    },
                   )}
                 </div>
               </div>
 
-              <div className="flex justify-end">
-                <ValidationActions
-                  responseId={response.id}
-                  currentStatus={response.status}
-                  variant="expanded"
-                  missionId={missionId}
-                />
-              </div>
+              {/* ✅ Actions en bas (expanded) après analyse */}
+              {canShowValidationActions && (
+                <div className="flex justify-end">
+                  <ValidationActions
+                    responseId={response.id}
+                    currentStatus={validationStatus}
+                    variant="expanded"
+                    missionId={missionId}
+                  />
+                </div>
+              )}
             </div>
           </CardContent>
         </CollapsibleContent>

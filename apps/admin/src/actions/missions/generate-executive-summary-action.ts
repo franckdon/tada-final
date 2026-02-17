@@ -11,9 +11,11 @@ export const generateExecutiveSummaryAction = authActionClient
   .metadata({
     name: "generate-executive-summary-action",
   })
-  .action(async ({ parsedInput: { missionId }, ctx: { user, auth } }) => {
+  .action(async ({ parsedInput: { missionId } }) => {
     try {
-      // 1. Récupérer la mission avec tous les graphiques et insights
+      // --------------------------------------------------
+      // 1. Fetch mission + charts + responses
+      // --------------------------------------------------
       const mission = await prisma.mission.findUnique({
         where: { id: missionId },
         include: {
@@ -21,11 +23,14 @@ export const generateExecutiveSummaryAction = authActionClient
             where: { status: "published" },
             orderBy: { dashboardOrder: "asc" },
           },
-          survey: {
+          surveys: {
             include: {
-              response: {
+              responses: {
                 where: { status: "completed" },
-                select: { id: true, responses: true },
+                select: {
+                  id: true,
+                  responses: true,
+                },
               },
             },
           },
@@ -36,32 +41,65 @@ export const generateExecutiveSummaryAction = authActionClient
         throw new Error("Mission non trouvée");
       }
 
-      if (!mission.survey?.[0]?.response?.length) {
-        throw new Error("Aucune réponse complétée trouvée pour cette mission");
+      const survey = mission.surveys?.[0];
+
+      if (!survey || !survey.responses.length) {
+        throw new Error(
+          "Aucune réponse complétée trouvée pour cette mission"
+        );
       }
 
-      // 2. Vérifier si un résumé exécutif existe déjà
-      const existingSummary = mission.executiveSummary;
-      const isUpdate = !!existingSummary;
+      // --------------------------------------------------
+      // 2. Anti-loop / anti double génération
+      // --------------------------------------------------
+      if (mission.executiveSummaryUpdatedAt) {
+        const lastUpdate = new Date(
+          mission.executiveSummaryUpdatedAt
+        ).getTime();
 
-      // 3. Collecter toutes les données pour le résumé
-      const surveyResponses = mission.survey[0].response;
+        const FIVE_MINUTES = 5 * 60 * 1000;
+
+        if (Date.now() - lastUpdate < FIVE_MINUTES) {
+          console.log("Executive summary récent → skip génération");
+
+          return {
+            success: true,
+            data: {
+              missionId,
+              executiveSummary: mission.executiveSummary,
+              isUpdate: true,
+              skipped: true,
+              chartsAnalyzed: mission.missionCharts.length,
+              totalResponses: survey.responses.length,
+            },
+          };
+        }
+      }
+
+      const isUpdate = !!mission.executiveSummary;
+
       const charts = mission.missionCharts;
-      const totalResponses = surveyResponses.length;
+      const totalResponses = survey.responses.length;
 
-      // Préparer les données des insights existants
+      // --------------------------------------------------
+      // 3. Build insights data
+      // --------------------------------------------------
       const chartInsights = charts
         .filter((chart) => chart.insights)
         .map((chart) => {
           const chartData = chart.chartData as any;
+
           return {
             question: chartData?.question || chart.title,
             insights: chart.insights,
           };
         });
 
-      // 4. Générer le prompt pour le résumé exécutif
-      const prompt = `Tu es un expert en analyse de données et insights. Génère un résumé exécutif ultra-concis pour cette mission de recherche.
+      // --------------------------------------------------
+      // 4. Build prompt
+      // --------------------------------------------------
+const prompt = `
+Tu es un expert en analyse de données et insights. Génère un résumé exécutif ultra-concis pour cette mission de recherche.
 
 MISSION: "${mission.name}"
 ${mission.objectives ? `OBJECTIFS: ${mission.objectives}` : ""}
@@ -101,45 +139,56 @@ FORMAT OBLIGATOIRE:
 EXEMPLE DE FORMAT ATTENDU:
 Cette étude sur [sujet] a collecté X réponses de participants ciblés.
 Découverte principale 1: [insight clé avec chiffre].
-Découverte principale 2: [insight clé avec chiffre].  
+Découverte principale 2: [insight clé avec chiffre].
 Découverte principale 3: [insight clé avec chiffre].
 Recommandation prioritaire 1: [action concrète].
 Recommandation prioritaire 2: [action concrète].
 Ces résultats offrent une opportunité stratégique claire pour [conclusion].
 
-${isUpdate ? "MISE À JOUR: Il s'agit d'une mise à jour du résumé existant. Intègre les nouvelles données et insights." : ""}`;
+${
+  isUpdate
+    ? "MISE À JOUR: Il s'agit d'une mise à jour du résumé existant. Intègre les nouvelles données et insights."
+    : ""
+}
+`;
 
-      // 5. Appeler AI SDK pour générer le résumé exécutif
-      const { text: executiveSummary } = await generateText({
+
+      // --------------------------------------------------
+      // 5. AI generation
+      // --------------------------------------------------
+      const { text } = await generateText({
         model: openai("gpt-4o"),
-        system: "Tu es un expert en synthèse de données. Tu génères des résumés exécutifs ULTRA-CONCIS de maximum 7 lignes, sans titres markdown, avec des phrases courtes et percutantes.",
+        system:
+          "Tu génères des résumés exécutifs ultra concis.",
         prompt,
         temperature: 0.2,
-        maxTokens: 500,
+        maxOutputTokens: 400, // ✅ fix AI SDK
       });
 
-      if (!executiveSummary) {
-        throw new Error("Erreur lors de la génération du résumé exécutif");
+      if (!text) {
+        throw new Error("Erreur génération résumé");
       }
 
-      // 6. Sauvegarder le résumé exécutif
+      // --------------------------------------------------
+      // 6. Save
+      // --------------------------------------------------
       await prisma.mission.update({
         where: { id: missionId },
         data: {
-          executiveSummary,
+          executiveSummary: text,
           executiveSummaryUpdatedAt: new Date(),
         },
       });
 
       console.log(
-        `Résumé exécutif ${isUpdate ? "mis à jour" : "généré"} pour la mission: ${mission.name}`
+        `Résumé exécutif ${isUpdate ? "mis à jour" : "créé"} pour ${mission.name}`
       );
 
       return {
         success: true,
         data: {
           missionId,
-          executiveSummary,
+          executiveSummary: text,
           isUpdate,
           chartsAnalyzed: charts.length,
           totalResponses,
@@ -147,9 +196,13 @@ ${isUpdate ? "MISE À JOUR: Il s'agit d'une mise à jour du résumé existant. I
       };
     } catch (error) {
       console.error("[GENERATE_EXECUTIVE_SUMMARY_ERROR]", error);
+
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Une erreur est survenue",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erreur inconnue",
       };
     }
   });

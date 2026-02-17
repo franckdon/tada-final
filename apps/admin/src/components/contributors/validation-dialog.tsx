@@ -18,6 +18,7 @@ import { useAction } from "next-safe-action/hooks";
 import { addCommentToSubmissionAction } from "@/actions/contributors/add-comment-to-submission-action";
 import { useI18n } from "@/locales/client";
 import { useSession } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 
 interface ValidationDialogProps {
   open: boolean;
@@ -47,6 +48,8 @@ export function ValidationDialog({
       });
       onOpenChange(false);
       setComment("");
+      // Revalidate la page des soumissions pour voir le nouveau statut
+      router.refresh();
     },
     onError: ({ error }) => {
       console.log("error", error);
