@@ -140,6 +140,7 @@ export function NavigationBarMission({
 
           <div className="w-44">
             <Select
+              disabled={!canEdit}
               value={mission.status ?? "draft"}
               onValueChange={(value) =>
                 updateMissionStatus.execute({

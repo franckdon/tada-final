@@ -9,10 +9,50 @@ interface SurveyResponseRaw {
   status: string;
 }
 
-// Fonction pour extraire toutes les réponses d'une question spécifique
+// ------------------------------------------------------
+// ✅ Normalisation des types venant de MissionChart
+// (tes chartData.type = "single_choice", etc.)
+// ------------------------------------------------------
+function normalizeQuestionType(input: string): string {
+  const t = String(input || "").toLowerCase().trim();
+
+  // single choice
+  if (t === "single_choice" || t === "single" || t === "radio" || t === "select")
+    return "dropdown";
+
+  // multi choice
+  if (
+    t === "multiple_choice" ||
+    t === "multi_choice" ||
+    t === "multiple" ||
+    t === "multiselect"
+  )
+    return "checkbox";
+
+  // déjà OK
+  return t;
+}
+
+// Normalise pour matcher les clés (accents/espaces/apostrophes)
+function normalizeKey(s: string): string {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "") // enlève accents
+    .replace(/\s+/g, " ")
+    .replace(/[’']/g, "'"); // apostrophe uniforme
+}
+
+// ------------------------------------------------------
+// ✅ Extraction robuste d'une question :
+// - supporte responsesData[title] = { type, answer }
+// - supporte responsesData[title] = primitive/array (legacy)
+// - supporte mismatch léger de clé via normalizeKey
+// ------------------------------------------------------
 export function extractResponsesForQuestion(
   surveyResponses: SurveyResponseRaw[],
-  questionTitle: string
+  questionTitle: string,
 ): Array<{ answer: any; age: number; gender: string; location: any; responseId: string }> {
   const questionResponses: Array<{
     answer: any;
@@ -22,29 +62,55 @@ export function extractResponsesForQuestion(
     responseId: string;
   }> = [];
 
+  const wantedKey = normalizeKey(questionTitle);
+
   surveyResponses.forEach((response) => {
     try {
-      // Parser le JSON des réponses
-      const responsesData = typeof response.responses === 'string' 
-        ? JSON.parse(response.responses) 
-        : response.responses;
+      const responsesData =
+        typeof response.responses === "string"
+          ? JSON.parse(response.responses)
+          : response.responses;
 
-      // Chercher la question spécifique
-      if (responsesData[questionTitle]) {
-        const questionData = responsesData[questionTitle];
-        
-        questionResponses.push({
-          answer: questionData.answer,
-          age: response.age,
-          gender: response.gender,
-          location: typeof response.location === 'string' 
-            ? JSON.parse(response.location) 
-            : response.location,
-          responseId: response.id,
-        });
+      if (!responsesData || typeof responsesData !== "object") return;
+
+      // 1) match exact
+      let hitKey: string | null = null;
+      if (questionTitle in responsesData) hitKey = questionTitle;
+
+      // 2) match normalisé (si pas exact)
+      if (!hitKey) {
+        for (const k of Object.keys(responsesData)) {
+          if (normalizeKey(k) === wantedKey) {
+            hitKey = k;
+            break;
+          }
+        }
       }
+
+      if (!hitKey) return;
+
+      const raw = (responsesData as any)[hitKey];
+
+      // ✅ support {type, answer} ou valeur brute
+      const answer =
+        raw && typeof raw === "object" && "answer" in raw ? (raw as any).answer : raw;
+
+      // ignore vides
+      if (answer === null || typeof answer === "undefined") return;
+      if (typeof answer === "string" && !answer.trim()) return;
+      if (Array.isArray(answer) && answer.length === 0) return;
+
+      questionResponses.push({
+        answer,
+        age: response.age,
+        gender: response.gender,
+        location:
+          typeof response.location === "string"
+            ? JSON.parse(response.location)
+            : response.location,
+        responseId: response.id,
+      });
     } catch (error) {
-      // Skip les réponses qui ne peuvent pas être parsées
       console.warn(`Erreur parsing response ${response.id}:`, error);
     }
   });
@@ -52,7 +118,11 @@ export function extractResponsesForQuestion(
   return questionResponses;
 }
 
-// Reformate les données d'une question pour l'affichage en graphique
+// ------------------------------------------------------
+// ✅ Format chart data
+// - gère single_choice en le mappant sur dropdown
+// - gère multiple_choice en le mappant sur checkbox
+// ------------------------------------------------------
 export function formatChartDataFromResponses(
   questionResponses: Array<{
     answer: any;
@@ -61,19 +131,18 @@ export function formatChartDataFromResponses(
     location: any;
     responseId: string;
   }>,
-  questionType: string
+  questionType: string,
 ): any[] {
-  if (!questionResponses || questionResponses.length === 0) {
-    return [];
-  }
+  if (!questionResponses || questionResponses.length === 0) return [];
+
+  const t = normalizeQuestionType(questionType);
 
   // Base Appinio: % calculé sur le nombre de répondants à la question
   const baseRespondents = questionResponses.length;
 
-  const safePct = (count: number, base: number) =>
-    base > 0 ? (count / base) * 100 : 0;
+  const safePct = (count: number, base: number) => (base > 0 ? (count / base) * 100 : 0);
 
-  switch (questionType) {
+  switch (t) {
     case "dropdown": {
       const counts: Record<string, number> = {};
       questionResponses.forEach((r) => {
@@ -93,7 +162,8 @@ export function formatChartDataFromResponses(
     case "checkbox": {
       const counts: Record<string, number> = {};
       questionResponses.forEach((r) => {
-        (Array.isArray(r.answer) ? r.answer : [r.answer]).forEach((a) => {
+        const arr = Array.isArray(r.answer) ? r.answer : [r.answer];
+        arr.forEach((a) => {
           const key = String(a ?? "").trim();
           if (!key) return;
           counts[key] = (counts[key] || 0) + 1;
@@ -108,27 +178,26 @@ export function formatChartDataFromResponses(
       }));
     }
 
-
     case "boolean": {
       const counts: Record<"Oui" | "Non", number> = { Oui: 0, Non: 0 };
       questionResponses.forEach((r) => {
         counts[r.answer ? "Oui" : "Non"]++;
       });
 
-      return (Object.entries(counts) as Array<[string, number]>).map(
-        ([label, value]) => ({
-          label,
-          value,
-          percent: safePct(value, baseRespondents),
-          base: baseRespondents,
-          fill: `var(--color-${label.toLowerCase()})`,
-        })
-      );
-  }
+      return (Object.entries(counts) as Array<[string, number]>).map(([label, value]) => ({
+        label,
+        value,
+        percent: safePct(value, baseRespondents),
+        base: baseRespondents,
+      }));
+    }
 
     case "rating": {
       const ratings = questionResponses
-        .map((r) => parseInt(String(r.answer), 10))
+        .map((r) => {
+          const n = typeof r.answer === "number" ? r.answer : parseInt(String(r.answer), 10);
+          return Number.isFinite(n) ? n : NaN;
+        })
         .filter((n) => !Number.isNaN(n));
 
       if (!ratings.length) return [];
@@ -148,26 +217,33 @@ export function formatChartDataFromResponses(
         }));
     }
 
+    case "file":
     case "text":
-    case "comment":
+    case "comment": {
+      // renvoie une liste de strings (ou paths)
       return questionResponses
-        .map((response) => String(response.answer))
-        .filter((answer) => answer && answer.trim().length > 0);
+        .map((r) => r.answer)
+        .flatMap((a) => (Array.isArray(a) ? a : [a]))
+        .map((v) => String(v ?? "").trim())
+        .filter((s) => s.length > 0);
+    }
 
     default:
       return [];
   }
 }
 
-
-// Génère la config des couleurs pour un graphique
+// ------------------------------------------------------
+// ✅ Config chart
+// Important: au minimum `value` doit exister
+// ------------------------------------------------------
 export function generateChartConfigFromData(
   data: Array<{ label: string; value: number }> | string[] | any[],
-  questionType: string
+  questionType: string,
 ): Record<string, { label: string; color: string }> {
+  const t = normalizeQuestionType(questionType);
   const config: Record<string, { label: string; color: string }> = {};
 
-  // Couleurs prédéfinies
   const colorVariables = [
     "hsl(var(--chart-1))",
     "hsl(var(--chart-2))",
@@ -181,99 +257,43 @@ export function generateChartConfigFromData(
     "hsl(var(--chart-10))",
   ];
 
-  switch (questionType) {
+  // ✅ série principale utilisée par tes BarChartCard/HorizontalCard: primaryDataKey="value"
+  config.value = { label: "value", color: "hsl(var(--chart-1))" };
+
+  switch (t) {
     case "dropdown":
     case "checkbox":
-      if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object' && 'label' in data[0]) {
-        (data as Array<{ label: string; value: number }>).forEach((item, index) => {
-          config[item.label] = {
-            label: item.label,
-            color: colorVariables[index % colorVariables.length] || "hsl(var(--chart-1))",
-          };
-        });
-      }
-      break;
-
+    case "rating":
     case "boolean":
-      if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object' && 'label' in data[0]) {
-        (data as Array<{ label: string; value: number }>).forEach((item) => {
-          const colorKey = item.label.toLowerCase();
-          config[item.label] = {
-            label: item.label,
-            color: item.label === "Oui" ? "hsl(var(--chart-1))" : "hsl(var(--chart-2))",
-          };
-          // Ajouter aussi la version lowercase pour les CSS variables
-          config[colorKey] = {
-            label: item.label,
-            color: item.label === "Oui" ? "hsl(var(--chart-1))" : "hsl(var(--chart-2))",
-          };
-        });
-      }
-      break;
-
-        case "rating":
-      // Nouvelle forme : data = [{ label: "3 étoiles", value, percentage, rating }, ...]
-      if (
-        Array.isArray(data) &&
-        data.length > 0 &&
-        typeof data[0] === "object" &&
-        "label" in data[0]
-      ) {
-        (data as Array<{ label: string }>).forEach((item, index) => {
-          config[item.label] = {
-            label: item.label,
-            color:
-              colorVariables[index % colorVariables.length] ||
-              "hsl(var(--chart-1))",
-          };
-        });
-      }
-      break;
-
-
-    case "text":
-    case "comment":
-      // Pour les réponses textuelles, pas de config de couleurs nécessaire
-      break;
+      // on peut laisser uniquement config.value (suffit pour afficher)
+      // si tu veux des couleurs par catégorie pour pie, tu peux étendre ici.
+      return config;
 
     default:
-      break;
+      return config;
   }
-
-  // Ajouter toujours une config par défaut pour "value"
-  config.value = {
-    label: "value",
-    color: "hsl(var(--chart-1))",
-  };
-
-  return config;
 }
 
 // Fonction utilitaire pour extraire les clés primaires (pour les ratings)
 export function extractPrimaryKeysFromRatingData(data: any[]): string[] {
-  if (!Array.isArray(data) || data.length === 0 || typeof data[0] !== 'object') {
-    return [];
-  }
+  if (!Array.isArray(data) || data.length === 0 || typeof data[0] !== "object") return [];
 
   const ratingData = data[0] as any;
   return Object.keys(ratingData)
-    .filter(key => key !== 'category' && !isNaN(Number(key)))
+    .filter((key) => key !== "category" && !isNaN(Number(key)))
     .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
 }
 
 // Fonction utilitaire pour extraire min/max des ratings
 export function extractRatingRange(data: any[]): { min: number; max: number } {
-  if (!Array.isArray(data) || data.length === 0 || typeof data[0] !== 'object') {
+  if (!Array.isArray(data) || data.length === 0 || typeof data[0] !== "object") {
     return { min: 0, max: 10 };
   }
 
   const ratingData = data[0] as any;
   const ratings = Object.keys(ratingData)
-    .filter(key => key !== 'category' && !isNaN(Number(key)))
-    .map(key => parseInt(key, 10));
+    .filter((key) => key !== "category" && !isNaN(Number(key)))
+    .map((key) => parseInt(key, 10));
 
-  return {
-    min: Math.min(...ratings),
-    max: Math.max(...ratings),
-  };
+  return { min: Math.min(...ratings), max: Math.max(...ratings) };
 }

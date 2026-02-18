@@ -1,38 +1,46 @@
+// utils.ts (réécrit + corrigé)
+// Objectif :
+// - Supporter plusieurs formats de "responses" en DB
+//   A) format primitif:  { "Q1": "Oui", "Q2": 3, "Q3": ["A","B"] }
+//   B) format riche:     { "Q1": { type:"boolean", answer:true }, ... }
+// - Ne PAS déduire les types uniquement depuis les réponses (souvent primitives)
+// - Construire questions/types depuis `survey.questions` quand possible (SurveyJS)
+// - Remplir questions_responses de manière robuste pour tes dashboards/graphs
+//
+// ⚠️ Hypothèses min:
+// - mission.surveys[0] existe et contient { questions, responses }
+// - survey.questions est un JSON SurveyJS (ou au moins un objet) avec pages/elements
+// - survey.responses[].responses peut être string JSON ou objet
+//
+// Tu peux remplacer ton fichier actuel par celui-ci.
+
 import { formatDistanceToNow } from "date-fns";
 import { enUS, fr } from "date-fns/locale";
 import type { VisualizationId } from "./chart-types";
-import { getVisualizationSettingsForQuestionType, QuestionTypeDashboard } from "./question-vizualisation";
+import type { QuestionTypeDashboard } from "./question-vizualisation";
 import { extractAllQuestionsDataWithConfig } from "./survey-chart-extractor";
 
 export { extractAllQuestionsDataWithConfig } from "./survey-chart-extractor";
 
+/* ---------------------------------- Basics --------------------------------- */
 
 export function stripSpecialCharacters(inputString: string) {
-  // Use a regular expression to replace all non-alphanumeric characters except hyphen, space, dot,and parentheses with an empty string
   return inputString?.replace(/[^a-zA-Z0-9\s.()-]/g, "");
 }
 
 type Locale = "en" | "fr";
 
 export function timeAgo(date: Date, locale: Locale = "en"): string {
-  const localeMap = {
-    en: enUS,
-    fr: fr,
-  };
-
+  const localeMap = { en: enUS, fr };
   return formatDistanceToNow(date, {
     addSuffix: true,
     locale: localeMap[locale],
   });
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-export function debounce<T extends (...args: any[]) => void>(
-  fn: T,
-  delay: number
-) {
+// biome-ignore lint/suspicious/noExplicitAny: legacy
+export function debounce<T extends (...args: any[]) => void>(fn: T, delay: number) {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  // biome-ignore lint/complexity/useArrowFunction: <explanation>
   return function (...args: Parameters<T>) {
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => fn(...args), delay);
@@ -45,43 +53,26 @@ export function capitalizeFirstLetter(text: string): string {
 }
 
 export function isMac() {
-  // Check the modern userAgentData API
-  if (navigator.userAgent?.includes("Mac")) {
-    return true;
-  }
+  // ⚠️ client-only
+  if (typeof navigator === "undefined") return false;
 
-  // Fallback to the older navigator.platform API
-  if (navigator.platform) {
-    return navigator.platform?.toLowerCase().includes("mac");
-  }
-
-  // Final fallback: Parse the userAgent string
-  if (navigator.userAgent) {
-    return navigator.userAgent?.toLowerCase().includes("mac");
-  }
-
-  // Default to false if no information is available
+  if (navigator.userAgent?.includes("Mac")) return true;
+  if (navigator.platform) return navigator.platform.toLowerCase().includes("mac");
+  if (navigator.userAgent) return navigator.userAgent.toLowerCase().includes("mac");
   return false;
 }
 
-export function getNumericKeysDescending<
-  T extends Record<string, string | number>
->(array: T[]): string[] {
+export function getNumericKeysDescending<T extends Record<string, string | number>>(array: T[]): string[] {
   if (array.length === 0) return [];
-
-  // Prendre le premier objet comme référence pour les clés
   const firstObject = array[0];
-
-  // Filtrer les clés qui ont des valeurs numériques et créer des paires [clé, valeur]
   const numericKeyValuePairs = Object.entries(firstObject!)
     .filter(([_, value]) => typeof value === "number")
     .map(([key, value]) => ({ key, value: value as number }));
 
-  // Trier par valeur décroissante et extraire les clés
-  return numericKeyValuePairs
-    .sort((a, b) => b.value - a.value)
-    .map((item) => item.key);
+  return numericKeyValuePairs.sort((a, b) => b.value - a.value).map((item) => item.key);
 }
+
+/* -------------------------- Participants / Demog --------------------------- */
 
 interface Participant {
   sexe: string;
@@ -94,90 +85,66 @@ interface AgeGroupCount {
   female: number;
 }
 
-export function extractSexAndAge(surveyResponses: any): Participant[] {
+export function extractSexAndAge(surveyResponses: SurveyData | null | undefined): Participant[] {
+  if (!surveyResponses?.questions_responses) return [];
+
   const sexAgeData: Participant[] = [];
   const processedIds = new Set<string>();
 
-  // Iterate through all questions and their responses
-  Object.values(surveyResponses.questions_responses).forEach(
-    (question: any) => {
-      question.responses.forEach((response: any) => {
-        // Avoid duplicates by checking response_id
-        if (!processedIds.has(response.response_id)) {
-          sexAgeData.push({
-            sexe: response.sex,
-            age: response.age,
-          });
-          processedIds.add(response.response_id);
-        }
-      });
-    }
-  );
+  Object.values(surveyResponses.questions_responses).forEach((question: any) => {
+    (question?.responses ?? []).forEach((response: any) => {
+      if (!response?.response_id) return;
+      if (!processedIds.has(response.response_id)) {
+        sexAgeData.push({ sexe: response.sex, age: response.age });
+        processedIds.add(response.response_id);
+      }
+    });
+  });
 
   return sexAgeData;
 }
 
 export function getAverageAge(participants: Participant[]): number {
   if (participants.length === 0) return 0;
-
   const validAges = participants
-    .map((participant) => parseInt(participant.age, 10))
-    .filter((age) => !isNaN(age));
+    .map((p) => parseInt(p.age, 10))
+    .filter((age) => !Number.isNaN(age));
 
   if (validAges.length === 0) return 0;
-
   const sum = validAges.reduce((total, age) => total + age, 0);
-  return Math.round(sum / validAges.length); // Return as integer
+  return Math.round(sum / validAges.length);
 }
 
-const ageRanges = [
-  "14-17",
-  "18-24",
-  "25-34",
-  "35-44",
-  "45-54",
-  "55-64",
-  "65-99",
-];
+const ageRanges = ["14-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65-99"];
 
 function findAgeRange(age: string): string | null {
   const numericAge = parseInt(age, 10);
-  if (isNaN(numericAge)) return null;
+  if (Number.isNaN(numericAge)) return null;
 
   for (const range of ageRanges) {
-    const [min, max] = range.split("-").map((num) => parseInt(num, 10));
-    if (numericAge >= min! && numericAge <= max!) {
-      return range;
-    }
+    const [min, max] = range.split("-").map((n) => parseInt(n, 10));
+    if (numericAge >= (min ?? 0) && numericAge <= (max ?? 999)) return range;
   }
   return null;
 }
 
-export function groupParticipantsByAge(
-  participants: Participant[]
-): AgeGroupCount[] {
+export function groupParticipantsByAge(participants: Participant[]): AgeGroupCount[] {
   const ageMap: Record<string, { male: number; female: number }> = {};
-
-  // Initialize all age ranges with zero counts
-  for (const range of ageRanges) {
-    ageMap[range] = { male: 0, female: 0 };
-  }
+  for (const range of ageRanges) ageMap[range] = { male: 0, female: 0 };
 
   for (const { age, sexe } of participants) {
     const ageRange = findAgeRange(age);
     if (ageRange && (sexe === "male" || sexe === "female")) {
-      ageMap[ageRange]![sexe]++;
+      ageMap[ageRange]![sexe] += 1;
     }
   }
 
   return Object.entries(ageMap)
     .filter(([, counts]) => counts.male > 0 || counts.female > 0)
-    .map(([age, counts]) => ({
-      age,
-      male: counts.male,
-      female: counts.female,
-    }));
+    .map(([age, counts]) => ({ age, male: counts.male, female: counts.female }));
 }
+
+/* --------------------------------- Charts --------------------------------- */
 
 export interface QuestionData {
   question: string;
@@ -186,10 +153,7 @@ export interface QuestionData {
   allowed_chart: VisualizationId[];
   participants_responded: number;
   data:
-    | Array<{
-        label: string;
-        value: number;
-      }>
+    | Array<{ label: string; value: number }>
     | Array<any>
     | string[]
     | string;
@@ -200,23 +164,15 @@ export interface QuestionData {
   insights?: any;
   insightsUpdatedAt?: Date | null;
   chartId?: string;
-
   rawResponses?: any[];
 }
 
-interface ChartConfig {
-  [key: string]: {
-    label: string;
-    color: string;
-  };
+export interface ChartConfig {
+  [key: string]: { label: string; color: string };
 }
 
-export function generateChartConfig(
-  data: Array<{ label: string; value: number }>
-): ChartConfig {
+export function generateChartConfig(data: Array<{ label: string; value: number }>): ChartConfig {
   const config: ChartConfig = {};
-
-  // Predefined color variables that can be used
   const colorVariables = [
     "hsl(var(--chart-1))",
     "hsl(var(--chart-2))",
@@ -233,55 +189,33 @@ export function generateChartConfig(
   data.forEach((item, index) => {
     config[item.label] = {
       label: item.label,
-      color:
-        colorVariables[index % colorVariables.length] || "hsl(var(--chart-1))",
+      color: colorVariables[index % colorVariables.length] || "hsl(var(--chart-1))",
     };
   });
 
-  // Add default value config
-  config.value = {
-    label: "value",
-    color: "hsl(var(--chart-1))",
-  };
-
+  config.value = { label: "value", color: "hsl(var(--chart-1))" };
   return config;
 }
 
-export function generateBooleanChartConfig(
-  data: Array<{ label: string; value: number }>
-): ChartConfig {
+export function generateBooleanChartConfig(data: Array<{ label: string; value: number }>): ChartConfig {
   const config: ChartConfig = {};
-
   data.forEach((item) => {
-    const colorKey = item.label.toLowerCase();
-    config[item.label] = {
-      label: item.label,
-      color:
-        item.label === "Oui" ? "hsl(var(--chart-1))" : "hsl(var(--chart-2))",
-    };
-    // Add CSS variable for fill
-    config[colorKey] = {
-      label: item.label,
-      color:
-        item.label === "Oui" ? "hsl(var(--chart-1))" : "hsl(var(--chart-2))",
-    };
+    const key = item.label.toLowerCase();
+    const color = item.label === "Oui" ? "hsl(var(--chart-1))" : "hsl(var(--chart-2))";
+    config[item.label] = { label: item.label, color };
+    config[key] = { label: item.label, color };
   });
-
-  // Add default value config
-  config.value = {
-    label: "value",
-    color: "hsl(var(--chart-1))",
-  };
-
+  config.value = { label: "value", color: "hsl(var(--chart-1))" };
   return config;
 }
+
+/* -------------------------- Survey normalized model ------------------------- */
 
 export interface SurveyData {
   survey_title: string;
   questions_responses: Record<string, QuestionDataRaw>;
   metadata: SurveyMetadata;
 }
-
 
 interface StatisticalSummary {
   survey_info: {
@@ -293,19 +227,12 @@ interface StatisticalSummary {
   };
   demographics: {
     average_age: number;
-    gender_distribution: {
-      male_percentage: number;
-      female_percentage: number;
-    };
+    gender_distribution: { male_percentage: number; female_percentage: number };
   };
   questions_stats: {
     dropdown: Array<{
       question: string;
-      responses: Array<{
-        option: string;
-        count: number;
-        percentage: number;
-      }>;
+      responses: Array<{ option: string; count: number; percentage: number }>;
     }>;
     boolean: Array<{
       question: string;
@@ -319,20 +246,12 @@ interface StatisticalSummary {
       average: number;
       min: number;
       max: number;
-      distribution: Array<{
-        rating: number;
-        count: number;
-        percentage: number;
-      }>;
+      distribution: Array<{ rating: number; count: number; percentage: number }>;
     }>;
     checkbox: Array<{
       question: string;
       total_selections: number;
-      options: Array<{
-        option: string;
-        count: number;
-        percentage: number;
-      }>;
+      options: Array<{ option: string; count: number; percentage: number }>;
     }>;
     text_comment: Array<{
       question: string;
@@ -344,7 +263,6 @@ interface StatisticalSummary {
   };
 }
 
-// Types pour les données de sondage
 interface Location {
   lat: number;
   lng: number;
@@ -358,27 +276,7 @@ interface BaseResponse {
   sex: "male" | "female";
 }
 
-interface TextResponse extends BaseResponse {
-  answer: string;
-}
-
-interface BooleanResponse extends BaseResponse {
-  answer: boolean;
-}
-
-interface RatingResponse extends BaseResponse {
-  answer: number;
-}
-
-interface CheckboxResponse extends BaseResponse {
-  answer: string[];
-}
-
-interface FileResponse extends BaseResponse {
-  answer: string;
-}
-
-type ResponseAnswer = string | boolean | number | string[];
+type ResponseAnswer = string | boolean | number | string[] | null;
 
 interface SurveyResponse extends BaseResponse {
   answer: ResponseAnswer;
@@ -397,24 +295,22 @@ interface SurveyMetadata {
   collection_period: string;
   locations_covered: string[];
   age_range: string;
-  gender_distribution: {
-    male: number;
-    female: number;
-  };
+  gender_distribution: { male: number; female: number };
   response_rate: string;
 }
 
-export function generateStatisticalSummary(
-  surveyResponses: SurveyData
-): StatisticalSummary {
+/* ------------------------------ Summary helper ----------------------------- */
+
+export function generateStatisticalSummary(surveyResponses: SurveyData): StatisticalSummary {
   const questionsData = extractAllQuestionsDataWithConfig(surveyResponses);
   const participants = extractSexAndAge(surveyResponses);
   const averageAge = getAverageAge(participants);
 
-  // Calculate gender distribution
   const maleCount = participants.filter((p) => p.sexe === "male").length;
   const femaleCount = participants.filter((p) => p.sexe === "female").length;
-  const totalParticipants = surveyResponses.metadata.total_responses;
+  const totalParticipants = surveyResponses.metadata.total_responses || 0;
+
+  const safePct = (num: number, den: number) => (den > 0 ? Math.round((num / den) * 100) : 0);
 
   const summary: StatisticalSummary = {
     survey_info: {
@@ -427,95 +323,68 @@ export function generateStatisticalSummary(
     demographics: {
       average_age: averageAge,
       gender_distribution: {
-        male_percentage: Math.round((maleCount / totalParticipants) * 100),
-        female_percentage: Math.round((femaleCount / totalParticipants) * 100),
+        male_percentage: safePct(maleCount, totalParticipants),
+        female_percentage: safePct(femaleCount, totalParticipants),
       },
     },
-    questions_stats: {
-      dropdown: [],
-      boolean: [],
-      rating: [],
-      checkbox: [],
-      text_comment: [],
-    },
+    questions_stats: { dropdown: [], boolean: [], rating: [], checkbox: [], text_comment: [] },
   };
 
-  // Process each question
   questionsData.forEach((question) => {
     switch (question.type as QuestionType) {
       case "dropdown": {
-        const dropdownData = question.data as Array<{
-          label: string;
-          value: number;
-        }>;
+        const dropdownData = question.data as Array<{ label: string; value: number }>;
         summary.questions_stats.dropdown.push({
           question: question.question,
           responses: dropdownData.map((item) => ({
             option: item.label,
             count: item.value,
-            percentage: Math.round(
-              (item.value / question.participants_responded) * 100
-            ),
+            percentage: safePct(item.value, question.participants_responded),
           })),
         });
         break;
       }
 
       case "boolean": {
-        const booleanData = question.data as Array<{
-          label: string;
-          value: number;
-        }>;
-        const yesData = booleanData.find((item) => item.label === "Oui");
-        const noData = booleanData.find((item) => item.label === "Non");
+        const booleanData = question.data as Array<{ label: string; value: number }>;
+        const yes = booleanData.find((i) => i.label === "Oui")?.value ?? 0;
+        const no = booleanData.find((i) => i.label === "Non")?.value ?? 0;
 
         summary.questions_stats.boolean.push({
           question: question.question,
-          yes_count: yesData?.value || 0,
-          yes_percentage: Math.round(
-            ((yesData?.value || 0) / question.participants_responded) * 100
-          ),
-          no_count: noData?.value || 0,
-          no_percentage: Math.round(
-            ((noData?.value || 0) / question.participants_responded) * 100
-          ),
+          yes_count: yes,
+          yes_percentage: safePct(yes, question.participants_responded),
+          no_count: no,
+          no_percentage: safePct(no, question.participants_responded),
         });
         break;
       }
 
       case "rating": {
-        const questionData =
-          surveyResponses.questions_responses[question.question];
-        const ratingResponses =
-          questionData?.responses?.map((r: any) => parseInt(r.answer, 10)) ||
-          [];
+        const q = surveyResponses.questions_responses[question.question];
+        const ratingValues =
+          q?.responses
+            ?.map((r: any) => (typeof r.answer === "number" ? r.answer : parseInt(String(r.answer ?? ""), 10)))
+            .filter((n: number) => !Number.isNaN(n)) ?? [];
 
-        if (ratingResponses.length === 0) break;
+        if (ratingValues.length === 0) break;
 
-        const average =
-          ratingResponses.reduce(
-            (sum: number, rating: number) => sum + rating,
-            0
-          ) / ratingResponses.length;
-        const min = Math.min(...ratingResponses);
-        const max = Math.max(...ratingResponses);
+        const avg = ratingValues.reduce((sum: number, v: number) => sum + v, 0) / ratingValues.length;
+        const min = Math.min(...ratingValues);
+        const max = Math.max(...ratingValues);
 
-        const ratingCounts: Record<number, number> = {};
-        ratingResponses.forEach((rating: number) => {
-          ratingCounts[rating] = (ratingCounts[rating] || 0) + 1;
-        });
+        const counts: Record<number, number> = {};
+        ratingValues.forEach((v) => (counts[v] = (counts[v] || 0) + 1));
 
-        const distribution = Object.entries(ratingCounts).map(
-          ([rating, count]) => ({
-            rating: parseInt(rating, 10),
-            count,
-            percentage: Math.round((count / ratingResponses.length) * 100),
-          })
-        );
+        const distribution = Object.entries(counts).map(([rating, count]) => ({
+          rating: parseInt(rating, 10),
+          count,
+          percentage: safePct(count, ratingValues.length),
+        }));
 
         summary.questions_stats.rating.push({
           question: question.question,
-          average: Math.round(average * 100) / 100,
+          average: Math.round(avg * 100) / 100,
           min,
           max,
           distribution,
@@ -524,279 +393,346 @@ export function generateStatisticalSummary(
       }
 
       case "checkbox": {
-        const checkboxData = question.data as Array<{
-          label: string;
-          value: number;
-        }>;
-        const totalSelections = checkboxData.reduce(
-          (sum, item) => sum + item.value,
-          0
-        );
-
-        if (totalSelections === 0) {
-          summary.questions_stats.checkbox.push({
-            question: question.question,
-            total_selections: 0,
-            options: [],
-          });
-          break;
-        }
+        const checkboxData = question.data as Array<{ label: string; value: number }>;
+        const totalSelections = checkboxData.reduce((sum, item) => sum + item.value, 0);
 
         summary.questions_stats.checkbox.push({
           question: question.question,
           total_selections: totalSelections,
-          options: checkboxData.map((item) => ({
-            option: item.label,
-            count: item.value,
-            percentage: Math.round((item.value / totalSelections) * 100),
-          })),
+          options:
+            totalSelections > 0
+              ? checkboxData.map((item) => ({
+                  option: item.label,
+                  count: item.value,
+                  percentage: safePct(item.value, totalSelections),
+                }))
+              : [],
         });
         break;
       }
 
       case "text":
       case "comment": {
-        const textData = question.data as string[];
-
-        const sampleResponses = textData.slice(0, Math.min(5, textData.length));
-
-        const commonThemes = extractCommonThemes(textData);
+        const textData = (question.data as string[]) ?? [];
+        const sample = textData.slice(0, Math.min(5, textData.length));
+        const themes = extractCommonThemes(textData);
 
         summary.questions_stats.text_comment.push({
           question: question.question,
           type: question.type as "text" | "comment",
           response_count: textData.length,
-          sample_responses: sampleResponses,
-          common_themes: commonThemes,
+          sample_responses: sample,
+          common_themes: themes,
         });
         break;
       }
+
+      default:
+        break;
     }
   });
 
   return summary;
 }
 
-// Helper function to extract common themes from text responses
 function extractCommonThemes(responses: string[]): string[] {
-  // Simple keyword extraction - can be enhanced
-  const commonWords = [
-    "qualité",
-    "prix",
-    "disponibilité",
-    "goût",
-    "marque",
-    "distribution",
-    "promotion",
-  ];
+  const commonWords = ["qualité", "prix", "disponibilité", "goût", "marque", "distribution", "promotion"];
   const themes: string[] = [];
 
   commonWords.forEach((word) => {
-    const count = responses.filter((response) =>
-      response.toLowerCase().includes(word.toLowerCase())
-    ).length;
-
-    if (count >= Math.ceil(responses.length * 0.2)) {
-      // If word appears in 20%+ of responses
-      themes.push(word);
-    }
+    const count = responses.filter((r) => r.toLowerCase().includes(word.toLowerCase())).length;
+    if (responses.length > 0 && count >= Math.ceil(responses.length * 0.2)) themes.push(word);
   });
 
   return themes;
 }
 
-// Types pour les données de la base de données
+/* ----------------------------- Prisma input types -------------------------- */
+
 interface PrismaSurveyResponse {
   id: string;
-  responses: any; // JSON
-  age: number;
-  gender: string;
-  location: any; // JSON
+  responses: any; // JSON string or object
+  age: number | null;
+  gender: string | null;
+  location: any; // JSON string or object
   status: string;
+  createdAt?: Date | string | null;
 }
 
 interface PrismaSurvey {
   id: string;
   name: string;
-  questions: any; // JSON
-  response: PrismaSurveyResponse[];
+  questions: any; // JSON (SurveyJS)
+  responses: PrismaSurveyResponse[]; // <-- IMPORTANT: "responses" (pas "response")
 }
 
 interface PrismaMission {
   id: string;
   name: string;
-  survey: PrismaSurvey[];
+  surveys: PrismaSurvey[];
 }
 
-export function convertPrismaSurveyToSurveyData(
-  mission: PrismaMission
-): SurveyData {
-  if (!mission.surveys || mission.surveys.length === 0) {
+/* -------------------------- Normalization utilities ------------------------ */
+
+function safeJsonParse<T = any>(value: any, fallback: T): T {
+  try {
+    if (typeof value === "string") return JSON.parse(value) as T;
+    if (value && typeof value === "object") return value as T;
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeQuestionType(raw: unknown): QuestionType {
+  const t = String(raw ?? "").toLowerCase();
+
+  // SurveyJS / autres alias fréquents
+  if (t === "radiogroup" || t === "dropdown" || t === "select") return "dropdown";
+  if (t === "checkbox" || t === "multiple") return "checkbox";
+  if (t === "rating" || t === "nps") return "rating";
+  if (t === "comment" || t === "textarea") return "comment";
+  if (t === "text" || t === "input") return "text";
+  if (t === "boolean" || t === "switch") return "boolean";
+  if (t === "file" || t === "image") return "file";
+
+  // fallback
+  return "text";
+}
+
+// Extrait les questions depuis un JSON SurveyJS (pages->elements) + titles.
+// Renvoie des libellés "humains" (title) si dispo, sinon name.
+function extractQuestionsFromSurveyJS(questionsJson: any): Array<{ label: string; type: QuestionType; isRequired?: boolean }> {
+  const out: Array<{ label: string; type: QuestionType; isRequired?: boolean }> = [];
+
+  const pages = Array.isArray(questionsJson?.pages) ? questionsJson.pages : [];
+  for (const p of pages) {
+    const elements = Array.isArray(p?.elements) ? p.elements : [];
+    for (const el of elements) {
+      if (!el) continue;
+      const label = (el.title || el.name || "").toString().trim();
+      if (!label) continue;
+
+      out.push({
+        label,
+        type: normalizeQuestionType(el.type),
+        isRequired: Boolean(el.isRequired),
+      });
+    }
+  }
+
+  // Certains schémas SurveyJS peuvent mettre "elements" à la racine
+  if (out.length === 0 && Array.isArray(questionsJson?.elements)) {
+    for (const el of questionsJson.elements) {
+      const label = (el?.title || el?.name || "").toString().trim();
+      if (!label) continue;
+      out.push({
+        label,
+        type: normalizeQuestionType(el.type),
+        isRequired: Boolean(el.isRequired),
+      });
+    }
+  }
+
+  return out;
+}
+
+// Supporte 2 formats de valeur en réponse:
+// A) primitive: "Oui", true, 3, ["A","B"]
+// B) object: { answer: ..., type: ... }
+function unwrapAnswer(questionData: any): ResponseAnswer {
+  if (questionData == null) return null;
+
+  // cas objet riche
+  if (typeof questionData === "object" && !Array.isArray(questionData)) {
+    if ("answer" in questionData) return (questionData as any).answer as ResponseAnswer;
+
+    // parfois: { value: ... }
+    if ("value" in questionData) return (questionData as any).value as ResponseAnswer;
+  }
+
+  // cas primitive / array
+  if (Array.isArray(questionData)) return questionData as any;
+  if (typeof questionData === "string") return questionData;
+  if (typeof questionData === "number") return questionData;
+  if (typeof questionData === "boolean") return questionData;
+
+  // fallback
+  return String(questionData);
+}
+
+function normalizeLocation(locRaw: any): Location {
+  const loc = safeJsonParse<any>(locRaw, {});
+  const lat = typeof loc?.lat === "number" ? loc.lat : 0;
+  const lng =
+    typeof loc?.lng === "number"
+      ? loc.lng
+      : typeof loc?.long === "number"
+      ? loc.long
+      : typeof loc?.longitude === "number"
+      ? loc.longitude
+      : 0;
+
+  const label = (loc?.label || loc?.name || "Unknown").toString();
+  return { lat, lng, label };
+}
+
+function normalizeGender(g: any): "male" | "female" {
+  const s = String(g ?? "").toLowerCase();
+  if (s === "female" || s === "f") return "female";
+  return "male";
+}
+
+function normalizeAge(a: any): string {
+  const n = typeof a === "number" ? a : parseInt(String(a ?? ""), 10);
+  return Number.isNaN(n) ? "" : String(n);
+}
+
+function normKey(s: string): string {
+  return stripSpecialCharacters(String(s ?? "")).trim().toLowerCase();
+}
+
+// match une question label depuis answers keys (si SurveyJS title != key stockée, on tente une correspondance normalisée)
+function findMatchingAnswerKey(answers: Record<string, any>, questionLabel: string): string | null {
+  if (questionLabel in answers) return questionLabel;
+
+  const target = normKey(questionLabel);
+  const keys = Object.keys(answers);
+  for (const k of keys) {
+    if (normKey(k) === target) return k;
+  }
+  return null;
+}
+
+/* ---------------------- ✅ MAIN: Prisma -> SurveyData ---------------------- */
+
+export function convertPrismaSurveyToSurveyData(mission: PrismaMission): SurveyData {
+  if (!mission?.surveys?.length) {
     throw new Error("No survey found in mission");
   }
 
-  const survey = mission.surveys[0]; 
-  const surveyResponses = survey?.response || [];
+  const survey = mission.surveys[0]!;
+  const surveyResponses = Array.isArray(survey.responses) ? survey.responses : [];
 
-  if (!surveyResponses || surveyResponses.length === 0) {
-    return {
-      survey_title: survey?.name || mission.name,
-      questions_responses: {},
-      metadata: {
-        total_responses: 0,
-        collection_period: "N/A",
-        locations_covered: [],
-        age_range: "N/A",
-        gender_distribution: { male: 0, female: 0 },
-        response_rate: "0%",
-      },
-    };
-  }
+  // SurveyJS questions schema (source of truth for types)
+  const questionsJson = safeJsonParse<any>(survey.questions, {});
+  const questionsFromSchema = extractQuestionsFromSurveyJS(questionsJson);
 
-  // Initialize questions_responses structure
+  // Prépare le dictionnaire questions_responses
   const questionsResponses: Record<string, QuestionDataRaw> = {};
-
-  // Get all unique questions from all responses and their types
-  const allQuestions = new Map<string, QuestionType>();
-  surveyResponses.forEach((response: PrismaSurveyResponse) => {
-    const responseAnswers =
-      typeof response.responses === "string"
-        ? JSON.parse(response.responses)
-        : response.responses;
-
-    Object.entries(responseAnswers).forEach(
-  ([question, questionData]: [string, any]) => {
-    if (
-      questionData &&
-      typeof questionData === "object" &&
-      questionData.type
-    ) {
-      const rawType = String(questionData.type).toLowerCase();
-
-      let normalizedType: QuestionType;
-      switch (rawType) {
-        case "dropdown":
-        case "radiogroup":
-          normalizedType = "dropdown";
-          break;
-        case "text":
-          normalizedType = "text";
-          break;
-        case "checkbox":
-          normalizedType = "checkbox";
-          break;
-        case "comment":
-          normalizedType = "comment";
-          break;
-        case "boolean":
-          normalizedType = "boolean";
-          break;
-        case "rating":
-          normalizedType = "rating";
-          break;
-        case "file":
-          normalizedType = "file";
-          break;
-        default:
-          normalizedType = "file";
-          break;
-      }
-
-      allQuestions.set(question, normalizedType);
-    }
-  }
-);
-  });
-
-  // Initialize each question in questionsResponses
-  allQuestions.forEach((questionType, question) => {
-    questionsResponses[question] = {
-      type: questionType,
-      isRequired: false,
+  for (const q of questionsFromSchema) {
+    questionsResponses[q.label] = {
+      type: q.type,
+      isRequired: q.isRequired ?? false,
       responses: [],
     };
-  });
+  }
 
-  // Process survey responses
-  surveyResponses.forEach((response: PrismaSurveyResponse) => {
-    const responseAnswers =
-      typeof response.responses === "string"
-        ? JSON.parse(response.responses)
-        : response.responses;
+  // Si jamais le schema est vide, fallback : construire depuis les clés trouvées dans les réponses
+  if (questionsFromSchema.length === 0) {
+    for (const r of surveyResponses) {
+      const answers = safeJsonParse<Record<string, any>>(r.responses, {});
+      Object.keys(answers).forEach((k) => {
+        if (!questionsResponses[k]) {
+          // type déduit grossièrement depuis la valeur
+          const v = unwrapAnswer(answers[k]);
+          const inferred: QuestionType =
+            typeof v === "boolean"
+              ? "boolean"
+              : typeof v === "number"
+              ? "rating"
+              : Array.isArray(v)
+              ? "checkbox"
+              : "text";
 
-    // Parse location
-    const location =
-      typeof response.location === "string"
-        ? JSON.parse(response.location)
-        : response.location;
+          questionsResponses[k] = { type: inferred, isRequired: false, responses: [] };
+        }
+      });
+    }
+  }
 
-    const baseResponse = {
-      response_id: response.id,
-      location: {
-        lat: location?.lat || 0,
-        lng: location?.lng || location?.long || 0,
-        label: location?.label || "Unknown",
-      },
-      age: response.age.toString(),
-      sex:
-        response.gender === "male" || response.gender === "female"
-          ? (response.gender as "male" | "female")
-          : "male", // default fallback
+  // Remplir les réponses normalisées
+  for (const r of surveyResponses) {
+    const answers = safeJsonParse<Record<string, any>>(r.responses, {});
+    const location = normalizeLocation(r.location);
+
+    const baseResponse: BaseResponse = {
+      response_id: r.id,
+      location,
+      age: normalizeAge(r.age),
+      sex: normalizeGender(r.gender),
     };
 
-    // Add each answer to its corresponding question
-    Object.entries(responseAnswers).forEach(
-      ([question, questionData]: [string, any]) => {
-        if (
-          questionsResponses[question] &&
-          questionData &&
-          typeof questionData === "object"
-        ) {
-          questionsResponses[question]!.responses.push({
-            ...baseResponse,
-            answer: questionData.answer as ResponseAnswer,
-          });
-        }
-      }
-    );
-  });
+    // Pour chaque question connue, on essaye de récupérer la valeur dans answers (match exact ou normalisé)
+    for (const questionLabel of Object.keys(questionsResponses)) {
+      const answerKey = findMatchingAnswerKey(answers, questionLabel);
+      if (!answerKey) continue;
 
-  // Calculate metadata
-  const uniqueLocations = [
-    ...new Set(
+      const raw = answers[answerKey];
+      const answer = unwrapAnswer(raw);
+
+      // ignore réponses vides
+      if (answer == null) continue;
+      if (typeof answer === "string" && answer.trim() === "") continue;
+      if (Array.isArray(answer) && answer.length === 0) continue;
+
+      questionsResponses[questionLabel]!.responses.push({
+        ...baseResponse,
+        answer,
+      });
+    }
+  }
+
+  // Metadata
+  const uniqueResponseIds = new Set<string>();
+  for (const q of Object.values(questionsResponses)) {
+    for (const r of q.responses) uniqueResponseIds.add(r.response_id);
+  }
+  const totalResponses = uniqueResponseIds.size || surveyResponses.length;
+
+  const uniqueLocations = Array.from(
+    new Set(
       surveyResponses.map((r) => {
-        const loc =
-          typeof r.location === "string" ? JSON.parse(r.location) : r.location;
-        return loc?.label || "Unknown";
-      })
+        const loc = normalizeLocation(r.location);
+        return loc.label || "Unknown";
+      }),
     ),
-  ];
+  );
 
-  const ages = surveyResponses.map((r) => r.age).filter((age) => age > 0);
-  const ageRange =
-    ages.length > 0
-      ? `${Math.min(...ages)}-${Math.max(...ages)} years`
-      : "Unknown";
+  const ages = surveyResponses
+    .map((r) => (typeof r.age === "number" ? r.age : parseInt(String(r.age ?? ""), 10)))
+    .filter((n) => !Number.isNaN(n) && n > 0);
+
+  const ageRange = ages.length ? `${Math.min(...ages)}-${Math.max(...ages)} years` : "Unknown";
 
   const genderCounts = surveyResponses.reduce(
     (acc, r) => {
-      if (r.gender === "male") acc.male++;
-      else if (r.gender === "female") acc.female++;
+      const g = String(r.gender ?? "").toLowerCase();
+      if (g === "male") acc.male += 1;
+      else if (g === "female") acc.female += 1;
       return acc;
     },
-    { male: 0, female: 0 }
+    { male: 0, female: 0 },
   );
 
-  // Create collection period (you might want to get this from createdAt timestamps)
-  const collectionPeriod = "Recent responses"; // Placeholder
+  // Collection period (basé sur createdAt si dispo)
+  const dates = surveyResponses
+    .map((r) => (r.createdAt ? new Date(r.createdAt as any) : null))
+    .filter((d): d is Date => d instanceof Date && !Number.isNaN(d.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
+
+  const collectionPeriod =
+    dates.length >= 2
+      ? `${dates[0].toISOString()} to ${dates[dates.length - 1].toISOString()}`
+      : "N/A";
 
   const metadata: SurveyMetadata = {
-    total_responses: surveyResponses.length,
+    total_responses: totalResponses,
     collection_period: collectionPeriod,
     locations_covered: uniqueLocations,
     age_range: ageRange,
     gender_distribution: genderCounts,
-    response_rate: "100%", // Assuming all responses are valid
+    response_rate: totalResponses > 0 ? "100%" : "0%",
   };
 
   return {

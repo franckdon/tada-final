@@ -18,16 +18,5 @@ export default async function DashboardLayout({
     notFound();
   }
 
-  return (
-    <ClientVeltWrapper
-      user={
-        {
-          ...session.user,
-          organizationId: session?.session.activeOrganizationId,
-        } as any
-      }
-    >
-      {children}
-    </ClientVeltWrapper>
-  );
+  return <div>{children}</div>;
 }

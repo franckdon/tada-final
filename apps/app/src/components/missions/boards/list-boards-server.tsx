@@ -1,52 +1,53 @@
 import { prisma } from "@/lib/prisma";
 import { NoResults } from "../empty-states";
-import { ListMissions } from "../list-missions";
-import { MissionFilter } from "../mission-filter";
 import { AddBoardButton } from "./add-board-button";
 import { ListBoards } from "./list-boards";
 
 const pageSize = 10;
-const maxItems = 100000;
 
 interface FetchMissionsParams {
   workspaceId: string;
   query?: string;
   status?: string;
-  date?: string;
-  from: number; // Starting page number
-  to: number; // Ending page number
+  date?: string; // ISO string
+  page: number; // 0-based
   pageSize: number;
   sort?: string[];
 }
 
-function fetchMissions({
+async function fetchMissions({
   workspaceId,
   query,
   status,
   date,
-  from,
-  to,
+  page,
   pageSize,
   sort = [],
 }: FetchMissionsParams) {
-  const whereClause = {
+  const whereClause: any = {
     organizationId: workspaceId,
-    ...(query && { name: { contains: query } }),
-    ...(status && status !== "all" && { status }),
-    ...(date && { createdAt: { gte: new Date(date) } }),
+    ...(query?.trim()
+      ? { name: { contains: query.trim(), mode: "insensitive" } }
+      : {}),
+    ...(status && status !== "all" ? { status } : {}),
+    ...(date ? { createdAt: { gte: new Date(date) } } : {}),
   };
 
-  const orderByClause = sort.map((s) => ({ [s]: "asc" }));
+  const orderByClause =
+    sort.length > 0 ? sort.map((s) => ({ [s]: "asc" as const })) : undefined;
 
-  const skip = from * pageSize;
-  const take = (to - from + 1) * pageSize;
-
-  return prisma.mission.findMany({
+  // ✅ fetch +1 pour déterminer hasNextPage
+  const items = await prisma.mission.findMany({
     where: whereClause,
-    orderBy: orderByClause,
-    skip,
-    take,
+    ...(orderByClause ? { orderBy: orderByClause } : {}),
+    skip: page * pageSize,
+    take: pageSize + 1,
   });
+
+  const hasNextPage = items.length > pageSize;
+  const missions = hasNextPage ? items.slice(0, pageSize) : items;
+
+  return { missions, hasNextPage };
 }
 
 export async function ListBoardsServer({
@@ -66,41 +67,32 @@ export async function ListBoardsServer({
   status?: string;
   date?: string;
 }) {
-  const hasFilters = Object.values({ query, status, date }).some(
-    (value) => value !== null
-  );
-  const missions = await fetchMissions({
-    workspaceId,
+  // ✅ orgId = workspaceId dans ta DB (organizationId)
+  const { missions, hasNextPage } = await fetchMissions({
+    workspaceId: orgId,
     query,
     status,
     date,
-    from: 0,
-    to: hasFilters ? maxItems : page > 0 ? pageSize : pageSize - 1,
+    page,
     pageSize,
     sort,
   });
 
-  async function loadMore({ from, to }: { from: number; to: number }) {
+  async function loadMore({ page: nextPage }: { page: number }) {
     "use server";
-
     return fetchMissions({
-      workspaceId,
+      workspaceId: orgId,
       query,
       status,
       date,
-      from: from + 1,
-      to,
+      page: nextPage,
       pageSize,
       sort,
     });
   }
 
-  const hasNextPage = Boolean(
-    missions.length && missions.length / (page + 1) > pageSize
-  );
-
   return (
-    <div className="space-x-4 ">
+    <div className="space-x-4">
       <AddBoardButton missionId={missionId} organizationId={orgId} />
       {missions.length > 0 ? (
         <ListBoards

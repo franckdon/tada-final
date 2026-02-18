@@ -3,16 +3,27 @@ import { NavigationBarMission } from "@/components/missions/navigation-bar-missi
 import { ReportView } from "@/components/missions/report-view";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
-import { eachMonthOfInterval, format } from "date-fns";
-import { getDateRange } from "@/utils/get-survey-date-range";
-import { MapLocation, TSurvey } from "@/types/survey-response";
+import Link from "next/link";
+import { headers } from "next/headers";
+import { getI18n } from "@/locales/server";
+
+import { auth } from "@/lib/auth";
 import { MissionSubmission } from "@/components/missions/mission-submission";
 import { getMissionSubmissionData } from "@/lib/get-mission-submission-data";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
-import { SubDashboard } from "@/types/sub-dashboard";
-import { getI18n } from "@/locales/server";
-import Link from "next/link";
+
+import type {
+  MapLocation,
+  MonthlySurveyCount,
+  TSurvey,
+} from "@/types/survey-response";
+import type { SubDashboard } from "@/types/sub-dashboard";
+
+import {
+  eachMonthOfInterval,
+  format,
+  startOfMonth,
+  endOfMonth,
+} from "date-fns";
 
 export const metadata = {
   title: "Mission | Tada",
@@ -30,16 +41,11 @@ export default async function Page({
   const resolvedParams = await params;
   const resolvedSearchParams = await searchParams;
 
-  console.log("[MISSION_PAGE] params =", resolvedParams);
-  console.log("[MISSION_PAGE] searchParams =", resolvedSearchParams);
-
   const session = await auth.api.getSession({
     headers: await headers(),
   });
 
-  if (!session || !session.user) {
-    notFound();
-  }
+  if (!session?.user) notFound();
 
   const mission = await prisma.mission.findUnique({
     where: { id: resolvedParams.missionId },
@@ -49,12 +55,19 @@ export default async function Page({
       status: true,
       createdAt: true,
       updatedAt: true,
-      surveys: true,
+      surveys: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          createdAt: true,
+          updatedAt: true,
+          questions: true,
+        },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
-
-  console.log("[MISSION_PAGE] params =", resolvedParams);
-  console.log("[MISSION_PAGE] searchParams =", resolvedSearchParams);
 
   if (!mission) {
     return (
@@ -75,17 +88,48 @@ export default async function Page({
     );
   }
 
-  const { start, end } = getDateRange("this_year");
+  const surveyId = mission.surveys?.[0]?.id;
 
+  if (!surveyId) {
+    return (
+      <div className="w-full h-full border border-gray-100 bg-white dark:bg-gray-900">
+        <NavigationBarMission
+          mission={mission as any}
+          workspaceId={resolvedParams.workspaceId}
+        />
+        <div className="p-6">
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+            <h2 className="text-lg font-semibold">
+              {t("missions.addSubDashboard.notFound.title")}
+            </h2>
+            <p className="mt-2 text-sm text-gray-500">
+              Aucune enquête (survey) n’est rattachée à cette mission.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ Tout charger (pas de timeframe)
   const surveyResponses = await prisma.surveyResponse.findMany({
-    where: {
-      surveyId: mission?.surveys[0]?.id,
-      createdAt: {
-        gte: start,
-        lte: end,
-      },
-      status: "completed",
+    where: { surveyId, status: "completed" },
+    select: {
+      id: true,
+      createdAt: true,
+      location: true,
+      responses: true,
+      age: true,
+      gender: true,
+      status: true,
+      surveyId: true,
+      userId: true,
+      submittedAt: true,
+      updatedAt: true,
+      ipAddress: true,
+      userAgent: true,
     },
+    orderBy: { createdAt: "asc" },
   });
 
   const subDashboards = await prisma.subDashboard.findMany({
@@ -93,70 +137,103 @@ export default async function Page({
       missionId: resolvedParams.missionId,
       OR: [{ isShared: true }, { userId: session.user.id }],
     },
-    include: {
-      user: true,
-    },
+    include: { user: true },
+    orderBy: { createdAt: "desc" },
   });
 
-  const monthsInRange = eachMonthOfInterval({ start, end });
+  // ✅ MonthlySurveyCount[] attendu par ReportView : { month: "01".."12", count }
+  let monthlyCounts: MonthlySurveyCount[] = [];
 
-  const monthlyCounts = monthsInRange.map((date) => ({
-    month: format(date, "MM"),
-    label: format(date, "MMM"),
-    count: 0,
-  }));
+  if (surveyResponses.length > 0) {
+    const minDate = startOfMonth(surveyResponses[0].createdAt);
+    const maxDate = endOfMonth(
+      surveyResponses[surveyResponses.length - 1].createdAt,
+    );
 
-  surveyResponses.forEach(({ createdAt }) => {
-    const month = format(createdAt, "MM");
-    const entry = monthlyCounts.find((m) => m.month === month);
-    if (entry) entry.count += 1;
-  });
+    const months = eachMonthOfInterval({ start: minDate, end: maxDate });
 
+    monthlyCounts = months.map((d) => ({
+      month: format(d, "MM"),
+      count: 0,
+    }));
+
+    for (const r of surveyResponses) {
+      const m = format(r.createdAt, "MM");
+      const entry = monthlyCounts.find((x) => x.month === m);
+      if (entry) entry.count += 1;
+    }
+  }
+
+  // ✅ Locations : JSON coords ou string
   const locationMap = new Map<string, MapLocation>();
 
-  surveyResponses.forEach((resp) => {
-    const loc = resp.location as any;
-    const label = loc.label;
-    const lng = loc.lng;
-    const lat = loc.lat;
+  for (const resp of surveyResponses) {
+    const loc: any = resp.location;
 
-    if (!label || lng === undefined || lat === undefined) return;
+    // cas JSON {label,lng,lat}
+    if (loc && typeof loc === "object") {
+      const label = loc.label;
+      const lng = loc.lng ?? loc.lon;
+      const lat = loc.lat;
 
-    if (locationMap.has(label)) {
-      locationMap.get(label)!.count += 1;
-    } else {
-      locationMap.set(label, {
-        id: crypto.randomUUID(),
-        coordinates: [lng, lat],
-        count: 1,
-        location: label,
-      });
+      if (!label || lng == null || lat == null) continue;
+
+      const prev = locationMap.get(label);
+      if (prev) prev.count += 1;
+      else {
+        locationMap.set(label, {
+          id: crypto.randomUUID(),
+          coordinates: [Number(lng), Number(lat)],
+          count: 1,
+          location: label,
+        });
+      }
+      continue;
     }
-  });
+
+    // cas string "Koumassi"
+    if (typeof loc === "string" && loc.trim()) {
+      const label = loc.trim();
+      const prev = locationMap.get(label);
+      if (prev) prev.count += 1;
+      else {
+        locationMap.set(label, {
+          id: crypto.randomUUID(),
+          coordinates: null as any,
+          count: 1,
+          location: label,
+        });
+      }
+    }
+  }
 
   const mapLocations: MapLocation[] = Array.from(locationMap.values());
 
-  const data = await getMissionSubmissionData(mission?.surveys[0]?.id || "");
+  const submissionData = await getMissionSubmissionData(surveyId);
+
+  const tab = resolvedSearchParams.tab;
 
   return (
-    <div className="w-full h-full border border-gray-100 bg-white dark:bg-gray-900 ">
+    <div className="w-full h-full border border-gray-100 bg-white dark:bg-gray-900">
       <NavigationBarMission
-        mission={mission}
+        mission={mission as any}
         workspaceId={resolvedParams.workspaceId}
       />
-      {resolvedSearchParams.tab === "overview" || !resolvedSearchParams.tab ? (
+
+      {tab === "overview" || !tab ? (
         <div className="flex flex-col md:flex-row gap-6 w-full px-4 mt-8">
           <ReportView
-            barChartData={monthlyCounts || []}
-            locations={mapLocations}
+            barChartData={monthlyCounts}
+            // ton MapboxMap utilise locations[0]?.coordinates → filtre ceux sans coords
+            locations={mapLocations.filter((l) => Array.isArray(l.coordinates))}
             surveys={mission.surveys as unknown as TSurvey[]}
-            surveyResponses={surveyResponses}
-            columns={data.columns}
+            surveyResponses={surveyResponses as any}
+            columns={submissionData.columns}
             workspaceId={resolvedParams.workspaceId}
             subDashboards={subDashboards as unknown as SubDashboard[]}
           />
         </div>
-      ) : resolvedSearchParams.tab === "dashboards" ? (
+      ) : tab === "dashboards" ? (
         <div className="mt-10">
           <ListBoardsServer
             orgId={resolvedParams.workspaceId}
@@ -169,11 +246,11 @@ export default async function Page({
           />
         </div>
       ) : (
-        <div className="flex flex-col md:flex-row gap-6 w-full px-4  py-5">
+        <div className="flex flex-col md:flex-row gap-6 w-full px-4 py-5">
           <MissionSubmission
-            rows={data.rows}
-            surveys={surveyResponses}
-            locations={mapLocations}
+            rows={submissionData.rows}
+            surveys={surveyResponses as any}
+            locations={mapLocations.filter((l) => Array.isArray(l.coordinates))}
             params={resolvedParams}
           />
         </div>

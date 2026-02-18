@@ -81,8 +81,6 @@ export const SurveyMiniDashboard = ({
       cell: ({ row }) => {
         const subDash = row.original;
 
-        console.log("subDash?.user?.name", subDash?.user?.name);
-
         return (
           <div className="flex justify-between items-center">
             <span>{subDash?.user?.name}</span>
@@ -178,7 +176,7 @@ export const SurveyMiniDashboard = ({
                       ? null
                       : flexRender(
                           header.column.columnDef.header,
-                          header.getContext()
+                          header.getContext(),
                         )}
                   </TableHead>
                 ))}
@@ -202,7 +200,7 @@ export const SurveyMiniDashboard = ({
                       >
                         {flexRender(
                           cell.column.columnDef.cell,
-                          cell.getContext()
+                          cell.getContext(),
                         )}
                       </Link>
                     </TableCell>
@@ -260,7 +258,7 @@ export const SurveyMiniDashboard = ({
                     {pageIndex + 1}
                   </Button>
                 );
-              }
+              },
             )}
             {table.getPageCount() > 5 && (
               <span className="text-gray-500">...</span>

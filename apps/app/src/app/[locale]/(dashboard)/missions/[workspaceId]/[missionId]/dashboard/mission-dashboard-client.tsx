@@ -1,10 +1,8 @@
-// src/app/[locale]/(dasboard)/missions/[workspaceId]/[missionId]/dasboard/mission-dashboard-client.tsx
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { useQueryState } from "nuqs";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button } from "@tada/ui/components/button";
 
 import { BarChartCard } from "@/components/missions/boards/graphs/bar-chart";
 import { BarChartHorizontalCard } from "@/components/missions/boards/graphs/bar-chart-horizontal";
@@ -49,9 +47,8 @@ export default function MissionDashboardClient({
   currentUserId,
   workspaceMembers,
 }: MissionDashboardClientProps) {
-  // On enrichit QuestionData avec l’état de vue (filter + sorted)
   const [questions, setQuestions] = useState<QuestionWithView[]>(() =>
-    initialQuestions.map((q) => ({
+    (initialQuestions ?? []).map((q) => ({
       ...q,
       activeFilter: "standard",
       isSorted: false,
@@ -68,28 +65,40 @@ export default function MissionDashboardClient({
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [showRail, setShowRail] = useState(false);
 
+  // ✅ debug rapide (dans la console du navigateur)
+  useEffect(() => {
+    console.log("[MissionDashboardClient]", {
+      initialQuestionsCount: initialQuestions?.length,
+      questionsCount: questions.length,
+      totalResponses,
+      missionId,
+      missionStatus,
+    });
+  }, [
+    initialQuestions?.length,
+    questions.length,
+    totalResponses,
+    missionId,
+    missionStatus,
+  ]);
+
   const openCommentsForQuestion = (question: QuestionWithView) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("commentQuestionKey", question.question);
-
     router.replace(`?${params.toString()}`, { scroll: false });
 
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("scroll-to-question", {
-          detail: { questionKey: question.question },
-        }),
-      );
-    }
+    window.dispatchEvent(
+      new CustomEvent("scroll-to-question", {
+        detail: { questionKey: question.question },
+      }),
+    );
 
     setActiveBubbleQuestionKey((prev) =>
       prev === question.question ? null : question.question,
     );
   };
 
-  const [, setQuestionId] = useQueryState("questionId", {
-    defaultValue: "",
-  });
+  const [, setQuestionId] = useQueryState("questionId", { defaultValue: "" });
 
   const openChangeChartModal = (question: QuestionWithView) => {
     const id = question.chartId ?? question.question;
@@ -128,12 +137,7 @@ export default function MissionDashboardClient({
       setQuestions((prev) =>
         prev.map((q) =>
           q.chartId === questionId || q.question === questionId
-            ? {
-                ...q,
-                chart_type: chartType,
-                activeFilter: filter,
-                isSorted,
-              }
+            ? { ...q, chart_type: chartType, activeFilter: filter, isSorted }
             : q,
         ),
       );
@@ -151,325 +155,213 @@ export default function MissionDashboardClient({
     downloadCsv(`mission-${missionId}-${safeName}.csv`, rows);
   };
 
-  const exportAllCsv = (delimiter: ";" | ",") => {
-    const allRows = questions.flatMap((q) => questionToCsvRows(q as any));
-    downloadCsv(`mission-${missionId}-all-questions.csv`, allRows, {
-      delimiter,
-    });
-  };
+  // ✅ Empty state : si rien à afficher, on le dit clairement
+  if (!questions.length) {
+    return (
+      <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+        <h2 className="text-lg font-semibold">Aucun graphique à afficher</h2>
+        <p className="mt-2 text-sm text-gray-500">
+          Causes possibles :
+          <br />• la mission n’a pas de réponses <br />• l’extraction des
+          questions retourne un tableau vide
+          <br />• tu ne passes pas <code>initialQuestions</code> au composant
+        </p>
 
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const custom = e as CustomEvent<{ questionKey: string }>;
-      const key = custom.detail?.questionKey;
-      if (!key) return;
-
-      const el =
-        document.querySelector<HTMLElement>(`[data-question-key="${key}"]`) ||
-        document.getElementById(`question-${key}`);
-
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        el.classList.add("ring-2", "ring-sky-400", "ring-offset-2");
-
-        setTimeout(() => {
-          el.classList.remove("ring-2", "ring-sky-400", "ring-offset-2");
-        }, 2000);
-      }
-    };
-
-    window.addEventListener("scroll-to-question", handler);
-    return () => window.removeEventListener("scroll-to-question", handler);
-  }, []);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const y =
-        window.pageYOffset ||
-        document.documentElement.scrollTop ||
-        document.body.scrollTop ||
-        0;
-
-      // Debug temporaire
-      // console.log("[Dashboard] scrollY =", y);
-
-      setShowRail(y > 200);
-    };
-
-    // Évalue une première fois au mount
-    handleScroll();
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-    };
-  }, []);
-
-  useEffect(() => {
-    const scroller = document.getElementById("dashboard-scroll");
-    if (!scroller) {
-      console.warn("[MissionDashboard] #dashboard-scroll introuvable");
-      return;
-    }
-
-    const handleScroll = () => {
-      const y = scroller.scrollTop;
-      setShowRail(y > 200);
-    };
-
-    // init
-    handleScroll();
-
-    scroller.addEventListener("scroll", handleScroll, { passive: true });
-    return () => scroller.removeEventListener("scroll", handleScroll);
-  }, []);
+        <div className="mt-4 text-xs text-gray-500">
+          Debug: totalResponses = {totalResponses} | missionId = {missionId}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
-      {questions
-        //.filter((question) => question.participants_responded > 0)
-        .map((question, index) => {
-          const commentCount =
-            commentCountsByQuestion?.[question.question] ?? 0;
+      {questions.map((question, index) => {
+        const commentCount = commentCountsByQuestion?.[question.question] ?? 0;
 
-          const participationLabel = `${index + 1} de ${
-            questions.length
-          } | ${question.participants_responded} Participants (${Math.round(
-            (question.participants_responded / totalResponses) * 100,
-          )}%)`;
+        // ✅ guard division by zero
+        const pct =
+          totalResponses > 0
+            ? Math.round(
+                (question.participants_responded / totalResponses) * 100,
+              )
+            : 0;
 
-          const renderInsights =
-            !!question.insights && !!question.insightsUpdatedAt;
+        const participationLabel = `${index + 1} de ${questions.length} | ${
+          question.participants_responded
+        } Participants (${pct}%)`;
 
-          const type = question.chart_type;
-          const questionKey = question.question;
-          const domId = `question-${index + 1}`;
-          const bubbleOpen = activeBubbleQuestionKey === questionKey;
+        const renderInsights =
+          !!question.insights && !!question.insightsUpdatedAt;
 
-          // Valeurs par défaut : pour les viz non bar/column
-          let chartData: Array<{ label: string; value: number }> | any =
-            question.data;
-          let chartConfig: ChartConfig = question.config as ChartConfig;
+        const type = question.chart_type;
+        const questionKey = question.question;
+        const domId = `question-${index + 1}`;
+        const bubbleOpen = activeBubbleQuestionKey === questionKey;
 
-          // Pour bar / column → on délègue au helper applyFilterAndSort
-          if (type === "bar" || type === "column") {
-            const result = applyFilterAndSort(question, type);
-            chartData = result.data;
-            chartConfig = result.config;
-          }
+        let chartData: Array<{ label: string; value: number }> | any =
+          question.data;
+        let chartConfig: ChartConfig = question.config as ChartConfig;
 
-          return (
-            <div
-              key={question.chartId ?? index}
-              id={domId}
-              data-question-key={questionKey}
-              data-export-question="true"
-              data-export-id={question.chartId ?? `q-${index + 1}`}
-              data-export-title={question.question}
-              className="relative mb-8 space-y-3"
-            >
-              {commentCount > 0 && (
-                <CommentPin
-                  count={commentCount}
-                  label={question.question}
-                  onClick={() => openCommentsForQuestion(question)}
-                />
-              )}
+        if (type === "bar" || type === "column") {
+          const result = applyFilterAndSort(question, type);
+          chartData = result.data;
+          chartConfig = result.config;
+        }
 
-              {renderInsights && (
-                <InsightsSection
-                  insights={question.insights as any}
-                  insightsUpdatedAt={question.insightsUpdatedAt}
-                  questionTitle={question.question}
-                  missionStatus={missionStatus}
-                />
-              )}
+        return (
+          <div
+            key={question.chartId ?? index}
+            id={domId}
+            data-question-key={questionKey}
+            className="relative mb-8 space-y-3"
+          >
+            {commentCount > 0 && (
+              <CommentPin
+                count={commentCount}
+                label={question.question}
+                onClick={() => openCommentsForQuestion(question)}
+              />
+            )}
 
-              {/* {question.type !== "text" && question.type !== "comment" && (
-                <div className="flex justify-end gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openChangeChartModal(question)}
-                  >
-                    Modifier la visualisation
-                  </Button>
+            {renderInsights && (
+              <InsightsSection
+                insights={question.insights as any}
+                insightsUpdatedAt={question.insightsUpdatedAt}
+                questionTitle={question.question}
+                missionStatus={missionStatus}
+              />
+            )}
 
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => openCommentsForQuestion(question)}
-                    className="relative"
-                    title={question.question}
-                  >
-                    Commentaires
-                    {commentCount > 0 && (
-                      <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary/10 text-primary text-[11px] px-1">
-                        {commentCount}
-                      </span>
-                    )}
-                  </Button>
-                </div>
-              )} */}
+            {type === "bar" && (
+              <BarChartHorizontalCard
+                subDashboardItemId={question.chartId ?? ""}
+                data={chartData}
+                config={chartConfig}
+                primaryDataKey="value"
+                categoryKey="label"
+                title={question.question}
+                description=""
+                participationQuestions={participationLabel}
+                handleExportCsv={() => exportQuestionCsv(question)}
+                onCommentsClick={() => openCommentsForQuestion(question)}
+                commentCount={commentCount}
+              />
+            )}
 
-              {/* BAR / COLUMN */}
-              {type === "bar" && (
-                <BarChartHorizontalCard
-                  subDashboardItemId={question.chartId ?? ""}
-                  data={
-                    chartData as Array<{
-                      label: string;
-                      value: number;
-                      percentage?: number;
-                    }>
-                  }
-                  config={chartConfig}
-                  primaryDataKey="value"
-                  categoryKey="label"
-                  title={question.question}
-                  description=""
-                  participationQuestions={participationLabel}
-                  handleExportCsv={() => exportQuestionCsv(question)}
-                  onCommentsClick={() => openCommentsForQuestion(question)}
-                  commentCount={commentCount}
-                />
-              )}
+            {type === "column" && (
+              <BarChartCard
+                subDashboardItemId={question.chartId ?? ""}
+                data={chartData}
+                config={chartConfig}
+                primaryDataKey="value"
+                categoryKey="label"
+                title={question.question}
+                description=""
+                participationQuestions={participationLabel}
+                handleExportCsv={() => exportQuestionCsv(question)}
+                onCommentsClick={() => openCommentsForQuestion(question)}
+                commentCount={commentCount}
+              />
+            )}
 
-              {type === "column" && (
-                <BarChartCard
-                  subDashboardItemId={question.chartId ?? ""}
-                  data={
-                    chartData as Array<{
-                      label: string;
-                      value: number;
-                      percentage?: number;
-                    }>
-                  }
-                  config={chartConfig}
-                  primaryDataKey="value"
-                  categoryKey="label"
-                  title={question.question}
-                  description=""
-                  participationQuestions={participationLabel}
-                  handleExportCsv={() => exportQuestionCsv(question)}
-                  onCommentsClick={() => openCommentsForQuestion(question)}
-                  commentCount={commentCount}
-                />
-              )}
+            {type === "stacked_bar" && (
+              <BarChartHorizontalStackedCard
+                subDashboardItemId={question.chartId ?? ""}
+                data={question.data as any}
+                config={question.config as ChartConfig}
+                categoryKey={question.type === "rating" ? "category" : "label"}
+                title={question.question}
+                description=""
+                participationQuestions={participationLabel}
+                participantCount={question.participants_responded}
+                primaryKeys={question.primaryKeys}
+                min={question.min || 0}
+                max={question.max || 100}
+                handleExportCsv={() => exportQuestionCsv(question)}
+                onCommentsClick={() => openCommentsForQuestion(question)}
+                commentCount={commentCount}
+              />
+            )}
 
-              {/* STACKED BAR (horizontal) */}
-              {type === "stacked_bar" && (
-                <BarChartHorizontalStackedCard
-                  subDashboardItemId={question.chartId ?? ""}
-                  data={question.data as any}
-                  config={question.config as ChartConfig}
-                  categoryKey={
-                    question.type === "rating" ? "category" : "label"
-                  }
-                  title={question.question}
-                  description=""
-                  participationQuestions={participationLabel}
-                  participantCount={question.participants_responded}
-                  primaryKeys={question.primaryKeys}
-                  min={question.min || 0}
-                  max={question.max || 100}
-                  handleExportCsv={() => exportQuestionCsv(question)}
-                  onCommentsClick={() => openCommentsForQuestion(question)}
-                  commentCount={commentCount}
-                />
-              )}
+            {type === "stacked_column" && (
+              <BarChartStackedCard
+                subDashboardItemId={question.chartId ?? ""}
+                data={question.data as any}
+                config={question.config as ChartConfig}
+                categoryKey={question.type === "rating" ? "category" : "label"}
+                title={question.question}
+                description=""
+                participationQuestions={participationLabel}
+                participantCount={question.participants_responded}
+                primaryKeys={question.primaryKeys}
+                min={question.min || 0}
+                max={question.max || 100}
+                handleExportCsv={() => exportQuestionCsv(question)}
+                onCommentsClick={() => openCommentsForQuestion(question)}
+                commentCount={commentCount}
+              />
+            )}
 
-              {/* STACKED COLUMN (vertical) */}
-              {type === "stacked_column" && (
-                <BarChartStackedCard
-                  subDashboardItemId={question.chartId ?? ""}
-                  data={question.data as any}
-                  config={question.config as ChartConfig}
-                  categoryKey={
-                    question.type === "rating" ? "category" : "label"
-                  }
-                  title={question.question}
-                  description=""
-                  participationQuestions={participationLabel}
-                  participantCount={question.participants_responded}
-                  primaryKeys={question.primaryKeys}
-                  min={question.min || 0}
-                  max={question.max || 100}
-                  handleExportCsv={() => exportQuestionCsv(question)}
-                  onCommentsClick={() => openCommentsForQuestion(question)}
-                  commentCount={commentCount}
-                />
-              )}
+            {type === "pie" && (
+              <PieChartCard
+                subDashboardItemId={question.chartId ?? ""}
+                data={(question.data as any) ?? []}
+                config={question.config as ChartConfig}
+                primaryDataKey="value"
+                categoryKey="label"
+                title={question.question}
+                description=""
+                participationQuestions={participationLabel}
+                participantCount={question.participants_responded}
+                handleExportCsv={() => exportQuestionCsv(question)}
+                onCommentsClick={() => openCommentsForQuestion(question)}
+                commentCount={commentCount}
+              />
+            )}
 
-              {/* PIE */}
-              {type === "pie" && (
-                <PieChartCard
-                  subDashboardItemId={question.chartId ?? ""}
-                  data={
-                    (question.data as Array<{
-                      label: string;
-                      value: number;
-                    }>) ?? []
-                  }
-                  config={question.config as ChartConfig}
-                  primaryDataKey="value"
-                  categoryKey="label"
-                  title={question.question}
-                  description=""
-                  participationQuestions={participationLabel}
-                  participantCount={question.participants_responded}
-                  handleExportCsv={() => exportQuestionCsv(question)}
-                  onCommentsClick={() => openCommentsForQuestion(question)}
-                  commentCount={commentCount}
-                />
-              )}
+            {type === "table" && (
+              <ArrayChartCard
+                subDashboardItemId={question.chartId ?? ""}
+                texts={question.data as unknown[]}
+                title={question.question}
+                description=""
+                participationQuestions={participationLabel}
+                handleExportCsv={() => exportQuestionCsv(question)}
+                onCommentsClick={() => openCommentsForQuestion(question)}
+                commentCount={commentCount}
+              />
+            )}
 
-              {/* TABLE */}
-              {type === "table" && (
-                <ArrayChartCard
-                  subDashboardItemId={question.chartId ?? ""}
-                  texts={question.data as unknown[]}
-                  title={question.question}
-                  description=""
-                  participationQuestions={participationLabel}
-                  handleExportCsv={() => exportQuestionCsv(question)}
-                  onCommentsClick={() => openCommentsForQuestion(question)}
-                  commentCount={commentCount}
-                />
-              )}
+            {type === "turf" && (
+              <RadarChartCard
+                subDashboardItemId={question.chartId ?? ""}
+                data={question.data as any}
+                config={question.config as ChartConfig}
+                primaryDataKey="value"
+                categoryKey="label"
+                title={question.question}
+                description=""
+                participationQuestions={participationLabel}
+                handleExportCsv={() => exportQuestionCsv(question)}
+                onCommentsClick={() => openCommentsForQuestion(question)}
+                commentCount={commentCount}
+              />
+            )}
 
-              {/* TURF / radar */}
-              {type === "turf" && (
-                <RadarChartCard
-                  subDashboardItemId={question.chartId ?? ""}
-                  data={
-                    question.data as Array<{ label: string; value: number }>
-                  }
-                  config={question.config as ChartConfig}
-                  primaryDataKey="value"
-                  categoryKey="label"
-                  title={question.question}
-                  description=""
-                  participationQuestions={participationLabel}
-                  handleExportCsv={() => exportQuestionCsv(question)}
-                  onCommentsClick={() => openCommentsForQuestion(question)}
-                  commentCount={commentCount}
-                />
-              )}
-
-              {bubbleOpen && (
-                <QuestionCommentsBubble
-                  missionId={missionId}
-                  questionKey={questionKey}
-                  questionLabel={question.question}
-                  currentUserId={currentUserId}
-                  workspaceMembers={workspaceMembers}
-                  onClose={() => setActiveBubbleQuestionKey(null)}
-                />
-              )}
-            </div>
-          );
-        })}
+            {bubbleOpen && (
+              <QuestionCommentsBubble
+                missionId={missionId}
+                questionKey={questionKey}
+                questionLabel={question.question}
+                currentUserId={currentUserId}
+                workspaceMembers={workspaceMembers}
+                onClose={() => setActiveBubbleQuestionKey(null)}
+              />
+            )}
+          </div>
+        );
+      })}
 
       <FilterChangeChartType
         getQuestionConfig={getQuestionConfig}
@@ -479,10 +371,8 @@ export default function MissionDashboardClient({
       <DashboardActionsRail
         onExportClick={() => setIsExportDialogOpen(true)}
         visible={showRail}
-        //visible={true}
       />
 
-      {/* Modal d’export */}
       <ExportOptionsDialog
         open={isExportDialogOpen}
         onOpenChange={setIsExportDialogOpen}
