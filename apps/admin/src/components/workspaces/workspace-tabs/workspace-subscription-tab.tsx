@@ -28,8 +28,6 @@ import SubscriptionInvoiceDownloadButton from "./subscription-invoice-download";
 
 const PLAN_CODES = ["starter", "growth", "business", "entreprise"] as const;
 
-const UNIT_PRICE_XOF = 9000;
-
 type PaymentMethod = "cash" | "cheque" | "bank_transfer" | "mobile_money";
 
 const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string }> = [
@@ -146,14 +144,14 @@ export default function WorkspaceSubscriptionTab({
     (subscription?.overrides ?? {}) as PlanOverrides,
   );
 
-  // ---- Billing (for invoice) ----
-  const [paymentMethod, setPaymentMethod] =
-    React.useState<PaymentMethod>("cash");
-
-  const [creditsQty, setCreditsQty] = React.useState<number>(1);
-
-  const [amountXof, setAmountXof] = React.useState<number>(UNIT_PRICE_XOF);
-  const [amountTouched, setAmountTouched] = React.useState(false);
+  // ✅ Nouveau workflow:
+  // - Avant d'attribuer: méthode de paiement obligatoire + montant obligatoire
+  // - Le montant n’est plus calculé automatiquement
+  // - creditsQty n'est plus un input: il vient du plan sélectionné
+  const [paymentMethod, setPaymentMethod] = React.useState<PaymentMethod | "">(
+    "",
+  );
+  const [amountXof, setAmountXof] = React.useState<number>(0);
 
   const [isSaving, setIsSaving] = React.useState(false);
 
@@ -182,6 +180,16 @@ export default function WorkspaceSubscriptionTab({
     planCode === "entreprise" ? overrides : null,
   );
 
+  // ✅ creditsQty = "crédit par défaut" du plan sélectionné
+  // Ici tu veux utiliser respondentCompletes comme "creditsQty"
+  // (valeur brute, pas formatLimit)
+  const creditsQtyFromPlan = React.useMemo(() => {
+    const v = selectedEffective.respondentCompletes;
+    if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+    // cas "unlimited" ou invalide -> fallback technique (évite l'erreur backend)
+    return 1;
+  }, [selectedEffective.respondentCompletes]);
+
   const currentPlanCodeForLimits = hasSubscription
     ? (subscription.planCode as PlanCode)
     : planCode;
@@ -203,41 +211,16 @@ export default function WorkspaceSubscriptionTab({
   const canDisable = hasSubscription && subscription?.status === "active";
   const canEnable = hasSubscription && subscription?.status !== "active";
 
-  // ---- Auto amount (9000 * credits) for non-entreprise unless user touched ----
-  React.useEffect(() => {
-    if (planCode === "entreprise") return;
-    if (amountTouched) return;
-
-    const qty = Number.isFinite(creditsQty) && creditsQty > 0 ? creditsQty : 1;
-    setAmountXof(qty * UNIT_PRICE_XOF);
-  }, [creditsQty, planCode, amountTouched]);
-
-  React.useEffect(() => {
-    // when switching plan: reset amountTouched logic
-    setAmountTouched(false);
-    if (planCode === "entreprise") {
-      // no default for enterprise
-      setAmountXof(0);
-    } else {
-      const qty =
-        Number.isFinite(creditsQty) && creditsQty > 0 ? creditsQty : 1;
-      setAmountXof(qty * UNIT_PRICE_XOF);
-    }
-  }, [planCode]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // --------- API CALLS ----------
   const callAssign = async () => {
-    const qty = Number.isFinite(creditsQty) && creditsQty > 0 ? creditsQty : 1;
-
     const payload = {
       planCode,
       note: note || null,
       overrides: planCode === "entreprise" ? overrides : null,
       billing: {
-        paymentMethod,
-        creditsQty: qty,
-        unitPriceXof: UNIT_PRICE_XOF,
-        amountXof,
+        paymentMethod, // ✅ obligatoire
+        amountXof, // ✅ obligatoire, saisi manuellement
+        creditsQty: creditsQtyFromPlan, // ✅ attribué automatiquement
       },
     };
 
@@ -258,17 +241,15 @@ export default function WorkspaceSubscriptionTab({
   };
 
   const validateBillingBeforeSubmit = () => {
-    const qty = Number.isFinite(creditsQty) ? creditsQty : 0;
-    if (qty <= 0) return "La quantité de crédits doit être supérieure à 0.";
+    if (!paymentMethod) return "La méthode de paiement est obligatoire.";
 
-    if (planCode === "entreprise") {
-      if (!Number.isFinite(amountXof) || amountXof <= 0) {
-        return "Pour ENTREPRISE, le montant est obligatoire et doit être > 0.";
-      }
-    } else {
-      if (!Number.isFinite(amountXof) || amountXof <= 0) {
-        return "Le montant doit être supérieur à 0.";
-      }
+    if (!Number.isFinite(amountXof) || amountXof <= 0) {
+      return "Le montant est obligatoire et doit être supérieur à 0.";
+    }
+
+    // sécurité: backend attend creditsQty > 0
+    if (!Number.isFinite(creditsQtyFromPlan) || creditsQtyFromPlan <= 0) {
+      return "Le crédit par défaut du plan sélectionné est invalide.";
     }
 
     return null;
@@ -482,16 +463,26 @@ export default function WorkspaceSubscriptionTab({
             </div>
           </div>
 
-          {/* BILLING (FACTURE) */}
+          {/* BILLING (OBLIGATOIRE) */}
           <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-gray-900">
-                  Facturation (facture PDF)
+                  Facturation (obligatoire avant attribution)
                 </div>
                 <div className="mt-1 text-xs text-gray-600">
-                  Quantité = crédits, PU = 9 000 XOF. Montant modifiable avant
-                  attribution.
+                  Choisis la méthode de paiement et saisis le montant (pas de
+                  calcul automatique). Les crédits attribués sont ceux du plan
+                  sélectionné.
+                </div>
+
+                <div className="mt-2 text-xs text-gray-700">
+                  Crédits attribués (par défaut du plan):{" "}
+                  <span className="font-semibold text-gray-900">
+                    {typeof selectedEffective.respondentCompletes === "number"
+                      ? selectedEffective.respondentCompletes
+                      : "Illimité"}
+                  </span>
                 </div>
               </div>
               <Badge variant="outline">Invoice</Badge>
@@ -500,7 +491,8 @@ export default function WorkspaceSubscriptionTab({
             <div className="mt-4 grid gap-3">
               <div>
                 <div className="mb-2 text-sm text-gray-700">
-                  Mode de paiement
+                  Mode de paiement{" "}
+                  <span className="text-xs text-red-600">*</span>
                 </div>
                 <Select
                   value={paymentMethod}
@@ -519,45 +511,9 @@ export default function WorkspaceSubscriptionTab({
                 </Select>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <div>
-                  <div className="mb-2 text-sm text-gray-700">
-                    Quantité (crédits)
-                  </div>
-                  <Input
-                    className="h-11"
-                    type="number"
-                    min={1}
-                    value={creditsQty}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      setCreditsQty(Number.isFinite(v) ? v : 1);
-                    }}
-                  />
-                  <div className="mt-1 text-xs text-gray-500">
-                    Crédits ajoutés au workspace après attribution.
-                  </div>
-                </div>
-
-                <div>
-                  <div className="mb-2 text-sm text-gray-700">
-                    Prix unitaire (XOF)
-                  </div>
-                  <Input
-                    className="h-11"
-                    value={formatXof(UNIT_PRICE_XOF)}
-                    readOnly
-                  />
-                  <div className="mt-1 text-xs text-gray-500">
-                    Fixé à 9 000 XOF / crédit.
-                  </div>
-                </div>
-              </div>
-
               <div>
                 <div className="mb-2 text-sm text-gray-700">
-                  Montant total (XOF)
-                  {planCode === "entreprise" ? " — obligatoire" : ""}
+                  Montant (XOF) <span className="text-xs text-red-600">*</span>
                 </div>
                 <Input
                   className="h-11"
@@ -565,16 +521,13 @@ export default function WorkspaceSubscriptionTab({
                   min={0}
                   value={amountXof}
                   onChange={(e) => {
-                    setAmountTouched(true);
                     const v = Number(e.target.value);
                     setAmountXof(Number.isFinite(v) ? v : 0);
                   }}
-                  placeholder={
-                    planCode === "entreprise" ? "Ex: 250000" : undefined
-                  }
+                  placeholder="Ex: 250000"
                 />
                 <div className="mt-1 text-xs text-gray-500">
-                  Affiché sur la facture. Valeur actuelle:{" "}
+                  Valeur actuelle:{" "}
                   <span className="font-semibold text-gray-900">
                     {formatXof(amountXof)}
                   </span>
@@ -705,14 +658,14 @@ export default function WorkspaceSubscriptionTab({
                 enabled={computedIsActive}
               />
 
-              <Button
+              {/* <Button
                 variant="secondary"
                 className="h-10"
                 onClick={renew}
                 disabled={canRenew === false || isSaving}
               >
                 Renouveler (+1 mois)
-              </Button>
+              </Button> */}
 
               {canEnable ? (
                 <Button

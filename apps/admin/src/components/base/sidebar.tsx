@@ -46,6 +46,7 @@ import {
   MessageCircleQuestionMark,
   Newspaper,
   BanknoteArrowDown,
+  FileBox,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -141,9 +142,19 @@ export function Sidebar() {
           href: "/blog",
         },
         {
+          icon: <Tags className="h-5 w-5" />,
+          text: "Topics",
+          href: "/blog/topics",
+        },
+        {
           icon: <BanknoteArrowDown className="h-5 w-5" />,
           text: "Demande de retraits",
           href: "/withdrawals",
+        },
+        {
+          icon: <FileBox className="h-5 w-5" />,
+          text: "Factures téléchargeables",
+          href: "/invoices",
         },
       ],
     },

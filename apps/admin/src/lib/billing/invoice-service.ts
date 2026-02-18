@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 export async function ensureInvoiceForPlanSubscription(args: {
   workspaceId: string;
   workspacePlanSubscriptionId: string;
-  amountCents: number; // treated as XOF integer
+  amountCents: number; // XOF integer
   currency?: string;
   metadata?: unknown;
 }) {
@@ -16,9 +16,8 @@ export async function ensureInvoiceForPlanSubscription(args: {
     metadata,
   } = args;
 
-  // 1) if exists -> update (so UI changes reflect on invoice PDF)
   const existing = await prisma.invoice.findUnique({
-    where: { workspacePlanSubscriptionId }, // requires @@unique([workspacePlanSubscriptionId])
+    where: { workspacePlanSubscriptionId }, // @@unique([workspacePlanSubscriptionId])
     select: {
       id: true,
       invoiceNumber: true,
@@ -26,6 +25,7 @@ export async function ensureInvoiceForPlanSubscription(args: {
       issuedAt: true,
       workspaceId: true,
       workspacePlanSubscriptionId: true,
+      workspaceCreditTransactionId: true,
       amountCents: true,
       currency: true,
       metadata: true,
@@ -39,7 +39,6 @@ export async function ensureInvoiceForPlanSubscription(args: {
         amountCents,
         currency,
         metadata: (metadata as any) ?? null,
-        // issuedAt: new Date(), // optionnel: si tu veux "ré-émettre" la facture à chaque assign
       },
       select: {
         id: true,
@@ -48,6 +47,7 @@ export async function ensureInvoiceForPlanSubscription(args: {
         issuedAt: true,
         workspaceId: true,
         workspacePlanSubscriptionId: true,
+        workspaceCreditTransactionId: true,
         amountCents: true,
         currency: true,
         metadata: true,
@@ -55,15 +55,15 @@ export async function ensureInvoiceForPlanSubscription(args: {
     });
   }
 
-  // 2) create (invoiceNumber généré par la DB)
   try {
     return await prisma.invoice.create({
       data: {
         workspace: { connect: { id: workspaceId } },
         workspacePlanSubscription: { connect: { id: workspacePlanSubscriptionId } },
-        metadata: (metadata as any) ?? null,
         amountCents,
         currency,
+        metadata: (metadata as any) ?? null,
+        // ✅ workspaceCreditTransactionId reste NULL => OK (1 source)
       },
       select: {
         id: true,
@@ -72,13 +72,13 @@ export async function ensureInvoiceForPlanSubscription(args: {
         issuedAt: true,
         workspaceId: true,
         workspacePlanSubscriptionId: true,
+        workspaceCreditTransactionId: true,
         amountCents: true,
         currency: true,
         metadata: true,
       },
     });
   } catch (e: any) {
-    // race condition -> fetch
     const fallback = await prisma.invoice.findUnique({
       where: { workspacePlanSubscriptionId },
       select: {
@@ -88,12 +88,79 @@ export async function ensureInvoiceForPlanSubscription(args: {
         issuedAt: true,
         workspaceId: true,
         workspacePlanSubscriptionId: true,
+        workspaceCreditTransactionId: true,
         amountCents: true,
         currency: true,
         metadata: true,
       },
     });
 
+    if (fallback) return fallback;
+    throw e;
+  }
+}
+
+/**
+ * ✅ IMPORTANT:
+ * Pour satisfaire invoice_one_source_chk, une invoice "credits_topup"
+ * DOIT avoir workspaceCreditTransactionId défini.
+ */
+export async function ensureInvoiceForCreditTopup(args: {
+  workspaceId: string;
+  workspaceCreditTransactionId: string; // ✅ REQUIRED
+  amountCents: number; // XOF integer
+  currency?: string;
+  metadata?: unknown;
+}) {
+  const {
+    workspaceId,
+    workspaceCreditTransactionId,
+    amountCents,
+    currency = "XOF",
+    metadata,
+  } = args;
+
+  // si tu veux éviter doublons: @@unique([workspaceCreditTransactionId]) existe déjà
+  // donc create suffira. En cas de race: catch + findUnique.
+  try {
+    return await prisma.invoice.create({
+      data: {
+        workspace: { connect: { id: workspaceId } },
+        workspaceCreditTransaction: { connect: { id: workspaceCreditTransactionId } },
+        amountCents,
+        currency,
+        metadata: (metadata as any) ?? null,
+        // ✅ workspacePlanSubscriptionId reste NULL => OK (1 source)
+      },
+      select: {
+        id: true,
+        invoiceNumber: true,
+        status: true,
+        issuedAt: true,
+        workspaceId: true,
+        workspacePlanSubscriptionId: true,
+        workspaceCreditTransactionId: true,
+        amountCents: true,
+        currency: true,
+        metadata: true,
+      },
+    });
+  } catch (e: any) {
+    const fallback = await prisma.invoice.findUnique({
+      where: { workspaceCreditTransactionId }, // @@unique([workspaceCreditTransactionId])
+      select: {
+        id: true,
+        invoiceNumber: true,
+        status: true,
+        issuedAt: true,
+        workspaceId: true,
+        workspacePlanSubscriptionId: true,
+        workspaceCreditTransactionId: true,
+        amountCents: true,
+        currency: true,
+        metadata: true,
+      },
+    });
     if (fallback) return fallback;
     throw e;
   }
