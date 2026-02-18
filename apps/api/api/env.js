@@ -20,4 +20,5 @@ exports.env = zod_1.z.object({
     SMTP_EMAIL: zod_1.z.string().min(1),
     SMTP_PASSWORD: zod_1.z.string().min(1),
     SEND_EMAILS: zod_1.z.string().default("true"),
+    SERVER_KEY: zod_1.z.string().min(8),
 }).parse(process.env);

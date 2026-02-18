@@ -26,6 +26,7 @@ function parseDateSafe(v) {
     const d = new Date(v);
     return Number.isNaN(d.getTime()) ? undefined : d;
 }
+const AssignedEnum = zod_1.z.enum(["all", "assigned", "unassigned"]);
 const StatusEnum = zod_1.z.enum(["draft", "live", "completed", "on hold"]);
 const TypeEnum = zod_1.z.enum(["survey", "contributor-info"]);
 const ModeEnum = zod_1.z.enum(["manual", "ai", "contributor-info", "template"]);
@@ -53,6 +54,12 @@ exports.missionsListQuerySchema = zod_1.z
     sortBy: SortByEnum.optional().default("createdAt"),
     sortDir: SortDirEnum.optional().default("desc"),
     zone: zod_1.z.string().optional().transform((v) => (v ? v.trim() : undefined)),
+    assigned: zod_1.z
+        .string()
+        .optional()
+        .transform((v) => (typeof v === "string" ? v.trim().toLowerCase() : undefined))
+        .pipe(AssignedEnum.optional())
+        .default("all"),
 })
     .transform((q) => {
     const page = Math.max(1, q.page ?? 1);

@@ -1,6 +1,6 @@
 // apps/api/src/routes/v1/mobile/contributor/modules/modules.service.ts
 import * as repo from "./modules.repo";
-import { DEFAULT_MODULES, ORDERED_MODULE_KEYS, type ModuleKey, type ProfileModuleStatus } from "./modules.config";
+import { DEFAULT_MODULES, mergeRuntimeConfig, ORDERED_MODULE_KEYS, type ModuleKey, type ProfileModuleStatus } from "./modules.config";
 import type { PersonalInfoInput, LocationInput, EthnicityInput } from "./modules.schemas";
 
 type ServiceResult<T> = { ok: true; data: T } | { ok: false; status: number; message: string };
@@ -37,6 +37,8 @@ async function getRuntimeModulesConfig(): Promise<{
     const base = DEFAULT_MODULES[key];
     const db = dbConfigs[key];
 
+    const runtime = mergeRuntimeConfig(key, db);
+
     // dependsOn : DB > base
     const dependsOnRaw = (db?.dependsOn ?? base.dependsOn) ?? undefined;
 
@@ -44,9 +46,10 @@ async function getRuntimeModulesConfig(): Promise<{
       key,
       label: db?.moduleLabel ?? base.label,
       order: typeof db?.order === "number" ? db.order : base.order,
-      rewardXof: typeof db?.rewardXof === "number" ? db.rewardXof : base.rewardXof,
+      //rewardXof: typeof db?.rewardXof === "number" ? db.rewardXof : base.rewardXof,
+      rewardXof: runtime.rewardXof,
       dependsOn: (dependsOnRaw as ModuleKey | undefined) ?? undefined,
-      isActive: typeof db?.isActive === "boolean" ? db.isActive : true,
+      isActive: runtime.isActive,
     };
   }
 

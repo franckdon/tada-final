@@ -54,7 +54,7 @@ exports.mobileMissionDetailsRoutes.onError((err, c) => {
  * - includeOrganization=true|false
  * - includeWorkspace=true|false
  * - includeCharts=true|false
- * - includeComments=true|false (recommandé: endpoint séparé)
+ * - includeComments=true|false
  */
 exports.mobileMissionDetailsRoutes.get("/:id", requireMobileAuth_1.requireMobileAuth, async (c) => {
     const userId = c.get("userId");

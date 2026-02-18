@@ -36,7 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.listMissions = listMissions;
 const repo = __importStar(require("./missions.repo"));
 async function listMissions(userId, query) {
-    const { items, total } = await repo.listMissions(query);
+    const { items, total } = await repo.listMissions(userId, query);
     const page = query.page;
     const pageSize = query.pageSize;
     const pageCount = Math.ceil(total / pageSize);

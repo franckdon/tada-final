@@ -36,10 +36,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getMissionDetails = getMissionDetails;
 const repo = __importStar(require("./missions.details.repo"));
 const env_1 = require("../../../env");
-function canViewMissionMobile(m) {
-    //if (m.internal) return { ok: false as const, reason: "MISSION_INTERNAL" };
+function canViewMissionMobilePublic(m) {
     if (m.isSuperAdminMission)
         return { ok: false, reason: "SUPERADMIN_ONLY" };
+    if (m.internal)
+        return { ok: false, reason: "MISSION_INTERNAL" };
     if (!m.isPublic)
         return { ok: false, reason: "NOT_PUBLIC" };
     if (!m.isPublish)
@@ -53,16 +54,24 @@ function canViewMissionMobile(m) {
     return { ok: true };
 }
 async function getMissionDetails(userId, id, query) {
-    const mission = await repo.getMissionById(id);
+    // 1) Access info (assignment + flags)
+    const accessInfo = await repo.getMissionAccessInfo(id, userId);
+    if (!accessInfo)
+        return { ok: false, status: 404, message: "Mission introuvable" };
+    // 2) Authorization:
+    // - if assigned => allow
+    // - else apply public policy
+    if (!accessInfo.isAssignedToMe) {
+        const access = canViewMissionMobilePublic(accessInfo);
+        if (!access.ok) {
+            const msg = env_1.env.NODE_ENV === "production" ? "Accès interdit" : `Accès interdit (${access.reason})`;
+            return { ok: false, status: 403, message: msg };
+        }
+    }
+    // 3) Mission details (includes config + assignment for this user)
+    const mission = await repo.getMissionById(id, userId);
     if (!mission)
         return { ok: false, status: 404, message: "Mission introuvable" };
-    const access = canViewMissionMobile(mission);
-    if (!access.ok) {
-        const msg = env_1.env.NODE_ENV === "production"
-            ? "Accès interdit"
-            : `Accès interdit (${access.reason})`; // très utile en dev
-        return { ok: false, status: 403, message: msg };
-    }
     const [organization, workspace, charts, comments] = await Promise.all([
         query.includeOrganization && mission.organizationId
             ? repo.getOrganizationMini(mission.organizationId)

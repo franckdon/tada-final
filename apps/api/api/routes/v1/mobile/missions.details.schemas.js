@@ -12,7 +12,7 @@ function toBool(v) {
         return true;
     if (falsy.has(s))
         return false;
-    return v; // laisse Zod gérer si valeur invalide
+    return v;
 }
 exports.missionDetailsQuerySchema = zod_1.z.object({
     includeOrganization: zod_1.z.preprocess(toBool, zod_1.z.boolean()).default(false),

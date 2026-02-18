@@ -34,12 +34,14 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mobileAccountRoutes = void 0;
+// src/routes/v1/mobile/account/account.routes.ts
 const hono_1 = require("hono");
 const zod_1 = require("zod");
 const requireMobileAuth_1 = require("../../../../middleware/requireMobileAuth");
 const mobile_errors_1 = require("../../mobile/mobile.errors");
 const account_schemas_1 = require("./account.schemas");
 const service = __importStar(require("./account.service"));
+const requireServerKey_1 = require("../../../../middleware/requireServerKey");
 exports.mobileAccountRoutes = new hono_1.Hono();
 exports.mobileAccountRoutes.onError((err, c) => {
     if (err instanceof zod_1.ZodError) {
@@ -53,6 +55,18 @@ exports.mobileAccountRoutes.get("/balance", requireMobileAuth_1.requireMobileAut
     const raw = c.req.query();
     const query = account_schemas_1.balanceQuerySchema.parse(raw);
     const r = await service.getBalance(userId, query);
+    if (!r.ok)
+        return (0, mobile_errors_1.jsonError)(c, r.status, r.message);
+    return c.json(r.data);
+});
+exports.mobileAccountRoutes.post("/credit", requireServerKey_1.requireServerKey, async (c) => {
+    const body = account_schemas_1.creditBodySchema.parse(await c.req.json());
+    // Ici: on crédite via payload (plus pratique pour le backend reward)
+    const userId = (await c.req.json()).userId ?? null;
+    if (!userId) {
+        return c.json({ error: "userId requis" }, 400);
+    }
+    const r = await service.creditUserWallet(userId, body);
     if (!r.ok)
         return (0, mobile_errors_1.jsonError)(c, r.status, r.message);
     return c.json(r.data);

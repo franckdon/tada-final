@@ -14,6 +14,9 @@ const responses_routes_1 = require("./routes/v1/mobile/surveys/responses.routes"
 const support_routes_1 = require("./routes/v1/mobile/support/support.routes");
 const account_routes_1 = require("./routes/v1/mobile/account/account.routes");
 const payout_accounts_routes_1 = require("./routes/v1/mobile/payout-accounts/payout-accounts.routes");
+const reward_routes_1 = require("./routes/v1/mobile/rewards/profile-modules/reward.routes");
+const modules_routes_1 = require("./routes/v1/mobile/contributor/modules/modules.routes");
+const withdrawals_routes_1 = require("./routes/v1/mobile/withdrawals/withdrawals.routes");
 exports.app = openapi_1.openapi;
 // Health
 exports.app.get("/health", (c) => c.json({ ok: true }));
@@ -37,6 +40,11 @@ exports.app.route("/v1/mobile/surveys", responses_routes_1.mobileSurveyResponses
 exports.app.route("/v1/mobile/support", support_routes_1.mobileSupportRoutes);
 exports.app.route("/v1/mobile/account", account_routes_1.mobileAccountRoutes);
 exports.app.route("/v1/mobile/payout-accounts", payout_accounts_routes_1.mobilePayoutAccountsRoutes);
+// rewards
+exports.app.route("/v1/mobile/contributor/modules", modules_routes_1.contributorModulesRoutes);
+exports.app.route("/v1/mobile/rewards/profile-modules", reward_routes_1.profileModulesRewardsRoutes);
+// withdrawals
+exports.app.route("/v1/mobile/withdrawals", withdrawals_routes_1.mobileWithdrawalsRoutes);
 // Swagger UI
 exports.app.get("/docs", (0, swagger_ui_1.swaggerUI)({
     url: "/openapi.json",

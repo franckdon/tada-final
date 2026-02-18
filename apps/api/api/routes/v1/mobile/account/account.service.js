@@ -34,11 +34,12 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getBalance = getBalance;
+exports.creditUserWallet = creditUserWallet;
 const repo = __importStar(require("./account.repo"));
+const db_1 = require("../../../../lib/db");
 async function getBalance(userId, q) {
     const row = await repo.findWalletAccountBalance({ userId, providerId: q.providerId });
     if (!row) {
-        // Option: retourner 0 si pas encore de wallet account
         return {
             ok: true,
             data: {
@@ -51,7 +52,6 @@ async function getBalance(userId, q) {
             },
         };
     }
-    // BIGINT: on renvoie string + number (si safe)
     const balanceRaw = row.balance ?? "0";
     const asNumber = Number(balanceRaw);
     const safeNumber = Number.isSafeInteger(asNumber) ? asNumber : 0;
@@ -66,4 +66,48 @@ async function getBalance(userId, q) {
             currency: row.currency ?? "XOF",
         },
     };
+}
+async function creditUserWallet(userId, body) {
+    // amount en bigint string
+    const amountRaw = String(body.amount);
+    await db_1.db.query("BEGIN");
+    try {
+        const acc = await repo.findAccountForUpdate({
+            userId,
+            providerId: body.providerId,
+        });
+        if (!acc) {
+            await db_1.db.query("ROLLBACK");
+            return { ok: false, status: 404, message: "Aucun compte wallet trouvé pour cet utilisateur" };
+        }
+        const r = await repo.creditAccountInTx({
+            accountPkId: acc.id,
+            amount: amountRaw,
+            currency: body.currency ?? acc.currency ?? "XOF",
+            reason: body.reason,
+            description: body.description,
+            referenceType: body.referenceType,
+            referenceId: body.referenceId,
+            idempotencyKey: body.idempotencyKey,
+        });
+        await db_1.db.query("COMMIT");
+        return {
+            ok: true,
+            data: {
+                userId,
+                accountPkId: acc.id,
+                providerId: acc.providerId,
+                currency: body.currency ?? acc.currency ?? "XOF",
+                amountRaw,
+                balanceAfterRaw: r.balanceAfter,
+                txId: r.txId,
+                idempotencyKey: body.idempotencyKey,
+                kind: r.kind,
+            },
+        };
+    }
+    catch (e) {
+        await db_1.db.query("ROLLBACK");
+        throw e;
+    }
 }
