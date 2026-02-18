@@ -7,24 +7,40 @@ import { renderInvoicePdfBuffer } from "@/lib/billing/invoice-pdf";
 
 export const runtime = "nodejs";
 
+function safeId(v: unknown) {
+  return typeof v === "string" ? v.trim() : "";
+}
+
+function safeFilename(name: string) {
+  return name.replace(/[^\w\-\.]+/g, "_").slice(0, 80);
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: { workspaceId: string; invoiceId: string } },
 ) {
   try {
     const session = await auth.api.getSession({ headers: headers() });
-    if (!session?.user?.id) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    const userId = session?.user?.id ?? null;
+
+    if (!userId) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 },
+      );
     }
 
-    const workspaceId = params.workspaceId;
-    const invoiceId = params.invoiceId;
+    const workspaceId = safeId(params.workspaceId);
+    const invoiceId = safeId(params.invoiceId);
 
     if (!workspaceId || !invoiceId) {
-      return NextResponse.json({ success: false, error: "Missing params" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Missing params" },
+        { status: 400 },
+      );
     }
 
-    // 1) Charge invoice + workspace (le PDF en a besoin)
+    // 1) Invoice (scopée workspace)
     const invoice = await prisma.invoice.findFirst({
       where: { id: invoiceId, workspaceId },
       select: {
@@ -40,9 +56,22 @@ export async function GET(
     });
 
     if (!invoice) {
-      return NextResponse.json({ success: false, error: "Invoice not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Invoice not found" },
+        { status: 404 },
+      );
     }
 
+    // ✅ Only allow download for paid invoices
+    const invoiceStatus = String(invoice.status ?? "").toLowerCase();
+    if (invoiceStatus !== "paid") {
+      return NextResponse.json(
+        { success: false, error: "Invoice not paid" },
+        { status: 403 },
+      );
+    }
+
+    // 2) Workspace
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
       select: {
@@ -56,19 +85,32 @@ export async function GET(
     });
 
     if (!workspace) {
-      return NextResponse.json({ success: false, error: "Workspace not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Workspace not found" },
+        { status: 404 },
+      );
     }
 
-    // 2) (Optionnel mais recommandé) contrôle d'accès :
-    // - soit owner
-    // - soit membre
-    // ⚠️ adapte à ton schema (workspaceMember / workspace_user / membership, etc.)
-    // Ici: contrôle minimum = owner uniquement
-    if (workspace.owner?.id !== session.user.id) {
-      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+    // 3) Access control: owner OR active member
+    const isOwner = workspace.owner?.id === userId;
+
+    const isMember = await prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId,
+        userId,
+        status: "active",
+      },
+      select: { id: true },
+    });
+
+    if (!isOwner && !isMember) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden" },
+        { status: 403 },
+      );
     }
 
-    // 3) Render PDF
+    // 4) Render PDF
     const pdfBuffer = await renderInvoicePdfBuffer({
       invoice: {
         id: invoice.id,
@@ -85,12 +127,17 @@ export async function GET(
         city: workspace.city,
         street: workspace.street,
         owner: workspace.owner
-          ? { id: workspace.owner.id, name: workspace.owner.name, email: workspace.owner.email }
+          ? {
+              id: workspace.owner.id,
+              name: workspace.owner.name,
+              email: workspace.owner.email,
+            }
           : null,
       },
     });
 
-    const filename = `${invoice.invoiceNumber || invoice.id}.pdf`;
+    const base = invoice.invoiceNumber || invoice.id;
+    const filename = safeFilename(`${base}.pdf`);
 
     return new Response(pdfBuffer, {
       headers: {

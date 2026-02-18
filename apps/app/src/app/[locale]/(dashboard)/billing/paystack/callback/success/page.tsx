@@ -1,5 +1,6 @@
 "use client";
 
+// apps/app/src/app/[locale]/(dashboard)/billing/paystack/callback/success/page.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -13,14 +14,24 @@ import { authClient } from "@/lib/auth-client";
 
 type VerifyPaystackResponse = {
   ok: boolean;
-  message?: string;
-  purchaseId?: string;
+  error?: string;
+
   reference?: string;
-  invoice?: {
-    number?: string;
-    hosted_invoice_url?: string;
-    invoice_pdf?: string;
+  purchaseId?: string;
+  status?: string;
+
+  // ✅ returned by our verify route
+  invoiceId?: string;
+  invoiceNumber?: string;
+  invoiceStatus?: string;
+
+  // purchase snapshot (so we can build PDF url)
+  purchase?: {
+    workspaceId?: string;
   };
+
+  // optional
+  alreadyPaid?: boolean;
 };
 
 export default function PaystackBillingSuccessPage() {
@@ -29,9 +40,14 @@ export default function PaystackBillingSuccessPage() {
   const searchParams = useSearchParams();
   const { data: organizations } = authClient.useListOrganizations();
 
-  const reference = searchParams.get("reference");
-  const purchaseId = searchParams.get("purchaseId");
-  const status = searchParams.get("status");
+  const reference = searchParams.get("reference")?.trim() || "";
+  const statusHint = searchParams.get("status")?.trim() || "";
+  const purchaseIdHint = searchParams.get("purchaseId")?.trim() || "";
+
+  // ✅ from callback redirect (best effort)
+  const invoiceIdHint = searchParams.get("invoiceId")?.trim() || "";
+  const invoiceNumberHint = searchParams.get("invoiceNumber")?.trim() || "";
+  const workspaceIdHint = searchParams.get("workspaceId")?.trim() || "";
 
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -40,51 +56,58 @@ export default function PaystackBillingSuccessPage() {
 
   const orgId = organizations?.[0]?.id ?? null;
 
-  const dashboardHref = useMemo(() => {
-    if (orgId) return `/`;
-    return "/";
-  }, [orgId]);
+  const dashboardHref = useMemo(() => "/", [orgId]);
+  const pricingHref = useMemo(() => "/pricing", []);
 
-  const pricingHref = useMemo(() => {
-    return "/pricing";
-  }, [orgId]);
+  const resolvedInvoiceId = data?.invoiceId || invoiceIdHint || "";
+  const resolvedInvoiceNumber = data?.invoiceNumber || invoiceNumberHint || "";
+  const resolvedWorkspaceId =
+    data?.purchase?.workspaceId || workspaceIdHint || "";
+
+  const pdfUrl = useMemo(() => {
+    if (!resolvedWorkspaceId || !resolvedInvoiceId) return "";
+    return `/api/workspaces/${encodeURIComponent(
+      resolvedWorkspaceId,
+    )}/invoices/${encodeURIComponent(resolvedInvoiceId)}/pdf`;
+  }, [resolvedWorkspaceId, resolvedInvoiceId]);
 
   useEffect(() => {
     const verify = async () => {
-      // Paystack: status=success n'est pas une preuve, c'est juste un hint UI.
-      if (!reference && !purchaseId) {
-        setError("Reference ou purchaseId manquant.");
+      // Paystack status in URL is just a hint, not proof.
+      if (!reference) {
+        setError("Reference manquante.");
         setLoading(false);
         return;
       }
 
-      // Si Paystack revient avec status=cancelled/failed, tu peux gérer UI vite
-      if (status && status !== "success") {
-        setError(`Paiement non confirmé (status=${status}).`);
+      // Optional fast UI if paystack hints failure
+      if (statusHint && statusHint !== "success") {
+        setError(`Paiement non confirmé (status=${statusHint}).`);
         setLoading(false);
         return;
       }
 
       try {
-        const res = await fetch(
-          `/api/payments/paystack/verify?reference=${encodeURIComponent(
-            reference ?? "",
-          )}&purchaseId=${encodeURIComponent(purchaseId ?? "")}`,
-          { cache: "no-store" },
-        );
+        // ✅ Always verify server-side (idempotent)
+        const res = await fetch(`/api/payments/paystack/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reference }),
+          cache: "no-store",
+        });
 
         const json = (await res
           .json()
           .catch(() => ({}))) as VerifyPaystackResponse;
 
         if (!res.ok || !json?.ok) {
-          setError(json?.message || t("billing.errors.generalError"));
+          setError(json?.error || t("billing.errors.generalError"));
           setLoading(false);
           return;
         }
 
-        setMessage("Paiement confirmé ✅ Vos crédits ont été appliqués.");
         setData(json);
+        setMessage("Paiement confirmé ✅ Vos crédits ont été appliqués.");
       } catch (e) {
         console.error("[PaystackBillingSuccessPage] verify error:", e);
         setError("Erreur lors de la vérification Paystack.");
@@ -94,11 +117,9 @@ export default function PaystackBillingSuccessPage() {
     };
 
     verify();
-  }, [reference, purchaseId, status, t]);
+  }, [reference, statusHint, t]);
 
-  const handleContinue = () => {
-    router.push(dashboardHref);
-  };
+  const handleContinue = () => router.push(dashboardHref);
 
   if (loading) {
     return (
@@ -138,17 +159,18 @@ export default function PaystackBillingSuccessPage() {
             </Link>
           </div>
 
-          {reference || purchaseId ? (
+          {(reference || purchaseIdHint) && (
             <p className="mt-4 text-xs text-gray-500 text-center">
               ref: <span className="font-mono">{reference}</span>
-              {purchaseId ? (
+              {purchaseIdHint ? (
                 <>
                   {" "}
-                  • purchaseId: <span className="font-mono">{purchaseId}</span>
+                  • purchaseId:{" "}
+                  <span className="font-mono">{purchaseIdHint}</span>
                 </>
               ) : null}
             </p>
-          ) : null}
+          )}
         </div>
       </div>
     );
@@ -167,41 +189,40 @@ export default function PaystackBillingSuccessPage() {
           </div>
         </div>
 
-        {data?.invoice ? (
+        {/* ✅ Invoice block (internal PDF) */}
+        {resolvedInvoiceId || resolvedInvoiceNumber || pdfUrl ? (
           <div className="mt-6 rounded-lg border bg-gray-50 p-4">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-sm font-semibold text-gray-900">
                 {t("billing.invoice.title")}
               </h2>
-              {data.invoice.number ? (
+
+              {resolvedInvoiceNumber ? (
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-800 border">
-                  #{data.invoice.number}
+                  #{resolvedInvoiceNumber}
+                </span>
+              ) : resolvedInvoiceId ? (
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-800 border">
+                  #{resolvedInvoiceId.slice(0, 8)}
                 </span>
               ) : null}
             </div>
 
             <div className="mt-3 flex flex-col gap-2 text-sm">
-              {data.invoice.hosted_invoice_url ? (
+              {pdfUrl ? (
                 <a
-                  href={data.invoice.hosted_invoice_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 text-blue-600 hover:underline"
-                >
-                  {t("billing.invoice.viewOnline")} <ExternalLink size={16} />
-                </a>
-              ) : null}
-
-              {data.invoice.invoice_pdf ? (
-                <a
-                  href={data.invoice.invoice_pdf}
+                  href={pdfUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-2 text-blue-600 hover:underline"
                 >
                   {t("billing.invoice.downloadPdf")} <ExternalLink size={16} />
                 </a>
-              ) : null}
+              ) : (
+                <div className="text-xs text-gray-600">
+                  PDF indisponible (workspaceId/invoiceId manquant).
+                </div>
+              )}
             </div>
           </div>
         ) : null}
@@ -219,6 +240,13 @@ export default function PaystackBillingSuccessPage() {
             <ArrowRight className="h-4 w-4" />
           </Button>
         </div>
+
+        {/* Debug line */}
+        {reference ? (
+          <p className="mt-4 text-xs text-gray-500">
+            ref: <span className="font-mono">{reference}</span>
+          </p>
+        ) : null}
       </div>
     </div>
   );

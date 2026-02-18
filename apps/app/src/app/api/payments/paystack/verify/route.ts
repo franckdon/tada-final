@@ -1,7 +1,7 @@
 // src/app/api/payments/paystack/verify/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { applyWorkspaceCreditsFromPurchase } from "@/utils/apply-workspace-credits-from-purchase";
+import { createPaidInvoiceForCreditPurchase } from "@/lib/billing/invoice-orchestrator";
 
 export const runtime = "nodejs";
 
@@ -30,6 +30,13 @@ function getReferenceFromUrl(req: Request) {
   return ref || null;
 }
 
+function normalizePurchaseStatusFromPaystack(ps: string) {
+  const s = String(ps || "").toLowerCase();
+  if (s === "success") return "paid" as const;
+  if (s === "failed" || s === "abandoned") return "failed" as const;
+  return "pending" as const;
+}
+
 async function handleVerify(reference: string) {
   const secretKey = process.env.PAYSTACK_SECRET_KEY;
   if (!secretKey) return jsonError("PAYSTACK_SECRET_KEY missing", 500);
@@ -44,8 +51,6 @@ async function handleVerify(reference: string) {
       providerStatus: true,
       metadata: true,
       createdAt: true,
-
-      // ✅ XOF columns
       totalAmountXof: true,
       unitPriceXof: true,
     },
@@ -53,11 +58,11 @@ async function handleVerify(reference: string) {
 
   if (!purchase) return jsonError("Purchase not found", 404);
 
-  // Idempotent: if already marked paid, still apply credits safely
+  // ✅ Idempotent: déjà paid => on force invoice/creditTx (sans double crédit)
   if (purchase.providerStatus === "paid") {
-    const applied = await applyWorkspaceCreditsFromPurchase({
-      purchaseId: purchase.id,
-      reference,
+    const result = await createPaidInvoiceForCreditPurchase({
+      provider: "paystack",
+      providerRef: reference,
       actorUserId: null,
       paystackVerifyPayload: (purchase.metadata as any)?.paystack?.verify ?? null,
     });
@@ -67,11 +72,15 @@ async function handleVerify(reference: string) {
       alreadyPaid: true,
       reference,
       purchaseId: purchase.id,
-      applied,
+      invoiceId: result.invoice.id,
+      invoiceNumber: result.invoice.invoiceNumber,
+      invoiceStatus: result.invoice.status,
+      creditTxId: result.creditTxId,
+      creditBalanceAfter: result.creditBalanceAfter ?? null,
     });
   }
 
-  // ---- Call Paystack verify
+  // ---- Paystack verify
   const url = `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`;
 
   const psRes = await fetch(url, {
@@ -86,7 +95,12 @@ async function handleVerify(reference: string) {
   const psJson = (await psRes.json().catch(() => ({}))) as PaystackVerifyResponse;
 
   if (!psRes.ok || !psJson?.status) {
-    console.error("[paystack.verify] failed", { reference, http: psRes.status, psJson });
+    console.error("[paystack.verify] failed", {
+      reference,
+      http: psRes.status,
+      psJson,
+    });
+
     return jsonError(psJson?.message || "Paystack verify failed", 502, {
       reference,
       paystackHttp: psRes.status,
@@ -95,7 +109,12 @@ async function handleVerify(reference: string) {
   }
 
   const data = psJson.data;
-  if (!data) return jsonError("Paystack response missing data", 502, { reference, paystack: psJson });
+  if (!data) {
+    return jsonError("Paystack response missing data", 502, {
+      reference,
+      paystack: psJson,
+    });
+  }
 
   const paystackStatus = data.status;
   const paystackAmount = Number(data.amount); // subunits
@@ -108,18 +127,19 @@ async function handleVerify(reference: string) {
   const amountOk = paystackAmount === expectedAmount;
   const currencyOk = paystackCurrency === expectedCurrency;
 
-  // Persist verify payload for audit/debug
+  const nextProviderStatus = normalizePurchaseStatusFromPaystack(paystackStatus);
+  const isPaid = nextProviderStatus === "paid";
+
+  // Persist verify payload
   const prevMeta =
     purchase.metadata && typeof purchase.metadata === "object"
       ? (purchase.metadata as Record<string, any>)
       : {};
 
-  const isPaid = paystackStatus === "success";
-
   await prisma.workspaceCreditPurchase.update({
     where: { id: purchase.id },
     data: {
-      providerStatus: isPaid ? "paid" : "pending",
+      providerStatus: nextProviderStatus,
       metadata: {
         ...prevMeta,
         paystack: {
@@ -130,7 +150,7 @@ async function handleVerify(reference: string) {
     },
   });
 
-  // ✅ If paid but mismatch, we STOP (security)
+  // ✅ Paid mais mismatch => stop sécurité
   if (isPaid && (!amountOk || !currencyOk)) {
     return jsonError("payment_mismatch", 409, {
       reference,
@@ -145,26 +165,31 @@ async function handleVerify(reference: string) {
     });
   }
 
-  // Apply credits if paid + OK
-  let applied: any = null;
-  if (isPaid) {
-    applied = await applyWorkspaceCreditsFromPurchase({
-      purchaseId: purchase.id,
-      reference,
-      actorUserId: null,
-      paystackVerifyPayload: psJson,
-    });
-  } else {
-    // Not paid => return 409 so callback redirects to error with reason
+  // ✅ Not paid => 409 (callback => error)
+  if (!isPaid) {
     return jsonError("not_paid", 409, { reference, status: paystackStatus });
   }
+
+  // ✅ Paid + OK => créer/récupérer creditTx + invoice (paid)
+  const result = await createPaidInvoiceForCreditPurchase({
+    provider: "paystack",
+    providerRef: reference,
+    actorUserId: null,
+    paystackVerifyPayload: psJson,
+  });
 
   return NextResponse.json({
     ok: true,
     reference,
     purchaseId: purchase.id,
     status: paystackStatus,
-    applied,
+
+    invoiceId: result.invoice.id,
+    invoiceNumber: result.invoice.invoiceNumber,
+    invoiceStatus: result.invoice.status,
+    creditTxId: result.creditTxId,
+    creditBalanceAfter: result.creditBalanceAfter ?? null,
+
     checks: {
       amountOk,
       currencyOk,
@@ -173,11 +198,13 @@ async function handleVerify(reference: string) {
       expectedCurrency,
       paystackCurrency,
     },
+
     paystack: {
       paid_at: data.paid_at ?? null,
       channel: data.channel ?? null,
       customerEmail: data.customer?.email ?? null,
     },
+
     purchase: {
       workspaceId: purchase.workspaceId,
       organizationId: purchase.organizationId,
