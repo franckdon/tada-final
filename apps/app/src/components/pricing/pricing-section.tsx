@@ -19,7 +19,7 @@ export default function PricingSection({
   const { data } = useSession();
   const [pricingPlans] = useState(initialPlans);
   const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(
-    null
+    null,
   );
   const { data: organizations } = authClient.useListOrganizations();
 
@@ -29,7 +29,7 @@ export default function PricingSection({
     if (plan?.name === "Enterprise") {
       window.open(
         "https://calendly.com/jeviensaider/rendez-vous-client",
-        "_blank"
+        "_blank",
       );
       setSubscribingPlanId(null);
       return;

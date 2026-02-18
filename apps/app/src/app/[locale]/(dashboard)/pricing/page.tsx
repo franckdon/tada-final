@@ -6,13 +6,15 @@ import { cn } from "@tada/ui/lib/utils";
 import { Button } from "@tada/ui/components/button";
 
 import { auth } from "@/lib/auth";
-
 import {
   PLAN_LIMITS,
   formatLimit,
   type PlanCode,
 } from "@/lib/plans/plan-limits";
 import { headers } from "next/headers";
+
+// ✅ ajout : composant client (liste + download)
+import { WorkspaceInvoicesClient } from "@/components/invoices/workspace-invoices-client";
 
 type Locale = "fr" | "en";
 
@@ -78,20 +80,19 @@ export default async function PricingPage({
     0,
   );
 
-  // 2) Déterminer si l'utilisateur a un plan actif
-  //    (on prend le premier workspace "actif" du user)
+  // 2) Session + workspaceId du user (pour plan actif + factures)
   const session = await auth.api.getSession({
     headers: await headers(),
   });
-  if (!session?.user) {
-    throw new Error("Non authentifié");
-  }
+  if (!session?.user) throw new Error("Non authentifié");
+
+  let workspaceIdForUser: string | null = null;
 
   let activePlanCode: string | null = null;
   let activePlanStatus: string | null = null;
   let activePlanEndsAt: Date | null = null;
   let activePlanStartsAt: Date | null = null;
-  let activePlanLabel: string | null = null; // label affichable
+  let activePlanLabel: string | null = null;
 
   if (session?.user?.id) {
     const membership = await prisma.workspaceMember.findFirst({
@@ -101,6 +102,8 @@ export default async function PricingPage({
     });
 
     if (membership?.workspaceId) {
+      workspaceIdForUser = membership.workspaceId;
+
       const sub = await prisma.workspacePlanSubscription.findUnique({
         where: { workspaceId: membership.workspaceId },
         select: {
@@ -111,7 +114,6 @@ export default async function PricingPage({
         },
       });
 
-      // On considère "actif" si status=active et pas expiré (endsAt null ou > now)
       const now = new Date();
       const isActive =
         !!sub &&
@@ -124,7 +126,6 @@ export default async function PricingPage({
         activePlanEndsAt = sub!.endsAt ?? null;
         activePlanStartsAt = sub!.startsAt ?? null;
 
-        // récupérer le "name" du plan en DB si possible (sinon fallback code)
         const planRow = activePlanCode
           ? await prisma.plan.findFirst({
               where: { code: activePlanCode },
@@ -144,7 +145,6 @@ export default async function PricingPage({
     return PLAN_LIMITS[code];
   };
 
-  // 3) UI
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-10">
       {/* Header */}
@@ -161,7 +161,7 @@ export default async function PricingPage({
         </p>
       </div>
 
-      {/* ✅ Current Plan (col-12) */}
+      {/* Current Plan */}
       {activePlanCode ? (
         <div className="mb-8">
           <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
@@ -191,8 +191,6 @@ export default async function PricingPage({
                 </div>
               </div>
 
-              {/* on ne touche pas CTA : tu peux même le supprimer ici si tu veux.
-                  Je te laisse un accès pricing/scopes */}
               <div className="flex items-center gap-3">
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-800">
                   {locale === "fr" ? "Actif" : "Active"}
@@ -203,7 +201,7 @@ export default async function PricingPage({
         </div>
       ) : null}
 
-      {/* Plans Grid (CTA inchangé) */}
+      {/* Plans Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {plans.map((plan) => {
           const bullets = splitBullets(
@@ -238,6 +236,19 @@ export default async function PricingPage({
           );
         })}
       </div>
+
+      {/* ✅ Invoices list (juste en dessous) */}
+      <div className="mt-10">
+        {workspaceIdForUser ? (
+          <WorkspaceInvoicesClient workspaceId={workspaceIdForUser} />
+        ) : (
+          <div className="rounded-xl border border-gray-100 bg-white p-6 text-sm text-gray-600">
+            {locale === "fr"
+              ? "Aucun workspace actif trouvé. Impossible d’afficher les factures."
+              : "No active workspace found. Cannot display invoices."}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -269,7 +280,6 @@ function PlanCard({
           "ring-2 ring-emerald-500/40 border-emerald-200",
       )}
     >
-      {/* Badge Current (sans toucher le CTA) */}
       {isCurrent ? (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20">
           <span className="text-[11px] font-semibold px-3 py-1 rounded-full bg-emerald-600 text-white shadow">
@@ -288,12 +298,10 @@ function PlanCard({
           featured && "text-white",
         )}
       >
-        {/* Title */}
         <h3 className="text-2xl font-bold">{plan.name}</h3>
 
         <p className="mt-2 text-sm opacity-90">{plan.description || "—"}</p>
 
-        {/* Respondents */}
         <div className="mt-6">
           <div className="text-3xl font-bold">
             {plan.respondentCompletesLabel}
@@ -307,7 +315,6 @@ function PlanCard({
 
         <div className="my-6 h-px bg-white/20" />
 
-        {/* Bullets */}
         <ul className="space-y-3">
           {plan.bullets.map((b, i) => (
             <li key={i} className="flex gap-2 items-start">
@@ -317,7 +324,6 @@ function PlanCard({
           ))}
         </ul>
 
-        {/* ✅ CTA inchangé */}
         <div className="mt-auto pt-7">
           <Button
             asChild

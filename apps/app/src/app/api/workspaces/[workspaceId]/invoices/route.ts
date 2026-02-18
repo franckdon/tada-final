@@ -1,4 +1,4 @@
-//src/app/api/workspaces/[workspaceId]/invoices/route.ts
+// src/app/api/workspaces/[workspaceId]/invoices/route.ts
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
@@ -8,16 +8,22 @@ export const runtime = "nodejs";
 
 function toInt(v: string | null, fallback: number) {
   const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? Math.min(n, 100) : fallback;
+  return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 100) : fallback;
 }
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(
+  req: Request,
+  { params }: { params: { workspaceId: string } },
+) {
   const session = await auth.api.getSession({ headers: headers() });
   if (!session?.user?.id) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 },
+    );
   }
 
-  const workspaceId = params.id;
+  const workspaceId = params.workspaceId;
   const url = new URL(req.url);
 
   const limit = toInt(url.searchParams.get("limit"), 25);
@@ -29,7 +35,10 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     select: { id: true },
   });
   if (!ws) {
-    return NextResponse.json({ success: false, error: "Workspace not found" }, { status: 404 });
+    return NextResponse.json(
+      { success: false, error: "Workspace not found" },
+      { status: 404 },
+    );
   }
 
   const rows = await prisma.invoice.findMany({
@@ -44,19 +53,21 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       : {}),
     select: {
       id: true,
+      invoiceNumber: true,
       status: true,
       issuedAt: true,
       createdAt: true,
+
+      amountCents: true,
+      currency: true,
+
       workspacePlanSubscriptionId: true,
       workspaceCreditTransactionId: true,
-      // IMPORTANT: ton champ prisma s’appelle invoiceNumber (pas invoice_number)
-      invoiceNumber: true,
     },
   });
 
   const hasMore = rows.length > limit;
   const data = hasMore ? rows.slice(0, limit) : rows;
-
   const nextCursor = hasMore ? data[data.length - 1]?.id ?? null : null;
 
   return NextResponse.json({

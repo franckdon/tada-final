@@ -425,11 +425,23 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
                 </Link>
               </DropdownMenuItem>
 
-              <DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!workspaceId}
+                onClick={() => {
+                  if (!workspaceId) {
+                    toast({
+                      title: "Workspace requis",
+                      description:
+                        "Sélectionne un workspace pour voir les factures.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  router.push(`/workspaces/${workspaceId}/invoices`);
+                }}
+              >
                 <Layers className="mr-2 h-4 w-4" />
-                <Link href="/invoices">
-                  <span>{t("invoices.title")}</span>
-                </Link>
+                <span>{t("invoices.title")}</span>
               </DropdownMenuItem>
 
               <DropdownMenuItem>

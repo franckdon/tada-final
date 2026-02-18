@@ -1,32 +1,96 @@
 "use client";
 
+// apps/app/src/components/invoices/workspace-invoices-client.tsx
 import * as React from "react";
 import { Button } from "@tada/ui/components/button";
+import { Badge } from "@tada/ui/components/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@tada/ui/components/table";
+import { Download } from "lucide-react";
 
 type InvoiceItem = {
   id: string;
   invoiceNumber: string;
-  status: string;
+  status: string; // "issued" | "paid" | "pending" | ...
   issuedAt: string;
-  createdAt: string;
+  createdAt?: string;
+
+  // ✅ pour la colonne Amount
+  amountCents: number; // XOF integer (chez toi tu utilises XOF sans /100)
+  currency: string; // "XOF"
+
   workspacePlanSubscriptionId: string | null;
   workspaceCreditTransactionId: string | null;
 };
 
-function formatDate(value: string) {
+type ApiResponse = {
+  success: true;
+  data: InvoiceItem[];
+  nextCursor: string | null;
+};
+
+function formatDateShort(value: string) {
   try {
-    return new Date(value).toLocaleString("fr-FR");
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(new Date(value));
   } catch {
     return value;
   }
 }
 
-function getBadge(status: string) {
+function formatMoney(amount: number, currency: string) {
+  const n = Number.isFinite(amount) ? amount : 0;
+  try {
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: currency || "XOF",
+      maximumFractionDigits: 0,
+    }).format(n);
+  } catch {
+    return String(n);
+  }
+}
+
+function statusPill(status: string) {
   const s = String(status || "").toLowerCase();
-  if (s === "paid") return "bg-green-100 text-green-700 border-green-200";
-  if (s === "issued") return "bg-blue-100 text-blue-700 border-blue-200";
-  if (s === "void") return "bg-gray-100 text-gray-700 border-gray-200";
-  return "bg-gray-100 text-gray-700 border-gray-200";
+
+  // tu peux ajuster selon tes statuts
+  if (s === "paid") {
+    return (
+      <Badge className="bg-green-50 text-green-700 border border-green-100">
+        paid
+      </Badge>
+    );
+  }
+  if (s === "issued") {
+    return (
+      <Badge className="bg-blue-50 text-blue-700 border border-blue-100">
+        issued
+      </Badge>
+    );
+  }
+  if (s === "pending") {
+    return (
+      <Badge className="bg-amber-50 text-amber-700 border border-amber-100">
+        pending
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge className="bg-gray-50 text-gray-700 border border-gray-100">
+      {s || "—"}
+    </Badge>
+  );
 }
 
 export function WorkspaceInvoicesClient({
@@ -50,17 +114,13 @@ export function WorkspaceInvoicesClient({
       if (cursor) url.searchParams.set("cursor", cursor);
 
       const res = await fetch(url.toString(), { cache: "no-store" });
-      const json = await res.json().catch(() => null);
+      const json = (await res.json().catch(() => null)) as ApiResponse | null;
 
       if (!res.ok || !json?.success) {
-        throw new Error(json?.error || "Failed to load invoices");
+        throw new Error((json as any)?.error || "Failed to load invoices");
       }
 
-      return json as {
-        success: true;
-        data: InvoiceItem[];
-        nextCursor: string | null;
-      };
+      return json;
     },
     [workspaceId],
   );
@@ -76,8 +136,8 @@ export function WorkspaceInvoicesClient({
         const data = await fetchPage(null);
         if (!mounted) return;
 
-        setItems(data.data);
-        setNextCursor(data.nextCursor);
+        setItems(data.data || []);
+        setNextCursor(data.nextCursor ?? null);
       } catch (e: any) {
         if (!mounted) return;
         setError(e?.message || "Error");
@@ -98,8 +158,8 @@ export function WorkspaceInvoicesClient({
     setLoadingMore(true);
     try {
       const data = await fetchPage(nextCursor);
-      setItems((prev) => [...prev, ...data.data]);
-      setNextCursor(data.nextCursor);
+      setItems((prev) => [...prev, ...(data.data || [])]);
+      setNextCursor(data.nextCursor ?? null);
     } catch (e: any) {
       setError(e?.message || "Error");
     } finally {
@@ -113,46 +173,34 @@ export function WorkspaceInvoicesClient({
     )}/pdf`;
 
   return (
-    <div className="flex flex-col border-r border-gray-200 bg-white flex-1 min-w-0 min-h-0">
+    <div className="w-full">
       {/* Header */}
-      <div className="border-b px-6 py-4 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-xl font-semibold">Factures</div>
-          <div className="text-sm text-gray-500">
-            Historique des factures du workspace (plans & crédits).
-          </div>
+      <div className="mb-4">
+        <div className="text-lg font-semibold text-gray-900">
+          Historique des factures
         </div>
+        <div className="text-sm text-gray-500">Téléchargez vos factures.</div>
       </div>
 
-      {/* Body */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
+      {/* Content */}
+      <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
         {loading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between rounded-xl border p-3"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-gray-200" />
-                  <div className="space-y-2">
-                    <div className="h-3 w-32 bg-gray-200 rounded" />
-                    <div className="h-3 w-52 bg-gray-100 rounded" />
-                  </div>
-                </div>
-                <div className="h-4 w-16 bg-gray-200 rounded" />
-              </div>
+          <div className="p-6 space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-10 bg-gray-100 rounded-md" />
             ))}
           </div>
         ) : error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-            <div className="text-sm font-medium text-red-700">
-              Impossible de charger les factures
+          <div className="p-6">
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+              <div className="text-sm font-medium text-red-700">
+                Impossible de charger les factures
+              </div>
+              <div className="text-xs text-red-600 mt-1">{error}</div>
             </div>
-            <div className="text-xs text-red-600 mt-1">{error}</div>
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-xl border bg-gray-50 p-6 text-center">
+          <div className="p-8 text-center">
             <div className="text-sm font-medium text-gray-700">
               Aucune facture
             </div>
@@ -162,66 +210,66 @@ export function WorkspaceInvoicesClient({
           </div>
         ) : (
           <>
-            <div className="space-y-2">
-              {items.map((it) => {
-                const sourceLabel = it.workspacePlanSubscriptionId
-                  ? "Plan"
-                  : it.workspaceCreditTransactionId
-                    ? "Crédit"
-                    : "—";
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50">
+                  <TableHead className="text-gray-600">Invoice</TableHead>
+                  <TableHead className="text-gray-600">Date</TableHead>
+                  <TableHead className="text-gray-600">Amount</TableHead>
+                  <TableHead className="text-gray-600">Status</TableHead>
+                  <TableHead className="text-right text-gray-600">
+                    Action
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
 
-                return (
-                  <div
-                    key={it.id}
-                    className="flex items-center justify-between rounded-xl border p-3 hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-sm font-semibold flex-shrink-0">
-                        F
-                      </div>
+              <TableBody>
+                {items.map((it) => (
+                  <TableRow key={it.id} className="hover:bg-gray-50">
+                    <TableCell className="font-medium text-gray-900">
+                      {it.invoiceNumber || it.id.slice(0, 10)}
+                    </TableCell>
 
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="text-sm font-medium truncate">
-                            {it.invoiceNumber}
-                          </div>
+                    <TableCell className="text-gray-600">
+                      {formatDateShort(it.issuedAt)}
+                    </TableCell>
 
-                          <span
-                            className={`text-[10px] px-2 py-0.5 rounded-full border flex-shrink-0 ${getBadge(
-                              it.status,
-                            )}`}
+                    <TableCell className="text-gray-900">
+                      {formatMoney(it.amountCents ?? 0, it.currency ?? "XOF")}
+                    </TableCell>
+
+                    <TableCell>{statusPill(it.status)}</TableCell>
+
+                    <TableCell className="text-right">
+                      {it.status === "paid" ? (
+                        <Button asChild variant="outline" size="sm">
+                          <a
+                            href={downloadUrl(it.id)}
+                            target="_blank"
+                            rel="noreferrer"
                           >
-                            {String(it.status).toUpperCase()}
-                          </span>
+                            Télécharger <Download className="ml-1" size={16} />
+                          </a>
+                        </Button>
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
 
-                          <span className="text-[10px] px-2 py-0.5 rounded-full border bg-gray-50 text-gray-600 flex-shrink-0">
-                            {sourceLabel}
-                          </span>
-                        </div>
-
-                        <div className="text-xs text-gray-500 truncate">
-                          Émise : {formatDate(it.issuedAt)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <Button asChild variant="outline" size="sm">
-                        <a href={downloadUrl(it.id)}>Télécharger PDF</a>
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="pt-4 flex items-center justify-center">
+            {/* Pagination */}
+            <div className="flex items-center justify-center p-4 border-t bg-white">
               {nextCursor ? (
-                <Button onClick={loadMore} disabled={loadingMore}>
-                  {loadingMore ? "Chargement..." : "Charger plus"}
+                <Button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  variant="outline"
+                >
+                  {loadingMore ? "Chargement..." : "Load more"}
                 </Button>
               ) : (
-                <div className="text-xs text-gray-500">Fin de la liste.</div>
+                <div className="text-xs text-gray-500">End of list.</div>
               )}
             </div>
           </>
