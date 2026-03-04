@@ -45,7 +45,6 @@ type ThreadProps = {
 const ToolRenderer: FC<any> = (props) => {
   const openModal = useAudienceModalStore((s) => s.openModal);
 
-  // selon version assistant-ui, le nom peut être à différents endroits
   const name =
     props?.toolName ??
     props?.name ??
@@ -53,10 +52,14 @@ const ToolRenderer: FC<any> = (props) => {
     props?.call?.name ??
     props?.toolCall?.name;
 
-  // debug utile 1 fois
-  // console.log("[ToolRenderer props]", props);
-
   if (name !== "open_audiences_modal") return null;
+
+  const docLang =
+    typeof document !== "undefined"
+      ? (document.documentElement.lang || "").toLowerCase()
+      : "en";
+
+  const isFr = docLang.startsWith("fr");
 
   return (
     <div className="mt-2">
@@ -69,7 +72,7 @@ const ToolRenderer: FC<any> = (props) => {
           openModal();
         }}
       >
-        Choisissez votre audience
+        {isFr ? "Choisissez votre audience" : "Choose your audience"}
       </button>
     </div>
   );

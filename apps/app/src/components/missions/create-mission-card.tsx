@@ -10,7 +10,6 @@ import { useAssistantForm } from "@assistant-ui/react-hook-form";
 import { Form } from "@tada/ui/components/form";
 import { CreateMissionForm } from "./forms/create-mission-form";
 import { ProgressSidebar } from "./progress-bar";
-import { useEffect, useState } from "react";
 import { AudiencesFilterModal } from "./modals/audiences-filter-modal";
 import { useAudienceModalStore } from "@/stores/useAudienceModalStore";
 
@@ -25,8 +24,12 @@ function AssistantRules({
   const audiencesSelectedCount =
     (activeFiltersCount ?? 0) + (suggestions?.length ?? 0);
 
-  const chatLang = locale === "fr" ? "French" : "English";
-
+  /**
+   * IMPORTANT:
+   * - On NE FORCE PLUS la langue via locale.
+   * - On suit STRICTEMENT la langue du DERNIER message utilisateur (FR/EN),
+   *   comme tu le veux, et comme ton backend le demande déjà.
+   */
   useAssistantInstructions(`
 You are Dina, a Marketing Research Copilot.
 
@@ -43,9 +46,12 @@ STRICT: If you believe you already have enough information, you MUST still ask f
 Do not proceed without that confirmation.
 Your message asking confirmation MUST end with [[READY_TO_FILL_FORM]].
 
-Language:
-- You MUST respond in ${chatLang} only.
-- Do NOT switch language mid-conversation.
+Language (CRITICAL):
+- You MUST respond in the language used by the user in their LAST message.
+- If the user's last message is French => respond in French.
+- If the user's last message is English => respond in English.
+- The user may switch languages: adapt immediately.
+- Do NOT mix languages inside the same message.
 
 Information to collect (in this order):
 1) Business context (product/service + market)
@@ -171,7 +177,7 @@ export function CreateMissionCard({
 
             form.setValue(field as any, normalized, { shouldDirty: true });
           },
-          render: ({ field, value }: any) => (
+          render: ({ field }: any) => (
             <p className="text-xs text-gray-500">
               Field updated: <b>{field}</b>
             </p>

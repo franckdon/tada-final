@@ -2,120 +2,125 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Development Commands
+## Commands
 
-- `npm run dev` - Start development server on port 3000
-- `npm run build` - Build application (includes Prisma generation)
-- `npm run lint` - Run Biome linter
-- `npm run format` - Format code with Biome
-- `npm run typecheck` - Run TypeScript type checking
-- `npm run clean` - Clean generated files (.next, .turbo, node_modules)
+```bash
+# Development
+bun dev          # Start dev server on port 3000
+
+# Build
+bun build        # Runs `prisma generate` then `next build`
+
+# Lint & Format (Biome)
+bun lint         # biome lint
+bun format       # biome format --write .
+
+# Type checking
+bun typecheck    # tsc --noEmit
+
+# From monorepo root
+bun dev:app      # turbo dev --filter=@tada/app
+```
+
+No test suite is configured for this app.
 
 ## Architecture Overview
 
-This is a **Next.js 14** application with **App Router** using TypeScript. The app is a survey and market research platform called "Tada" with multi-tenant organization support.
+This is a **Next.js 15 App Router** application within a Turborepo monorepo (`apps/app`). It is the primary SaaS dashboard for "Tada", a market research platform.
 
-### Core Technologies
-- **Database**: PostgreSQL with Prisma ORM
-- **Authentication**: better-auth with email/password and OAuth (Google, Apple)
-- **UI**: HeroUI (React components) + Tailwind CSS
-- **Forms**: react-hook-form with Zod validation
-- **Charts**: Chart.js, Recharts, and Vega-Lite
-- **Email**: React Email with Nodemailer
-- **Internationalization**: next-international (English/French)
-- **File Structure**: Monorepo with workspace packages
+### Monorepo Structure
 
-### Project Structure
+- `apps/app` – Main SaaS dashboard (this repo)
+- `apps/web` – Marketing site
+- `apps/admin` – Admin panel
+- `apps/contributors` – Contributor-facing app
+- `packages/ui` – Shared Shadcn/HeroUI component library (`@tada/ui`)
+- `packages/email` – React Email templates (`@tada/email`)
+- `packages/supabase` – Supabase client helpers (`@tada/supabase`)
+- `packages/kv` – KV store helpers (`@tada/kv`)
+- `packages/analytics` – Analytics helpers (`@tada/analytics`)
 
-The application follows Next.js 14 App Router conventions with additional organization:
+### Routing (`src/app/`)
 
-#### Key Directories:
-- `src/app/[locale]/` - Localized routes (en/fr)
-  - `(dashboard)/` - Protected dashboard routes
-  - `(public)/` - Public authentication routes
-  - `(setup)/` - Organization setup flow
-- `src/actions/` - Server Actions organized by feature
-- `src/components/` - React components organized by feature
-- `src/lib/` - Utility functions and configurations
-- `prisma/` - Database schema and migrations
-- `better-auth_migrations/` - Auth-specific SQL migrations
+All user-facing routes live under `[locale]/` with two route groups:
 
-#### Workspace Dependencies:
-- `@tada/analytics` - Analytics utilities
-- `@tada/email` - Email templates
-- `@tada/kv` - Key-value storage
-- `@tada/supabase` - Supabase integration
-- `@tada/ui` - Shared UI components
+- `(public)/` – Unauthenticated pages: login, signup, accept-invitation, forgot-password, etc.
+- `(dashboard)/` – Authenticated app pages: missions, workspaces, billing, settings, analysis, invoices, market-beats, etc.
+- `(setup)/` – Post-signup organization setup flow.
+- `api/` – API routes (auth, webhooks/stripe, payments, uploads, AI endpoints, etc.)
 
-### Database Schema
+### Authentication
 
-The application uses a complex multi-tenant schema with these core entities:
-- **User**: Basic user information with role-based permissions
-- **Organization**: Multi-tenant organizations with subscription management
-- **Mission**: Core business entity representing survey projects
-- **Survey/SurveyResponse**: Survey management and response collection
-- **Subscription/Payment**: Stripe-based billing system
-- **MissionPermission**: Fine-grained access control for missions
+Uses **better-auth** (not NextAuth). Configuration in `src/lib/auth.ts` (server) and `src/lib/auth-client.ts` (client).
 
-### Authentication & Authorization
+- Plugins enabled: `organization`, `admin`, `emailOTP`
+- Social providers: Google, Apple (sign-in only, no self-signup)
+- Session is checked in `src/middleware.ts` via `/api/auth/get-session`
+- `NEXT_PUBLIC_BYPASS_AUTH=1` skips auth in dev/localhost
+- Helper: `getCurrentUser()` / `requireCurrentUser()` in `src/lib/current-user.ts`
 
-- **Authentication**: better-auth with multiple strategies:
-  - Email/password with OTP verification
-  - OAuth (Google, Apple)
-  - Organization invitations
-- **Authorization**: Role-based access control with these roles:
-  - `superAdmin` - Full system access
-  - `organizationAdmin` - Organization management
-  - `userOrganization` - Standard organization member
-  - `contributor` - Limited mission access
-  - Additional specialized roles for operations, finance, and content moderation
+### Roles & Permissions
 
-### Permission System
+Defined in `src/lib/permissions.ts` using better-auth access control:
 
-The app uses a sophisticated permission system:
-- **Organization-level**: Users belong to organizations with specific roles
-- **Mission-level**: Fine-grained permissions for individual missions
-- **Access Control**: Custom `better-auth` plugin with granular permissions for actions like `create`, `read`, `update`, `delete`, `validate`
+- Platform roles: `superAdmin`, `operationsAdmin`, `organizationAdmin`, `userOrganization`, `contentModerator`, `financialAdmin`, `externalAuditor`, `contributor`
+- Organization-level roles (via better-auth organization plugin): `admin`, `owner`, `member`
 
-### Server Actions Pattern
+### Database
 
-All data mutations use Next.js Server Actions with:
-- `actionClient` - Basic server action wrapper
-- `authActionClient` - Authenticated actions with user context
-- Zod schemas for input validation in `src/actions/*/schema.ts`
-- Error handling and logging
+- **Prisma** with PostgreSQL (`prisma/schema.prisma`)
+- `src/lib/prisma.ts` exports a singleton `prisma` client (globally cached in dev for HMR)
+- Migration scripts live in `scripts/`
 
-### Key Features
+### Storage
 
-1. **Survey Management**: Create, distribute, and analyze surveys
-2. **Dashboard Builder**: Dynamic chart creation with multiple visualization types
-3. **Multi-tenant Organizations**: Complete organization management with billing
-4. **Subscription System**: Stripe integration with usage-based billing
-5. **Internationalization**: French/English support
-6. **Real-time Collaboration**: Velt integration for collaborative features
-7. **Export Capabilities**: CSV and PowerPoint export functionality
+- **Supabase Storage** for file uploads (bucket: `tada`)
+- Categories: `workspaceLogo`, `userAvatar`, `organizationLogo`, `surveyImage`
+- Server-only admin client: `getSupabaseAdmin()` in `src/lib/supabase-server.ts`
+- Upload utilities: `src/lib/uploads.ts` (`uploadFileToSupabase`, `getPublicUrlForPath`, `deleteFromSupabase`)
 
-### Development Notes
+### Server Actions
 
-- **Database**: Run `prisma generate` before building
-- **Environment**: Requires DATABASE_URL, BETTER_AUTH_SECRET, GOOGLE_CLIENT_ID, STRIPE keys
-- **Build Configuration**: 
-  - Standalone output mode
-  - Transpiles workspace packages
-  - Ignores TypeScript/ESLint errors during builds (set in next.config.mjs)
-- **CORS**: Configured for API routes with full access headers
+All mutations use **next-safe-action** via clients in `src/actions/safe-action.ts`:
 
-### Common Patterns
+- `actionClient` – unauthenticated
+- `authActionClient` – requires session (injects `ctx.user` and `ctx.auth`); use this for all protected mutations
 
-1. **Server Actions**: Follow the pattern in `src/actions/` with proper authentication and validation
-2. **Components**: Organize by feature, use TypeScript interfaces in `type.ts` files
-3. **Database Queries**: Use Prisma client through `src/lib/prisma.ts`
-4. **Authentication**: Check user session with `auth.api.getSession()` in Server Actions
-5. **Permissions**: Use the role-based system defined in `src/lib/permissions.ts`
+### Internationalization
 
-### Testing & Quality
+- **next-international** with locales `en` / `fr` (default: `en`)
+- Translation files: `src/locales/en.ts` and `src/locales/fr.ts`
+- Client hook: `useI18n()` from `@/locales/client`
+- Server helper: `getScopedI18n()` from `@/locales/server`
+- Zod schemas that need i18n error messages accept `t` (the `useI18n` return) as a parameter — see `src/lib/schemas/auth.ts`
 
-- Uses Biome for linting and formatting
-- TypeScript strict mode enabled
-- Server-side validation with Zod schemas
-- Error boundaries for React components
+### Payments
+
+Two providers are integrated:
+
+- **Stripe** (`src/lib/stripe.ts`) – subscription billing (webhook at `api/webhooks/stripe`)
+- **Paystack** (`src/lib/payments/paystack/`) – workspace credit purchases in XOF currency; Paystack amounts are in subunits (×100)
+
+### Plans & Credits
+
+- Plan tiers: `starter`, `growth`, `business`, `entreprise` — limits defined in `src/lib/plans/plan-limits.ts`
+- Workspace credits system: purchase flow in `src/lib/credits/`, invoices in `src/lib/billing/`
+
+### AI
+
+- Uses **Vercel AI SDK** (`ai` package) with `@ai-sdk/openai`
+- AI actions for mission/survey generation in `src/actions/missions/`
+- AI analysis endpoints at `api/ai/` (datasets, analyses)
+- Chat endpoint at `api/chat/`
+- UI built with `@assistant-ui/react`
+
+### Key Conventions
+
+- Path alias `@/` maps to `src/`
+- Server-only files import `"server-only"` at the top
+- All `prisma` queries go through `src/lib/prisma.ts`
+- Linting/formatting via **Biome** (not ESLint/Prettier) — config at repo root `biome.json`
+- TypeScript strict mode; build ignores TS errors (`typescript.ignoreBuildErrors: true`) so always run `bun typecheck` separately
+- Tailwind uses CSS variables for theming; dark mode via class strategy
+- Toast notifications via **sonner**
+- State management via **zustand** stores in `src/stores/`
