@@ -1861,12 +1861,12 @@ enum BlogPostStatus {
 
 model BlogTopic {
   id       String  @id @default(uuid())
-  key      String  @unique @map("key") // ex: "fundamentals"
-  label    String  @map("label") // ex: "Fundamentals"
+  key      String  @unique @map("key")
   isActive Boolean @default(true) @map("is_active")
   order    Int     @default(0) @map("order")
 
-  posts BlogPost[]
+  posts        BlogPost[]
+  translations BlogTopicTranslation[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1874,18 +1874,32 @@ model BlogTopic {
   @@map("blog_topic")
 }
 
+model BlogTopicTranslation {
+  id      String     @id @default(uuid())
+  topicId String     @map("topic_id")
+  locale  LocaleCode @map("locale")
+  label   String     @map("label")
+
+  topic BlogTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([topicId, locale])
+  @@index([locale])
+  @@map("blog_topic_translation")
+}
+
 model BlogPost {
   id      String    @id @default(uuid())
   topicId String    @map("topic_id")
-  topic   BlogTopic @relation(fields: [topicId], references: [id])
+  topic   BlogTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
 
-  title       String         @map("title")
-  slug        String         @unique @map("slug") // ex: "5-short-interest-metrics"
-  excerpt     String?        @map("excerpt")
-  content     String         @map("content") // markdown ou html (simple)
-  coverPath   String?        @map("cover_path") // ✅ on stocke le path storage
+  coverPath   String?        @map("cover_path")
   status      BlogPostStatus @default(draft) @map("status")
   publishedAt DateTime?      @map("published_at")
+
+  translations BlogPostTranslation[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1893,6 +1907,28 @@ model BlogPost {
   @@index([topicId])
   @@index([status, publishedAt])
   @@map("blog_post")
+}
+
+model BlogPostTranslation {
+  id     String     @id @default(uuid())
+  postId String     @map("post_id")
+  locale LocaleCode @map("locale")
+
+  title   String  @map("title")
+  slug    String  @map("slug")
+  excerpt String? @map("excerpt")
+  content String  @map("content")
+
+  post BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([postId, locale])
+  @@unique([locale, slug])
+  @@index([locale])
+  @@index([locale, title])
+  @@map("blog_post_translation")
 }
 
 model Invoice {

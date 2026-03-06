@@ -68,7 +68,7 @@ export default async function ContributorPage({
 
     // Vérifier si la question existe déjà dans cette mission
     let existingQuestion = acc[missionId].questions.find(
-      (q: any) => q.key === item.key
+      (q: any) => q.key === item.key,
     );
 
     if (!existingQuestion) {

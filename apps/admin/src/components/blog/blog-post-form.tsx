@@ -21,21 +21,35 @@ import { getPublicUrlFromPath } from "@/lib/uploads/public-url";
 
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { Languages } from "lucide-react";
 
 type Topic = {
   id: string;
   key: string;
   label: string;
+  labels: {
+    fr: string;
+    en: string;
+  };
   order: number;
   isActive: boolean;
 };
 
 type PostStatus = "draft" | "published" | "archived";
 
+type TranslationInput = {
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+};
+
 function slugify(input: string) {
   return input
     .toLowerCase()
     .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^\w\s-]/g, "")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
@@ -50,56 +64,94 @@ export function BlogPostForm({
   topics: Topic[];
   initial?: {
     id: string;
-    title: string;
-    slug: string;
-    excerpt: string | null;
-    content: string;
     coverPath: string | null;
     status: PostStatus;
-    topicId: string | null;
+    topicId: string;
+    labels: {
+      fr: {
+        title: string;
+        slug: string;
+        excerpt: string | null;
+        content: string;
+      } | null;
+      en: {
+        title: string;
+        slug: string;
+        excerpt: string | null;
+        content: string;
+      } | null;
+    };
   };
 }) {
   const router = useRouter();
   const { uploadFile, isLoading: isUploading } = useUpload();
 
-  const [autoSlug, setAutoSlug] = useState(mode === "create");
+  const [autoSlugFr, setAutoSlugFr] = useState(mode === "create");
+  const [autoSlugEn, setAutoSlugEn] = useState(mode === "create");
 
   const [form, setForm] = useState({
     topicId: initial?.topicId ?? topics[0]?.id ?? "",
-    title: initial?.title ?? "",
-    slug: initial?.slug ?? "",
-    excerpt: initial?.excerpt ?? "",
     status: (initial?.status ?? "draft") as PostStatus,
     coverPath: initial?.coverPath ?? "",
     coverUrl:
       getPublicUrlFromPath({ bucket: "tada", pathOrUrl: initial?.coverPath }) ??
       "",
+
+    fr: {
+      title: initial?.labels?.fr?.title ?? "",
+      slug: initial?.labels?.fr?.slug ?? "",
+      excerpt: initial?.labels?.fr?.excerpt ?? "",
+    },
+    en: {
+      title: initial?.labels?.en?.title ?? "",
+      slug: initial?.labels?.en?.slug ?? "",
+      excerpt: initial?.labels?.en?.excerpt ?? "",
+    },
   });
 
-  // Tiptap editor (HTML)
-  const editor = useEditor({
+  const editorFr = useEditor({
     extensions: [StarterKit],
-    content: initial?.content ?? "",
+    content: initial?.labels?.fr?.content ?? "",
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        class: "prose prose-sm max-w-none min-h-[260px] focus:outline-none p-3",
+        class: "prose prose-sm max-w-none min-h-[220px] focus:outline-none p-3",
       },
     },
   });
 
-  // auto slug when title changes
+  const editorEn = useEditor({
+    extensions: [StarterKit],
+    content: initial?.labels?.en?.content ?? "",
+    immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        class: "prose prose-sm max-w-none min-h-[220px] focus:outline-none p-3",
+      },
+    },
+  });
+
   useEffect(() => {
-    if (!autoSlug) return;
-    const next = slugify(form.title || "");
-    setForm((f) => ({ ...f, slug: next }));
-  }, [form.title, autoSlug]);
+    if (!autoSlugFr) return;
+    const next = slugify(form.fr.title || "");
+    setForm((f) => ({ ...f, fr: { ...f.fr, slug: next } }));
+  }, [form.fr.title, autoSlugFr]);
+
+  useEffect(() => {
+    if (!autoSlugEn) return;
+    const next = slugify(form.en.title || "");
+    setForm((f) => ({ ...f, en: { ...f.en, slug: next } }));
+  }, [form.en.title, autoSlugEn]);
 
   const canSubmit = useMemo(() => {
-    return Boolean(
-      form.topicId && form.title.trim() && form.slug.trim() && editor,
-    );
-  }, [form.topicId, form.title, form.slug, editor]);
+    if (!form.topicId) return false;
+    if (!editorFr || !editorEn) return false;
+
+    const hasFr = Boolean(form.fr.title.trim() && form.fr.slug.trim());
+    const hasEn = Boolean(form.en.title.trim() && form.en.slug.trim());
+
+    return hasFr || hasEn;
+  }, [form, editorFr, editorEn]);
 
   async function onPickCover(file: File) {
     const filename = `${Date.now()}-${file.name}`.replace(/\s+/g, "-");
@@ -115,16 +167,29 @@ export function BlogPostForm({
   }
 
   async function submit() {
-    if (!editor) return;
+    if (!editorFr || !editorEn) return;
+
+    const frContent = editorFr.getHTML();
+    const enContent = editorEn.getHTML();
 
     const payload = {
-      topicId: form.topicId || null,
-      title: form.title.trim(),
-      slug: form.slug.trim(),
-      excerpt: form.excerpt?.trim() || null,
-      content: editor.getHTML(),
+      topicId: form.topicId,
       status: form.status,
       coverPath: form.coverPath || null,
+      translations: {
+        fr: {
+          title: form.fr.title.trim(),
+          slug: form.fr.slug.trim(),
+          excerpt: form.fr.excerpt.trim() || null,
+          content: frContent,
+        },
+        en: {
+          title: form.en.title.trim(),
+          slug: form.en.slug.trim(),
+          excerpt: form.en.excerpt.trim() || null,
+          content: enContent,
+        },
+      },
     };
 
     const url =
@@ -148,25 +213,69 @@ export function BlogPostForm({
     router.refresh();
   }
 
+  function renderEditorToolbar(editor: ReturnType<typeof useEditor>) {
+    return (
+      <div className="flex flex-wrap gap-2 border-b bg-gray-50 p-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => editor?.chain().focus().toggleBold().run()}
+          disabled={!editor}
+        >
+          Bold
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => editor?.chain().focus().toggleItalic().run()}
+          disabled={!editor}
+        >
+          Italic
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => editor?.chain().focus().toggleBulletList().run()}
+          disabled={!editor}
+        >
+          • List
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+          disabled={!editor}
+        >
+          1. List
+        </Button>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white rounded-lg p-6 space-y-6">
+    <div className="space-y-6 rounded-lg bg-white p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">
             {mode === "create" ? "Nouvel article" : "Modifier l’article"}
           </h1>
-          <p className="text-gray-500 mt-1">
-            Topic, contenu riche, couverture, statut
+          <p className="mt-1 text-gray-500">
+            Topic, contenu riche, couverture, statut, FR & EN
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <Badge variant="outline">{form.status}</Badge>
+          {form.fr.title ? <Badge variant="outline">FR</Badge> : null}
+          {form.en.title ? <Badge variant="outline">EN</Badge> : null}
         </div>
       </div>
 
-      {/* Topic + Status */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label>Topic</Label>
           <Select
@@ -179,7 +288,7 @@ export function BlogPostForm({
             <SelectContent>
               {topics.map((t) => (
                 <SelectItem key={t.id} value={t.id}>
-                  {t.label}
+                  {t.labels?.fr || t.labels?.en || t.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -190,7 +299,9 @@ export function BlogPostForm({
           <Label>Status</Label>
           <Select
             value={form.status}
-            onValueChange={(v) => setForm((f) => ({ ...f, status: v as any }))}
+            onValueChange={(v) =>
+              setForm((f) => ({ ...f, status: v as PostStatus }))
+            }
           >
             <SelectTrigger>
               <SelectValue />
@@ -204,54 +315,6 @@ export function BlogPostForm({
         </div>
       </div>
 
-      {/* Title + Slug */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Titre</Label>
-          <Input
-            value={form.title}
-            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-            placeholder="Ex: 5 métriques de short interest"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Slug</Label>
-          <Input
-            value={form.slug}
-            onChange={(e) => {
-              setAutoSlug(false); // ✅ stop auto
-              setForm((f) => ({ ...f, slug: e.target.value }));
-            }}
-            placeholder="Ex: 5-short-interest-metrics"
-          />
-          <div className="text-xs text-gray-500">
-            Auto: {autoSlug ? "ON" : "OFF"}{" "}
-            {!autoSlug ? (
-              <button
-                className="underline ml-1"
-                type="button"
-                onClick={() => setAutoSlug(true)}
-              >
-                réactiver
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </div>
-
-      {/* Excerpt */}
-      <div className="space-y-2">
-        <Label>Excerpt</Label>
-        <Textarea
-          rows={3}
-          value={form.excerpt}
-          onChange={(e) => setForm((f) => ({ ...f, excerpt: e.target.value }))}
-          placeholder="Résumé court (optionnel)"
-        />
-      </div>
-
-      {/* Cover */}
       <div className="space-y-2">
         <Label>Cover</Label>
         <Input
@@ -268,71 +331,170 @@ export function BlogPostForm({
           <img
             src={form.coverUrl}
             alt="cover"
-            className="h-48 w-full object-cover rounded-md border"
+            className="h-48 w-full rounded-md border object-cover"
           />
         ) : null}
       </div>
 
-      {/* Content editor */}
-      <div className="space-y-2">
-        <Label>Corps de l’article</Label>
+      <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+        <div className="mb-1 flex items-center gap-2 text-sm font-medium text-blue-700">
+          <Languages className="h-4 w-4" />
+          Traductions
+        </div>
+        <p className="text-xs text-blue-600">
+          Tu peux renseigner le français, l’anglais, ou les deux. Au moins une
+          traduction complète est requise.
+        </p>
+      </div>
 
-        <div className="border rounded-md">
-          {/* Toolbar minimal */}
-          <div className="flex flex-wrap gap-2 p-2 border-b bg-gray-50">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => editor?.chain().focus().toggleBold().run()}
-              disabled={!editor}
-            >
-              Bold
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => editor?.chain().focus().toggleItalic().run()}
-              disabled={!editor}
-            >
-              Italic
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => editor?.chain().focus().toggleBulletList().run()}
-              disabled={!editor}
-            >
-              • List
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => editor?.chain().focus().toggleOrderedList().run()}
-              disabled={!editor}
-            >
-              1. List
-            </Button>
+      <div className="grid gap-6 xl:grid-cols-2">
+        <div className="space-y-4 rounded-lg border p-4">
+          <div className="text-sm font-semibold text-gray-900">
+            Version française
           </div>
 
-          <EditorContent editor={editor} />
+          <div className="space-y-2">
+            <Label>Titre FR</Label>
+            <Input
+              value={form.fr.title}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  fr: { ...f.fr, title: e.target.value },
+                }))
+              }
+              placeholder="Ex: 5 métriques de short interest"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Slug FR</Label>
+            <Input
+              value={form.fr.slug}
+              onChange={(e) => {
+                setAutoSlugFr(false);
+                setForm((f) => ({
+                  ...f,
+                  fr: { ...f.fr, slug: e.target.value },
+                }));
+              }}
+              placeholder="Ex: 5-metriques-de-short-interest"
+            />
+            <div className="text-xs text-gray-500">
+              Auto: {autoSlugFr ? "ON" : "OFF"}
+              {!autoSlugFr ? (
+                <button
+                  className="ml-1 underline"
+                  type="button"
+                  onClick={() => setAutoSlugFr(true)}
+                >
+                  réactiver
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Excerpt FR</Label>
+            <Textarea
+              rows={3}
+              value={form.fr.excerpt}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  fr: { ...f.fr, excerpt: e.target.value },
+                }))
+              }
+              placeholder="Résumé court en français"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Contenu FR</Label>
+            <div className="rounded-md border">
+              {renderEditorToolbar(editorFr)}
+              <EditorContent editor={editorFr} />
+            </div>
+          </div>
         </div>
 
-        <div className="text-xs text-gray-500">
-          Contenu stocké en <b>HTML</b> dans `blog_post.content`.
+        <div className="space-y-4 rounded-lg border p-4">
+          <div className="text-sm font-semibold text-gray-900">
+            Version anglaise
+          </div>
+
+          <div className="space-y-2">
+            <Label>Title EN</Label>
+            <Input
+              value={form.en.title}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  en: { ...f.en, title: e.target.value },
+                }))
+              }
+              placeholder="Ex: 5 short interest metrics"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Slug EN</Label>
+            <Input
+              value={form.en.slug}
+              onChange={(e) => {
+                setAutoSlugEn(false);
+                setForm((f) => ({
+                  ...f,
+                  en: { ...f.en, slug: e.target.value },
+                }));
+              }}
+              placeholder="Ex: 5-short-interest-metrics"
+            />
+            <div className="text-xs text-gray-500">
+              Auto: {autoSlugEn ? "ON" : "OFF"}
+              {!autoSlugEn ? (
+                <button
+                  className="ml-1 underline"
+                  type="button"
+                  onClick={() => setAutoSlugEn(true)}
+                >
+                  reactivate
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Excerpt EN</Label>
+            <Textarea
+              rows={3}
+              value={form.en.excerpt}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  en: { ...f.en, excerpt: e.target.value },
+                }))
+              }
+              placeholder="Short summary in English"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Content EN</Label>
+            <div className="rounded-md border">
+              {renderEditorToolbar(editorEn)}
+              <EditorContent editor={editorEn} />
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Actions */}
       <div className="flex items-center justify-end gap-2">
         <Button variant="outline" onClick={() => router.back()}>
           Annuler
         </Button>
         <Button disabled={!canSubmit} onClick={() => void submit()}>
-          Créer
+          {mode === "create" ? "Créer" : "Enregistrer"}
         </Button>
       </div>
     </div>

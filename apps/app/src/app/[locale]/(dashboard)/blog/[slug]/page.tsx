@@ -1,4 +1,3 @@
-// app/[locale]/blog/[slug]/page.tsx
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Image from "next/image";
@@ -7,8 +6,32 @@ import Link from "next/link";
 import { getPublicUrlForPath } from "@/lib/uploads.public";
 
 type PageProps = {
-  params: { locale: string; slug: string };
+  params: Promise<{ locale: string; slug: string }>;
 };
+
+type Locale = "fr" | "en";
+
+function getSafeLocale(locale?: string): Locale {
+  return locale === "en" ? "en" : "fr";
+}
+
+function getTranslations(locale: Locale) {
+  if (locale === "en") {
+    return {
+      home: "Home",
+      blog: "Blog",
+      backToBlog: "← Back to blog",
+      slug: "Slug",
+    };
+  }
+
+  return {
+    home: "Accueil",
+    blog: "Blog",
+    backToBlog: "← Retour au blog",
+    slug: "Slug",
+  };
+}
 
 function formatDate(d?: Date | null, locale = "fr") {
   if (!d) return null;
@@ -23,18 +46,61 @@ function formatDate(d?: Date | null, locale = "fr") {
   }
 }
 
-export default async function BlogPostPage({ params }: PageProps) {
-  const { slug, locale } = params;
+function getLocalizedTopic(topic: any, locale: Locale) {
+  if (!topic) return null;
 
-  const post = await prisma.blogPost.findUnique({
-    where: { slug },
-    include: { topic: true },
+  const primary = topic.translations?.find((t: any) => t.locale === locale);
+  const fallback = topic.translations?.find((t: any) =>
+    locale === "fr" ? t.locale === "en" : t.locale === "fr",
+  );
+
+  return {
+    ...topic,
+    label: primary?.label || fallback?.label || "",
+  };
+}
+
+export default async function BlogPostPage({ params }: PageProps) {
+  const { slug, locale: rawLocale } = await params;
+  const locale = getSafeLocale(rawLocale);
+  const t = getTranslations(locale);
+
+  const translation = await prisma.blogPostTranslation.findFirst({
+    where: {
+      locale,
+      slug,
+      post: {
+        status: "published",
+      },
+    },
+    include: {
+      post: {
+        include: {
+          topic: {
+            include: {
+              translations: {
+                orderBy: { locale: "asc" },
+              },
+            },
+          },
+          translations: {
+            orderBy: { locale: "asc" },
+          },
+        },
+      },
+    },
   });
 
-  // 🔒 gate simple: only published visible
-  if (!post || post.status !== "published") {
+  if (
+    !translation ||
+    !translation.post ||
+    translation.post.status !== "published"
+  ) {
     notFound();
   }
+
+  const post = translation.post;
+  const topic = getLocalizedTopic(post.topic, locale);
 
   const coverUrl =
     getPublicUrlForPath({
@@ -46,27 +112,25 @@ export default async function BlogPostPage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen bg-gray-100 py-8">
-      <article className="max-w-3xl mx-auto px-4">
-        {/* Breadcrumb */}
+      <article className="mx-auto max-w-3xl px-4">
         <div className="mb-4 text-sm text-gray-500">
           <Link href={`/${locale}`} className="hover:underline">
-            Home
+            {t.home}
           </Link>
           <span className="mx-2">/</span>
           <Link href={`/${locale}/blog`} className="hover:underline">
-            Blog
+            {t.blog}
           </Link>
           <span className="mx-2">/</span>
-          <span className="text-gray-700">{post.title}</span>
+          <span className="text-gray-700">{translation.title}</span>
         </div>
 
-        {/* Header */}
-        <header className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <header className="overflow-hidden rounded-xl border border-gray-200 bg-white">
           {coverUrl ? (
-            <div className="relative w-full h-[240px] sm:h-[320px]">
+            <div className="relative h-[240px] w-full sm:h-[320px]">
               <Image
                 src={coverUrl}
-                alt={post.title}
+                alt={translation.title}
                 fill
                 className="object-cover"
                 priority
@@ -75,10 +139,10 @@ export default async function BlogPostPage({ params }: PageProps) {
           ) : null}
 
           <div className="p-6 sm:p-8">
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              {post.topic?.label ? (
-                <span className="text-xs font-semibold px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                  {post.topic.label}
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              {topic?.label ? (
+                <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
+                  {topic.label}
                 </span>
               ) : null}
 
@@ -87,36 +151,32 @@ export default async function BlogPostPage({ params }: PageProps) {
               ) : null}
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-              {post.title}
+            <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">
+              {translation.title}
             </h1>
 
-            {post.excerpt ? (
-              <p className="mt-3 text-gray-600 leading-relaxed">
-                {post.excerpt}
+            {translation.excerpt ? (
+              <p className="mt-3 leading-relaxed text-gray-600">
+                {translation.excerpt}
               </p>
             ) : null}
           </div>
         </header>
 
-        {/* Body */}
-        <section className="mt-6 bg-white rounded-xl border border-gray-200 p-6 sm:p-8">
-          {/* ✅ Choisis une des 2 options ci-dessous pour afficher le content */}
-          <BlogContent content={post.content} />
+        <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 sm:p-8">
+          <BlogContent content={translation.content} />
         </section>
 
-        {/* Footer actions */}
         <footer className="mt-6 flex items-center justify-between">
           <Link
             href={`/${locale}/blog`}
             className="text-sm text-blue-700 hover:underline"
           >
-            ← Back to blog
+            {t.backToBlog}
           </Link>
 
-          {/* Optionnel: partager */}
           <div className="text-xs text-gray-500">
-            Slug: <span className="font-mono">{post.slug}</span>
+            {t.slug}: <span className="font-mono">{translation.slug}</span>
           </div>
         </footer>
       </article>
@@ -124,13 +184,6 @@ export default async function BlogPostPage({ params }: PageProps) {
   );
 }
 
-/**
- * Rendu du contenu:
- * - si tu stockes du Markdown => utilise react-markdown
- * - si tu stockes du HTML => utilise dangerouslySetInnerHTML (avec sanitation côté back)
- *
- * Je te mets Markdown (recommandé) ci-dessous.
- */
 function BlogContent({ content }: { content: string }) {
   return (
     <div

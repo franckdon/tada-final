@@ -5,44 +5,44 @@ import { cn } from "@tada/ui/lib/utils";
 type TemplateItem = {
   title: string;
   href: string;
-  imageSrc: string; // local: /images/templates/xxx.png
+  imageSrc: string;
   imageAlt: string;
 };
 
 const DEFAULT_TEMPLATES: TemplateItem[] = [
   {
     title: "Track your brand’s health",
-    href: "/templates/brand-health",
+    href: "#",
     imageSrc: "/images/templates/Track.webp",
     imageAlt: "Brand health template",
   },
   {
     title: "Measure the impact of your campaigns",
-    href: "/templates/campaign-impact",
+    href: "#",
     imageSrc: "/images/templates/Measure.webp",
     imageAlt: "Campaign impact template",
   },
   {
     title: "Test how memorable your campaign is",
-    href: "/templates/ad-memorability",
+    href: "#",
     imageSrc: "/images/templates/Test_how.webp",
     imageAlt: "Ad memorability template",
   },
   {
     title: "Test new ideas before you launch",
-    href: "/templates/idea-testing",
+    href: "#",
     imageSrc: "/images/templates/Test_new.webp",
     imageAlt: "Idea testing template",
   },
   {
     title: "Understand who your customers really are",
-    href: "/templates/personas",
+    href: "#",
     imageSrc: "/images/templates/Understand.webp",
     imageAlt: "Personas template",
   },
   {
     title: "Learn how and why people use your category",
-    href: "/templates/usage-and-attitudes",
+    href: "#",
     imageSrc: "/images/templates/Learn_how.webp",
     imageAlt: "Usage & attitudes template",
   },
@@ -59,15 +59,15 @@ export function HomeTemplatesSection({
 }) {
   return (
     <section className={cn("mt-8", "p-6", className)}>
-      <h2 className="text-lg font-semibold text-gray-900 mb-3">{title}</h2>
+      <h2 className="mb-3 text-lg font-semibold text-gray-900">{title}</h2>
 
-      <div className="rounded-xl border bg-white overflow-hidden">
+      <div className="overflow-hidden rounded-xl border bg-white">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6">
-          {items.map((it) => (
+          {items.map((it, index) => (
             <Link
-              key={it.href}
+              key={`${it.title}-${index}`}
               href={it.href}
-              className="group p-6 border-b sm:border-b lg:border-b-0 lg:border-r last:border-r-0 hover:bg-gray-50 transition-colors"
+              className="group border-b p-6 transition-colors hover:bg-gray-50 sm:border-b lg:border-b-0 lg:border-r last:border-r-0"
             >
               <div className="flex flex-col gap-4">
                 <div className="relative h-20 w-full">
@@ -81,7 +81,7 @@ export function HomeTemplatesSection({
                   />
                 </div>
 
-                <div className="text-sm font-semibold text-gray-900 leading-snug group-hover:underline">
+                <div className="text-sm font-semibold leading-snug text-gray-900 group-hover:underline">
                   {it.title}
                 </div>
               </div>

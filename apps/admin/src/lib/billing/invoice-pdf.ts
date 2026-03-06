@@ -176,14 +176,14 @@ export async function renderInvoicePdfBuffer(input: InvoicePdfInput): Promise<Bu
   drawTextRight(page, fontAll, S_H, rightX, yr, "BILLED TO:");
   yr -= 16;
 
-  drawTextRight(page, fontAll, S_H, rightX, yr, `${safeText(billedCompanyName)} (Company name)`);
+  drawTextRight(page, fontAll, S_H, rightX, yr, `${safeText(billedCompanyName)}`);
   yr -= 14;
-  drawTextRight(page, fontAll, S_B, rightX, yr, `${safeText(billedOwnerName)} (workspace owner)`);
+  drawTextRight(page, fontAll, S_B, rightX, yr, `${safeText(billedOwnerName)}`);
   yr -= 14;
 
-  drawTextRight(page, fontAll, S_B, rightX, yr, `${safeText(billedEmail)} (email)`, rgb(0.1, 0.3, 0.8));
+  drawTextRight(page, fontAll, S_B, rightX, yr, `${safeText(billedEmail)}`, rgb(0.1, 0.3, 0.8));
   yr -= 14;
-  drawTextRight(page, fontAll, S_B, rightX, yr, `${safeText(billedAddress)} (adresse)`);
+  drawTextRight(page, fontAll, S_B, rightX, yr, `${safeText(billedAddress)}`);
 
   yr -= 22;
   drawTextRight(page, fontAll, S_B, rightX, yr, `Invoice #: ${safeText(invoice.invoiceNumber ?? invoice.id)}`);

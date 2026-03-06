@@ -24,16 +24,30 @@ import {
 } from "@tada/ui/components/table";
 import { Badge } from "@tada/ui/components/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash2, Loader2, Tags } from "lucide-react";
+import { Plus, Edit, Trash2, Loader2, Tags, Languages } from "lucide-react";
+
+type TopicTranslation = {
+  id?: string;
+  topicId?: string;
+  locale: "fr" | "en";
+  label: string;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+};
 
 type Topic = {
   id: string;
   key: string;
   label: string;
+  labels: {
+    fr: string;
+    en: string;
+  };
   isActive: boolean;
   order: number;
   createdAt: string | Date;
   updatedAt: string | Date;
+  translations?: TopicTranslation[];
   _count?: { posts: number };
 };
 
@@ -49,11 +63,26 @@ function normalizeKey(v: string) {
     .replace(/[^a-z0-9_]/g, "");
 }
 
+function normalizeTopic(topic: any): Topic {
+  const labels = {
+    fr: topic?.labels?.fr || "",
+    en: topic?.labels?.en || "",
+  };
+
+  return {
+    ...topic,
+    label: labels.fr || labels.en || "",
+    labels,
+  };
+}
+
 export function BlogTopicsManagement({ initialTopics }: Props) {
   const router = useRouter();
   const { toast } = useToast();
 
-  const [topics, setTopics] = useState<Topic[]>(initialTopics);
+  const [topics, setTopics] = useState<Topic[]>(
+    initialTopics.map(normalizeTopic),
+  );
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -67,17 +96,29 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
 
   const [form, setForm] = useState({
     key: "",
-    label: "",
+    labelFr: "",
+    labelEn: "",
     order: 0,
     isActive: true,
   });
 
   const usedKeys = useMemo(() => new Set(topics.map((t) => t.key)), [topics]);
 
+  const normalizedCreateKey = normalizeKey(form.key);
+
+  const editKeyAlreadyUsed = useMemo(() => {
+    if (!selected) return false;
+    const normalized = normalizeKey(form.key);
+    if (!normalized) return false;
+
+    return topics.some((t) => t.id !== selected.id && t.key === normalized);
+  }, [topics, selected, form.key]);
+
   const resetForm = () =>
     setForm({
       key: "",
-      label: "",
+      labelFr: "",
+      labelEn: "",
       order: 0,
       isActive: true,
     });
@@ -91,7 +132,8 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
     setSelected(t);
     setForm({
       key: t.key,
-      label: t.label,
+      labelFr: t.labels?.fr || "",
+      labelEn: t.labels?.en || "",
       order: t.order ?? 0,
       isActive: !!t.isActive,
     });
@@ -109,9 +151,13 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
 
     try {
       const payload = {
-        ...form,
         key: normalizeKey(form.key),
-        label: form.label.trim(),
+        order: Number(form.order || 0),
+        isActive: !!form.isActive,
+        translations: {
+          fr: { label: form.labelFr.trim() },
+          en: { label: form.labelEn.trim() },
+        },
       };
 
       const res = await fetch("/api/blog/topics", {
@@ -121,17 +167,25 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
       });
 
       const json = await res.json().catch(() => ({}));
-      if (!res.ok)
+      if (!res.ok) {
         throw new Error(json?.error || "Impossible de créer le topic");
+      }
+
+      const created = normalizeTopic(json.data);
 
       setTopics((prev) =>
-        [json.data, ...prev].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+        [...prev, created].sort(
+          (a, b) =>
+            (a.order ?? 0) - (b.order ?? 0) ||
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        ),
       );
 
       toast({
         title: "Topic créé",
-        description: `${json.data.label} a été créé.`,
+        description: created.label || created.key,
       });
+
       setIsCreateOpen(false);
       resetForm();
       router.refresh();
@@ -154,11 +208,13 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
 
     try {
       const payload = {
-        label: form.label.trim(),
+        key: normalizeKey(form.key),
         order: Number(form.order || 0),
         isActive: !!form.isActive,
-        // clé éditable si tu veux; sinon commente la ligne suivante
-        key: normalizeKey(form.key),
+        translations: {
+          fr: { label: form.labelFr.trim() },
+          en: { label: form.labelEn.trim() },
+        },
       };
 
       const res = await fetch(`/api/blog/topics/${selected.id}`, {
@@ -168,19 +224,27 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
       });
 
       const json = await res.json().catch(() => ({}));
-      if (!res.ok)
+      if (!res.ok) {
         throw new Error(json?.error || "Impossible de modifier le topic");
+      }
+
+      const updated = normalizeTopic(json.data);
 
       setTopics((prev) =>
         prev
-          .map((t) => (t.id === selected.id ? { ...t, ...json.data } : t))
-          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+          .map((t) => (t.id === selected.id ? updated : t))
+          .sort(
+            (a, b) =>
+              (a.order ?? 0) - (b.order ?? 0) ||
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+          ),
       );
 
       toast({
         title: "Topic modifié",
         description: "Modifications enregistrées.",
       });
+
       setIsEditOpen(false);
       setSelected(null);
       router.refresh();
@@ -203,14 +267,17 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
       const res = await fetch(`/api/blog/topics/${toDelete.id}`, {
         method: "DELETE",
       });
+
       const json = await res.json().catch(() => ({}));
-      if (!res.ok)
+      if (!res.ok) {
         throw new Error(json?.error || "Impossible de supprimer le topic");
+      }
 
       setTopics((prev) => prev.filter((t) => t.id !== toDelete.id));
+
       toast({
         title: "Topic supprimé",
-        description: "Les articles liés ont été détachés (topic = null).",
+        description: `${toDelete.label || toDelete.key} a été supprimé.`,
       });
 
       setIsDeleteOpen(false);
@@ -228,34 +295,40 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
   }
 
   const createDisabled =
-    !form.label.trim() ||
+    !normalizedCreateKey ||
+    usedKeys.has(normalizedCreateKey) ||
+    (!form.labelFr.trim() && !form.labelEn.trim());
+
+  const updateDisabled =
     !normalizeKey(form.key) ||
-    usedKeys.has(normalizeKey(form.key));
+    editKeyAlreadyUsed ||
+    (!form.labelFr.trim() && !form.labelEn.trim());
 
   return (
-    <div className="bg-white rounded-lg p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="rounded-lg bg-white p-6">
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="flex items-center gap-2 text-2xl font-bold">
             <Tags className="h-6 w-6 text-blue-600" />
             Topics du Blog
           </h1>
-          <p className="text-gray-500 mt-1">
-            Gérez les catégories du blog (topic uniquement).
+          <p className="mt-1 text-gray-500">
+            Gérez les catégories du blog en français et en anglais.
           </p>
         </div>
 
         <Button onClick={openCreate}>
-          <Plus className="h-4 w-4 mr-2" />
+          <Plus className="mr-2 h-4 w-4" />
           Nouveau topic
         </Button>
       </div>
 
-      <div className="border rounded-lg">
+      <div className="rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50">
-              <TableHead>Label</TableHead>
+              <TableHead>Label FR</TableHead>
+              <TableHead>Label EN</TableHead>
               <TableHead>Key</TableHead>
               <TableHead>Ordre</TableHead>
               <TableHead>Statut</TableHead>
@@ -268,8 +341,8 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
             {topics.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
-                  className="text-center text-gray-500 py-8"
+                  colSpan={7}
+                  className="py-8 text-center text-gray-500"
                 >
                   Aucun topic
                 </TableCell>
@@ -277,7 +350,12 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
             ) : (
               topics.map((t) => (
                 <TableRow key={t.id}>
-                  <TableCell className="font-medium">{t.label}</TableCell>
+                  <TableCell className="font-medium">
+                    {t.labels?.fr || "—"}
+                  </TableCell>
+                  <TableCell className="text-gray-600">
+                    {t.labels?.en || "—"}
+                  </TableCell>
                   <TableCell className="text-sm text-gray-600">
                     {t.key}
                   </TableCell>
@@ -297,7 +375,7 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
                     <Badge variant="outline">{t._count?.posts ?? 0}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex gap-2 justify-end">
+                    <div className="flex justify-end gap-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -327,20 +405,40 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
           <DialogHeader>
             <DialogTitle>Créer un topic</DialogTitle>
             <DialogDescription>
-              Ex: Fundamentals, Indicators, Technical analysis…
+              Ajoute les libellés en français et/ou en anglais.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleCreate} className="space-y-4">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-blue-700">
+                <Languages className="h-4 w-4" />
+                Traductions
+              </div>
+              <p className="mt-1 text-xs text-blue-600">
+                Au moins un label est requis : français ou anglais.
+              </p>
+            </div>
+
             <div className="space-y-2">
-              <Label>Label *</Label>
+              <Label>Label FR</Label>
               <Input
-                value={form.label}
+                value={form.labelFr}
                 onChange={(e) =>
-                  setForm((p) => ({ ...p, label: e.target.value }))
+                  setForm((p) => ({ ...p, labelFr: e.target.value }))
+                }
+                placeholder="Ex: Fondamentaux"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Label EN</Label>
+              <Input
+                value={form.labelEn}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, labelEn: e.target.value }))
                 }
                 placeholder="Ex: Fundamentals"
-                required
               />
             </div>
 
@@ -355,12 +453,9 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
                 required
               />
               <div className="text-xs text-gray-500">
-                Normalisé:{" "}
-                <span className="font-mono">
-                  {normalizeKey(form.key) || "—"}
-                </span>
-                {normalizeKey(form.key) &&
-                usedKeys.has(normalizeKey(form.key)) ? (
+                Normalisé :{" "}
+                <span className="font-mono">{normalizedCreateKey || "—"}</span>
+                {normalizedCreateKey && usedKeys.has(normalizedCreateKey) ? (
                   <span className="text-red-600"> (déjà utilisé)</span>
                 ) : null}
               </div>
@@ -419,17 +514,41 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Modifier le topic</DialogTitle>
+            <DialogDescription>
+              Mets à jour les traductions et la configuration du topic.
+            </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleUpdate} className="space-y-4">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-blue-700">
+                <Languages className="h-4 w-4" />
+                Traductions
+              </div>
+              <p className="mt-1 text-xs text-blue-600">
+                Tu peux renseigner le français, l’anglais, ou les deux.
+              </p>
+            </div>
+
             <div className="space-y-2">
-              <Label>Label *</Label>
+              <Label>Label FR</Label>
               <Input
-                value={form.label}
+                value={form.labelFr}
                 onChange={(e) =>
-                  setForm((p) => ({ ...p, label: e.target.value }))
+                  setForm((p) => ({ ...p, labelFr: e.target.value }))
                 }
-                required
+                placeholder="Ex: Fondamentaux"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Label EN</Label>
+              <Input
+                value={form.labelEn}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, labelEn: e.target.value }))
+                }
+                placeholder="Ex: Fundamentals"
               />
             </div>
 
@@ -443,10 +562,13 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
                 required
               />
               <div className="text-xs text-gray-500">
-                Normalisé:{" "}
+                Normalisé :{" "}
                 <span className="font-mono">
                   {normalizeKey(form.key) || "—"}
                 </span>
+                {editKeyAlreadyUsed ? (
+                  <span className="text-red-600"> (déjà utilisé)</span>
+                ) : null}
               </div>
             </div>
 
@@ -490,7 +612,7 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
               >
                 Annuler
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting || updateDisabled}>
                 {isSubmitting ? "Enregistrement..." : "Enregistrer"}
               </Button>
             </DialogFooter>
@@ -509,12 +631,16 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
             <DialogDescription>
               Le topic{" "}
               <span className="font-semibold text-gray-900">
-                {toDelete?.label}
+                {toDelete?.label || toDelete?.key}
               </span>{" "}
-              sera supprimé.
+              sera supprimé uniquement s’il ne contient aucun article.
               <br />
-              Les articles liés seront conservés mais auront{" "}
-              <span className="font-semibold">topic = null</span>.
+              {toDelete && (toDelete._count?.posts ?? 0) > 0 ? (
+                <span className="mt-2 inline-block font-medium text-red-600">
+                  Ce topic contient {toDelete._count?.posts ?? 0} article(s). La
+                  suppression sera refusée.
+                </span>
+              ) : null}
             </DialogDescription>
           </DialogHeader>
 
@@ -534,7 +660,7 @@ export function BlogTopicsManagement({ initialTopics }: Props) {
               type="button"
               variant="destructive"
               onClick={handleDelete}
-              disabled={isDeleting}
+              disabled={isDeleting || (toDelete?._count?.posts ?? 0) > 0}
             >
               {isDeleting ? (
                 <>

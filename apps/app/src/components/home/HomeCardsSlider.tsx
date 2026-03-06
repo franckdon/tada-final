@@ -14,14 +14,19 @@ type Slide = {
   imageAlt: string;
 };
 
-export function HomeCardsSlider({ slides }: { slides: Slide[] }) {
+export function HomeCardsSlider({
+  slides,
+  title = "What's New",
+}: {
+  slides: Slide[];
+  title?: string;
+}) {
   const trackRef = useRef<HTMLDivElement | null>(null);
 
   const scrollByCards = (dir: "left" | "right") => {
     const el = trackRef.current;
     if (!el) return;
 
-    // 👉 scroll = largeur visible (donc 3 cards d'un coup)
     const delta = el.clientWidth;
 
     el.scrollBy({
@@ -30,11 +35,14 @@ export function HomeCardsSlider({ slides }: { slides: Slide[] }) {
     });
   };
 
+  if (!slides.length) {
+    return null;
+  }
+
   return (
-    <section className="bg-white rounded-xl p-6">
-      {/* Controls */}
+    <section className="rounded-xl bg-white p-6">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">What's New</h2>
+        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
 
         <div className="flex gap-2">
           <button
@@ -54,10 +62,9 @@ export function HomeCardsSlider({ slides }: { slides: Slide[] }) {
         </div>
       </div>
 
-      {/* Track */}
       <div
         ref={trackRef}
-        className="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2"
+        className="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2"
         style={{ scrollbarWidth: "none" }}
       >
         <style jsx>{`
@@ -70,7 +77,7 @@ export function HomeCardsSlider({ slides }: { slides: Slide[] }) {
           <article
             key={idx}
             data-card
-            className="snap-start shrink-0 w-full sm:w-[calc((100%-1rem)/2)] lg:w-[calc((100%-2rem)/3)] rounded-xl border bg-white p-5"
+            className="w-full shrink-0 snap-start rounded-xl border bg-white p-5 sm:w-[calc((100%-1rem)/2)] lg:w-[calc((100%-2rem)/3)]"
           >
             <div className="space-y-4">
               <div className="relative h-[180px] w-full overflow-hidden rounded-lg bg-gray-100">
@@ -82,19 +89,19 @@ export function HomeCardsSlider({ slides }: { slides: Slide[] }) {
                 />
               </div>
 
-              <h3 className="text-base md:text-lg font-bold text-gray-900">
+              <h3 className="text-base font-bold text-gray-900 md:text-lg">
                 {s.title}
               </h3>
 
-              <p className="text-sm md:text-base text-gray-600">
+              <p className="text-sm text-gray-600 md:text-base">
                 {s.description}
               </p>
 
-              {s.ctaHref && s.ctaLabel && (
-                <Button className="text-white">
+              {s.ctaHref && s.ctaLabel ? (
+                <Button asChild className="text-white">
                   <Link href={s.ctaHref}>{s.ctaLabel}</Link>
                 </Button>
-              )}
+              ) : null}
             </div>
           </article>
         ))}

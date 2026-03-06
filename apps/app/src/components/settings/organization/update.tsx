@@ -42,6 +42,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Upload } from "lucide-react";
 import { updateOrganizationAction } from "@/actions/organization/update-organization-action";
+import { PreferencesSection } from "../preferences-section";
 
 interface TeamMember {
   id: string;
@@ -332,7 +333,7 @@ export default function SettingsPage() {
                   <FormControl>
                     <Input
                       placeholder={t(
-                        "teamMembers.organization.name.placeholder"
+                        "teamMembers.organization.name.placeholder",
                       )}
                       {...field}
                       disabled={!canManageOrg}
@@ -363,7 +364,7 @@ export default function SettingsPage() {
                         <SelectTrigger disabled={!canManageOrg}>
                           <SelectValue
                             placeholder={t(
-                              "teamMembers.organization.countryPlaceholder"
+                              "teamMembers.organization.countryPlaceholder",
                             )}
                           />
                         </SelectTrigger>
@@ -398,7 +399,7 @@ export default function SettingsPage() {
                         <SelectTrigger>
                           <SelectValue
                             placeholder={t(
-                              "teamMembers.organization.sectorPlaceholder"
+                              "teamMembers.organization.sectorPlaceholder",
                             )}
                           />
                         </SelectTrigger>
@@ -442,6 +443,8 @@ export default function SettingsPage() {
           </div>
         </form>
       </Form>
+
+      <PreferencesSection />
     </div>
   );
 }

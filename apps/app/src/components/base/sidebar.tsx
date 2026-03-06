@@ -167,15 +167,15 @@ export function Sidebar() {
     {
       title: t("navigation.explore"),
       items: [
-        {
-          icon: <Layers className="h-5 w-5" />,
-          text: t("navigation.templates"),
-          href: `/${currentLocale}/missions/org/${
-            organizations ? organizations[0]?.id : "dev-org"
-          }/templates`,
-          target: "_self",
-          disabled: true,
-        },
+        // {
+        //   icon: <Layers className="h-5 w-5" />,
+        //   text: t("navigation.templates"),
+        //   href: `/${currentLocale}/missions/org/${
+        //     organizations ? organizations[0]?.id : "dev-org"
+        //   }/templates`,
+        //   target: "_self",
+        //   disabled: true,
+        // },
         {
           icon: <TrendingUp className="h-5 w-5" />,
           text: t("navigation.marketBeats"),
@@ -270,38 +270,6 @@ export function Sidebar() {
           </SidebarGroup>
         ))}
       </nav>
-
-      {/* Currency */}
-      <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-800">
-        <div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-            {t("common.currency")}
-          </p>
-
-          <Select
-            value={selectedCurrency.code}
-            onValueChange={(value: string) => {
-              const currency = currencies.find((c) => c.code === value);
-              if (currency) setSelectedCurrency(currency);
-            }}
-            disabled={!hydrated}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue>
-                {selectedCurrency.symbol} - {selectedCurrency.name}
-              </SelectValue>
-            </SelectTrigger>
-
-            <SelectContent>
-              {currencies.map((currency) => (
-                <SelectItem key={currency.code} value={currency.code}>
-                  {currency.symbol} - {currency.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
     </div>
   );
 }

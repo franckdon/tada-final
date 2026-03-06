@@ -27,6 +27,7 @@ import { applyOverrides } from "@/lib/plans/plan-overrides";
 import SubscriptionInvoiceDownloadButton from "./subscription-invoice-download";
 
 const PLAN_CODES = ["starter", "growth", "business", "entreprise"] as const;
+const PLAN_PRICING_ENDPOINT = "/api/pricing/plans";
 
 type PaymentMethod = "cash" | "cheque" | "bank_transfer" | "mobile_money";
 
@@ -37,6 +38,8 @@ const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string }> = [
   { value: "mobile_money", label: "Mobile Money" },
 ];
 
+const FIXED_AMOUNT_PLAN_CODES: PlanCode[] = ["starter", "growth", "business"];
+
 const formatDate = (d?: Date | string | null) => {
   if (!d) return "—";
   const date = typeof d === "string" ? new Date(d) : d;
@@ -45,7 +48,6 @@ const formatDate = (d?: Date | string | null) => {
 
 function formatXof(n: number) {
   const value = Number.isFinite(n) ? n : 0;
-  // XOF : 0 décimales
   return new Intl.NumberFormat("fr-FR", {
     style: "currency",
     currency: "XOF",
@@ -53,10 +55,56 @@ function formatXof(n: number) {
   }).format(value);
 }
 
+function isFixedAmountPlan(planCode: PlanCode) {
+  return FIXED_AMOUNT_PLAN_CODES.includes(planCode);
+}
+
+type PlanPriceMap = Partial<Record<PlanCode, number>>;
+
+type RawPlan = {
+  code?: string;
+  name?: string;
+  priceXof?: number | string | null;
+  amountXof?: number | string | null;
+  price?: number | string | null;
+  priceCents?: number | string | null;
+  amountCents?: number | string | null;
+  currency?: string | null;
+};
+
+function normalizePlansResponse(payload: any): RawPlan[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.plans)) return payload.plans;
+  return [];
+}
+
+function coercePlanAmountXof(plan: RawPlan): number | null {
+  if (plan.amountXof != null && Number.isFinite(Number(plan.amountXof))) {
+    return Number(plan.amountXof);
+  }
+
+  if (plan.priceXof != null && Number.isFinite(Number(plan.priceXof))) {
+    return Number(plan.priceXof);
+  }
+
+  if (plan.amountCents != null && Number.isFinite(Number(plan.amountCents))) {
+    return Math.round(Number(plan.amountCents));
+  }
+
+  if (plan.priceCents != null && Number.isFinite(Number(plan.priceCents))) {
+    return Math.round(Number(plan.priceCents));
+  }
+
+  if (plan.price != null && Number.isFinite(Number(plan.price))) {
+    return Number(plan.price);
+  }
+
+  return null;
+}
+
 // ------------------------------
-// ✅ Helper UI: 2 choix seulement
-// - "unlimited"
-// - "number" (personnalisé => input)
+// UI Helper
 // ------------------------------
 function LimitOverrideField({
   label,
@@ -105,7 +153,7 @@ function LimitOverrideField({
             placeholder={placeholder ?? "Ex: 10"}
           />
         ) : (
-          <div className="h-11 rounded-md border border-gray-200 bg-gray-50 px-3 flex items-center text-sm text-gray-600">
+          <div className="flex h-11 items-center rounded-md border border-gray-200 bg-gray-50 px-3 text-sm text-gray-600">
             Illimité
           </div>
         )}
@@ -144,16 +192,93 @@ export default function WorkspaceSubscriptionTab({
     (subscription?.overrides ?? {}) as PlanOverrides,
   );
 
-  // ✅ Nouveau workflow:
-  // - Avant d'attribuer: méthode de paiement obligatoire + montant obligatoire
-  // - Le montant n’est plus calculé automatiquement
-  // - creditsQty n'est plus un input: il vient du plan sélectionné
   const [paymentMethod, setPaymentMethod] = React.useState<PaymentMethod | "">(
     "",
   );
   const [amountXof, setAmountXof] = React.useState<number>(0);
 
+  const [planPrices, setPlanPrices] = React.useState<PlanPriceMap>({});
+  const [isLoadingPlanPrices, setIsLoadingPlanPrices] = React.useState(false);
+
   const [isSaving, setIsSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    let isMounted = true;
+
+    const loadPlanPrices = async () => {
+      setIsLoadingPlanPrices(true);
+
+      try {
+        const res = await fetch(PLAN_PRICING_ENDPOINT, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+        });
+
+        if (!res.ok) {
+          throw new Error("Impossible de charger les montants des plans.");
+        }
+
+        const json = await res.json();
+        const rows = normalizePlansResponse(json);
+
+        const nextMap: PlanPriceMap = {};
+
+        for (const row of rows) {
+          const code = String(row.code ?? row.name ?? "").toLowerCase();
+
+          if (
+            code === "starter" ||
+            code === "growth" ||
+            code === "business" ||
+            code === "entreprise"
+          ) {
+            const amount = coercePlanAmountXof(row);
+            if (amount != null && Number.isFinite(amount)) {
+              nextMap[code as PlanCode] = amount;
+            }
+          }
+        }
+
+        if (isMounted) {
+          setPlanPrices(nextMap);
+        }
+      } catch (e) {
+        if (isMounted) {
+          setPlanPrices({});
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingPlanPrices(false);
+        }
+      }
+    };
+
+    loadPlanPrices();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const dbAmountForSelectedPlan = React.useMemo(() => {
+    return planPrices[planCode] ?? null;
+  }, [planPrices, planCode]);
+
+  const isSelectedPlanFixedAmount = isFixedAmountPlan(planCode);
+
+  React.useEffect(() => {
+    if (isSelectedPlanFixedAmount) {
+      if (
+        dbAmountForSelectedPlan != null &&
+        Number.isFinite(dbAmountForSelectedPlan)
+      ) {
+        setAmountXof(dbAmountForSelectedPlan);
+      } else {
+        setAmountXof(0);
+      }
+    }
+  }, [isSelectedPlanFixedAmount, dbAmountForSelectedPlan]);
 
   // --------- ACTIVE STATE ----------
   const endsAtDate: Date | null = subscription?.endsAt
@@ -174,19 +299,14 @@ export default function WorkspaceSubscriptionTab({
   // --------- LIMITS ----------
   const selectedDefaults = getPlanLimits(planCode);
 
-  // ✅ ENTREPRISE uniquement: overrides appliqués (unlimited / number)
   const selectedEffective = applyOverrides(
     selectedDefaults,
     planCode === "entreprise" ? overrides : null,
   );
 
-  // ✅ creditsQty = "crédit par défaut" du plan sélectionné
-  // Ici tu veux utiliser respondentCompletes comme "creditsQty"
-  // (valeur brute, pas formatLimit)
   const creditsQtyFromPlan = React.useMemo(() => {
     const v = selectedEffective.respondentCompletes;
     if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
-    // cas "unlimited" ou invalide -> fallback technique (évite l'erreur backend)
     return 1;
   }, [selectedEffective.respondentCompletes]);
 
@@ -207,7 +327,6 @@ export default function WorkspaceSubscriptionTab({
   // --------- UI STATES ----------
   const isPlanChanged = currentPlan ? planCode !== currentPlan : true;
 
-  const canRenew = hasSubscription;
   const canDisable = hasSubscription && subscription?.status === "active";
   const canEnable = hasSubscription && subscription?.status !== "active";
 
@@ -218,9 +337,9 @@ export default function WorkspaceSubscriptionTab({
       note: note || null,
       overrides: planCode === "entreprise" ? overrides : null,
       billing: {
-        paymentMethod, // ✅ obligatoire
-        amountXof, // ✅ obligatoire, saisi manuellement
-        creditsQty: creditsQtyFromPlan, // ✅ attribué automatiquement
+        paymentMethod,
+        amountXof,
+        creditsQty: creditsQtyFromPlan,
       },
     };
 
@@ -243,11 +362,28 @@ export default function WorkspaceSubscriptionTab({
   const validateBillingBeforeSubmit = () => {
     if (!paymentMethod) return "La méthode de paiement est obligatoire.";
 
-    if (!Number.isFinite(amountXof) || amountXof <= 0) {
-      return "Le montant est obligatoire et doit être supérieur à 0.";
+    if (isSelectedPlanFixedAmount) {
+      if (isLoadingPlanPrices) {
+        return "Les montants des plans sont en cours de chargement.";
+      }
+
+      if (
+        dbAmountForSelectedPlan == null ||
+        !Number.isFinite(dbAmountForSelectedPlan) ||
+        dbAmountForSelectedPlan <= 0
+      ) {
+        return "Le montant du plan sélectionné est introuvable dans la base.";
+      }
+
+      if (amountXof !== dbAmountForSelectedPlan) {
+        return "Le montant du plan sélectionné doit correspondre au montant défini en base.";
+      }
+    } else {
+      if (!Number.isFinite(amountXof) || amountXof <= 0) {
+        return "Le montant est obligatoire et doit être supérieur à 0.";
+      }
     }
 
-    // sécurité: backend attend creditsQty > 0
     if (!Number.isFinite(creditsQtyFromPlan) || creditsQtyFromPlan <= 0) {
       return "Le crédit par défaut du plan sélectionné est invalide.";
     }
@@ -295,38 +431,6 @@ export default function WorkspaceSubscriptionTab({
         title: "Plan modifié",
         description: `Le plan ${planCode.toUpperCase()} est maintenant appliqué.`,
       });
-      router.refresh();
-    } catch (e: any) {
-      toast({
-        title: "Erreur",
-        description: e?.message ?? "Une erreur est survenue",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const renew = async () => {
-    setIsSaving(true);
-    try {
-      const res = await fetch(
-        `/api/workspaces/${workspaceId}/subscription/renew`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ note: note || null }),
-        },
-      );
-
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Impossible de renouveler");
-
-      toast({
-        title: "Renouvellement effectué",
-        description: "Le plan a été prolongé d’un mois.",
-      });
-
       router.refresh();
     } catch (e: any) {
       toast({
@@ -403,6 +507,15 @@ export default function WorkspaceSubscriptionTab({
     }
   };
 
+  const amountFieldDisabled = isSelectedPlanFixedAmount;
+  const isPrimaryActionDisabled =
+    isSaving ||
+    (hasSubscription ? !isPlanChanged : false) ||
+    (isSelectedPlanFixedAmount &&
+      (isLoadingPlanPrices ||
+        dbAmountForSelectedPlan == null ||
+        dbAmountForSelectedPlan <= 0));
+
   return (
     <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
       {/* LEFT PANEL */}
@@ -447,7 +560,6 @@ export default function WorkspaceSubscriptionTab({
               </SelectContent>
             </Select>
 
-            {/* Preview du plan sélectionné */}
             <div className="mt-3 rounded-lg bg-gray-50 p-4">
               <div className="text-xs text-gray-500">
                 Preview — Soumissions/mois (plan sélectionné)
@@ -463,7 +575,7 @@ export default function WorkspaceSubscriptionTab({
             </div>
           </div>
 
-          {/* BILLING (OBLIGATOIRE) */}
+          {/* BILLING */}
           <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -471,9 +583,9 @@ export default function WorkspaceSubscriptionTab({
                   Facturation (obligatoire avant attribution)
                 </div>
                 <div className="mt-1 text-xs text-gray-600">
-                  Choisis la méthode de paiement et saisis le montant (pas de
-                  calcul automatique). Les crédits attribués sont ceux du plan
-                  sélectionné.
+                  {isSelectedPlanFixedAmount
+                    ? "Pour ce plan, le montant XOF vient automatiquement du montant enregistré en base. Seul le plan ENTREPRISE permet une saisie manuelle."
+                    : "Pour le plan ENTREPRISE, le montant XOF reste modifiable manuellement. Les crédits attribués sont ceux du plan sélectionné."}
                 </div>
 
                 <div className="mt-2 text-xs text-gray-700">
@@ -521,17 +633,37 @@ export default function WorkspaceSubscriptionTab({
                   min={0}
                   value={amountXof}
                   onChange={(e) => {
+                    if (amountFieldDisabled) return;
                     const v = Number(e.target.value);
                     setAmountXof(Number.isFinite(v) ? v : 0);
                   }}
-                  placeholder="Ex: 250000"
+                  placeholder={
+                    amountFieldDisabled ? "Chargé depuis la base" : "Ex: 250000"
+                  }
+                  disabled={amountFieldDisabled}
+                  readOnly={amountFieldDisabled}
                 />
+
                 <div className="mt-1 text-xs text-gray-500">
                   Valeur actuelle:{" "}
                   <span className="font-semibold text-gray-900">
                     {formatXof(amountXof)}
                   </span>
                 </div>
+
+                {isSelectedPlanFixedAmount ? (
+                  <div className="mt-1 text-xs text-gray-500">
+                    {isLoadingPlanPrices
+                      ? "Chargement du montant du plan depuis la base..."
+                      : dbAmountForSelectedPlan != null
+                        ? `Montant verrouillé pour ${planCode.toUpperCase()}`
+                        : "Montant du plan introuvable. Vérifie l’endpoint des plans."}
+                  </div>
+                ) : (
+                  <div className="mt-1 text-xs text-gray-500">
+                    Plan ENTREPRISE : montant librement modifiable.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -598,17 +730,25 @@ export default function WorkspaceSubscriptionTab({
             <Button
               className="h-11 w-full"
               onClick={assignPlan}
-              disabled={isSaving}
+              disabled={isPrimaryActionDisabled}
             >
-              {isSaving ? "Attribution..." : "Attribuer le plan"}
+              {isSaving
+                ? "Attribution..."
+                : isLoadingPlanPrices && isSelectedPlanFixedAmount
+                  ? "Chargement du montant..."
+                  : "Attribuer le plan"}
             </Button>
           ) : (
             <Button
               className="h-11 w-full"
               onClick={changePlan}
-              disabled={!isPlanChanged || isSaving}
+              disabled={isPrimaryActionDisabled}
             >
-              {isSaving ? "Mise à jour..." : "Changer de plan"}
+              {isSaving
+                ? "Mise à jour..."
+                : isLoadingPlanPrices && isSelectedPlanFixedAmount
+                  ? "Chargement du montant..."
+                  : "Changer de plan"}
             </Button>
           )}
         </div>
@@ -651,21 +791,11 @@ export default function WorkspaceSubscriptionTab({
               </div>
             </div>
 
-            {/* ACTIONS */}
             <div className="flex flex-wrap items-center gap-2">
               <SubscriptionInvoiceDownloadButton
                 workspaceId={workspaceId}
                 enabled={computedIsActive}
               />
-
-              {/* <Button
-                variant="secondary"
-                className="h-10"
-                onClick={renew}
-                disabled={canRenew === false || isSaving}
-              >
-                Renouveler (+1 mois)
-              </Button> */}
 
               {canEnable ? (
                 <Button
@@ -691,7 +821,6 @@ export default function WorkspaceSubscriptionTab({
         </div>
 
         <div className="space-y-6 p-5">
-          {/* Dates */}
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-xl border border-gray-100 p-4">
               <div className="text-xs text-gray-500">Début</div>
@@ -714,7 +843,6 @@ export default function WorkspaceSubscriptionTab({
             </div>
           </div>
 
-          {/* Meta */}
           <div className="rounded-xl border border-gray-100 p-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div>
@@ -735,7 +863,6 @@ export default function WorkspaceSubscriptionTab({
             </div>
           </div>
 
-          {/* Limits (plan actuel) */}
           <div className="rounded-xl border border-gray-100 p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -751,7 +878,7 @@ export default function WorkspaceSubscriptionTab({
               </Badge>
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2 text-sm">
+            <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
               {[
                 {
                   label: "Soumissions / mois",
@@ -820,7 +947,6 @@ export default function WorkspaceSubscriptionTab({
             </div>
           </div>
 
-          {/* Note */}
           <div className="rounded-xl border border-gray-100 p-4">
             <div className="text-sm font-semibold text-gray-900">Note</div>
             <div className="mt-1 text-xs text-gray-500">

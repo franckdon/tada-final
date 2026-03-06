@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { Card } from "@tada/ui/components/card";
-import { Badge } from "@tada/ui/components/badge";
-import { Button } from "@tada/ui/components/button";
-import { useScopedI18n } from "@/locales/client";
+import { useScopedI18n, useCurrentLocale } from "@/locales/client";
 import { useCreditsPurchaseFlowStore } from "@/stores/useCreditsPurchaseFlowStore";
+import { useWorkspace } from "@/context/workspace-context";
+import { usePathname } from "next/navigation";
 
 import { PlusCircle, Database, TrendingUp, ClipboardPlus } from "lucide-react";
 
@@ -19,9 +19,26 @@ type ActionCard = {
 
 export function HomeQuickActionsSection() {
   const t = useScopedI18n("home.quickActions");
+  const currentLocale = useCurrentLocale();
+  const pathname = usePathname();
+  const { currentWorkspace } = useWorkspace();
+
   const openCreditsModal = useCreditsPurchaseFlowStore(
     (s) => s.openCreditsModal,
   );
+
+  const parts = pathname.split("/");
+  let workspaceIdFromUrl: string | undefined;
+
+  if (
+    parts.length > 3 &&
+    (parts[2] === "missions" || parts[2] === "market-beats")
+  ) {
+    workspaceIdFromUrl = parts[3];
+  }
+
+  const workspaceId =
+    currentWorkspace?.id || workspaceIdFromUrl || "dev-workspace";
 
   const cards: ActionCard[] = [
     {
@@ -29,6 +46,11 @@ export function HomeQuickActionsSection() {
       icon: <PlusCircle className="h-5 w-5" />,
       badge: "recommended",
       onClick: () => openCreditsModal(),
+    },
+    {
+      key: "addMission",
+      href: `/${currentLocale}/missions/${workspaceId}`,
+      icon: <ClipboardPlus className="h-5 w-5" />,
     },
     {
       key: "chatWithData",
@@ -41,49 +63,43 @@ export function HomeQuickActionsSection() {
       href: "/#",
       icon: <TrendingUp className="h-5 w-5" />,
     },
-    {
-      key: "addMission",
-      href: "/create-mission",
-      icon: <ClipboardPlus className="h-5 w-5" />,
-    },
   ];
 
   return (
-    <section className="bg-white rounded-xl p-6">
-      <div className="flex items-end justify-between gap-4 mb-4">
+    <section className="rounded-xl bg-white p-6">
+      <div className="mb-4 flex items-end justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-gray-900">{t("title")}</h2>
-          <p className="text-gray-500 mt-1">{t("subtitle")}</p>
+          <p className="mt-1 text-gray-500">{t("subtitle")}</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {cards.map((c) => {
           const content = (
-            <Card className="p-5 h-full border bg-white hover:shadow-sm transition">
+            <Card className="h-full border bg-white p-5 transition hover:shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 text-gray-900">
-                  <span className="inline-flex items-center justify-center rounded-md border bg-gray-50 h-10 w-10">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-md border bg-gray-50">
                     {c.icon}
                   </span>
                   <div className="font-semibold">{t(`${c.key}.title`)}</div>
                 </div>
               </div>
 
-              <p className="text-gray-600 mt-3 text-sm leading-relaxed">
+              <p className="mt-3 text-sm leading-relaxed text-gray-600">
                 {t(`${c.key}.desc`)}
               </p>
             </Card>
           );
 
-          // card cliquable -> soit onClick (credits), soit Link
           if (c.onClick) {
             return (
               <button
                 key={c.key}
                 type="button"
                 onClick={c.onClick}
-                className="text-left group"
+                className="group text-left"
               >
                 {content}
               </button>
