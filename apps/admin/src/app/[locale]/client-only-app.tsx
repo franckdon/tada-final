@@ -3,28 +3,29 @@
 import { useEffect, useState } from "react";
 import { ClientProviders } from "./client-providers";
 
-export function ClientOnlyApp({ 
-  children, 
-  locale 
-}: { 
-  children: React.ReactNode; 
-  locale: string; 
+export function ClientOnlyApp({
+  children,
+  locale,
+}: {
+  children: React.ReactNode;
+  locale: string;
 }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     // Supprime TOUTES les erreurs React/Next.js
+    // On redéfinit temporairement console.error et console.warn pour filtrer les messages d'erreur liés à la hydration
     const originalError = console.error;
     const originalWarn = console.warn;
-    
+
     console.error = (...args) => {
-      const message = args[0]?.toString() || '';
+      const message = args[0]?.toString() || "";
       if (
-        message.includes('Hydration') ||
-        message.includes('ActionQueueContext') ||
-        message.includes('useReducerWithReduxDevtoolsImpl') ||
-        message.includes('Warning: An error occurred during hydration') ||
-        message.includes('There was an error while hydrating')
+        message.includes("Hydration") ||
+        message.includes("ActionQueueContext") ||
+        message.includes("useReducerWithReduxDevtoolsImpl") ||
+        message.includes("Warning: An error occurred during hydration") ||
+        message.includes("There was an error while hydrating")
       ) {
         return; // Ignore complètement ces erreurs
       }
@@ -32,11 +33,11 @@ export function ClientOnlyApp({
     };
 
     console.warn = (...args) => {
-      const message = args[0]?.toString() || '';
+      const message = args[0]?.toString() || "";
       if (
-        message.includes('hydration') ||
-        message.includes('Hydration') ||
-        message.includes('server HTML')
+        message.includes("hydration") ||
+        message.includes("Hydration") ||
+        message.includes("server HTML")
       ) {
         return; // Ignore complètement ces warnings
       }
@@ -58,29 +59,33 @@ export function ClientOnlyApp({
   // Affichage de loading pendant le montage
   if (!mounted) {
     return (
-      <div 
+      <div
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '100vh',
-          backgroundColor: '#f9fafb'
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          backgroundColor: "#f9fafb",
         }}
       >
-        <div 
+        <div
           style={{
-            width: '32px',
-            height: '32px',
-            border: '3px solid #e5e7eb',
-            borderTop: '3px solid #3b82f6',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite'
+            width: "32px",
+            height: "32px",
+            border: "3px solid #e5e7eb",
+            borderTop: "3px solid #3b82f6",
+            borderRadius: "50%",
+            animation: "spin 1s linear infinite",
           }}
         />
         <style jsx>{`
           @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+              transform: rotate(0deg);
+            }
+            100% {
+              transform: rotate(360deg);
+            }
           }
         `}</style>
       </div>
@@ -88,9 +93,5 @@ export function ClientOnlyApp({
   }
 
   // Rendu de l'app une fois monté côté client
-  return (
-    <ClientProviders locale={locale}>
-      {children}
-    </ClientProviders>
-  );
+  return <ClientProviders locale={locale}>{children}</ClientProviders>;
 }
