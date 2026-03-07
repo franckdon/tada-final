@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryState } from "nuqs";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -59,13 +59,14 @@ export default function MissionDashboardClient({
     string | null
   >(null);
 
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [showRail, setShowRail] = useState(false);
 
-  // ✅ debug rapide (dans la console du navigateur)
+  const topSentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   useEffect(() => {
     console.log("[MissionDashboardClient]", {
       initialQuestionsCount: initialQuestions?.length,
@@ -81,6 +82,26 @@ export default function MissionDashboardClient({
     missionId,
     missionStatus,
   ]);
+
+  useEffect(() => {
+    const sentinel = topSentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setShowRail(!entry.isIntersecting);
+      },
+      {
+        root: null,
+        threshold: 0,
+        rootMargin: "-120px 0px 0px 0px",
+      },
+    );
+
+    observer.observe(sentinel);
+
+    return () => observer.disconnect();
+  }, []);
 
   const openCommentsForQuestion = (question: QuestionWithView) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -99,11 +120,6 @@ export default function MissionDashboardClient({
   };
 
   const [, setQuestionId] = useQueryState("questionId", { defaultValue: "" });
-
-  const openChangeChartModal = (question: QuestionWithView) => {
-    const id = question.chartId ?? question.question;
-    setQuestionId(id);
-  };
 
   const getQuestionConfig = useCallback(
     (questionId: string) => {
@@ -152,18 +168,18 @@ export default function MissionDashboardClient({
       .replace(/[^\w\- ]+/g, "")
       .trim()
       .replace(/\s+/g, "_");
+
     downloadCsv(`mission-${missionId}-${safeName}.csv`, rows);
   };
 
-  // ✅ Empty state : si rien à afficher, on le dit clairement
   if (!questions.length) {
     return (
-      <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-6">
+      <div className="rounded-xl border border-gray-200 p-6 dark:border-gray-800">
         <h2 className="text-lg font-semibold">Aucun graphique à afficher</h2>
         <p className="mt-2 text-sm text-gray-500">
           Causes possibles :
-          <br />• la mission n’a pas de réponses <br />• l’extraction des
-          questions retourne un tableau vide
+          <br />• la mission n’a pas de réponses
+          <br />• l’extraction des questions retourne un tableau vide
           <br />• tu ne passes pas <code>initialQuestions</code> au composant
         </p>
 
@@ -176,10 +192,11 @@ export default function MissionDashboardClient({
 
   return (
     <>
+      <div ref={topSentinelRef} className="h-px w-full" />
+
       {questions.map((question, index) => {
         const commentCount = commentCountsByQuestion?.[question.question] ?? 0;
 
-        // ✅ guard division by zero
         const pct =
           totalResponses > 0
             ? Math.round(
@@ -214,6 +231,9 @@ export default function MissionDashboardClient({
             key={question.chartId ?? index}
             id={domId}
             data-question-key={questionKey}
+            data-export-question="true"
+            data-export-id={question.chartId ?? questionKey ?? domId}
+            data-export-title={question.question}
             className="relative mb-8 space-y-3"
           >
             {commentCount > 0 && (

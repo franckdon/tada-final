@@ -143,19 +143,19 @@ export function getUnitPriceUSD(args: { planCode: PlanCode | null; credits: numb
   const credits = Number.isFinite(args.credits) ? Math.max(0, Math.trunc(args.credits)) : 0;
   const planCode = args.planCode ?? null;
 
-  if (!planCode) return 17;
+  if (!planCode) return 10;
 
-  if (planCode === "starter") return 15;
-  if (planCode === "growth") return 15;
-  if (planCode === "business") return 12;
+  if (planCode === "starter") return 7;
+  if (planCode === "growth") return 6;
+  if (planCode === "business") return 5;
 
   if (planCode === "entreprise") {
-    if (credits >= 2000) return 10;
-    if (credits >= 500) return 11;
+    if (credits >= 2000) return 3;
+    if (credits >= 500) return 4;
     return 12;
   }
 
-  return 17;
+  return 10;
 }
 
 /**

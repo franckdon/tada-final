@@ -1,10 +1,8 @@
-// src/lib/exports/full-survey-export.ts
 "use client";
 
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
-// import dynamique pptxgenjs (comme tu fais déjà)
 const loadPptxGen = async () => {
   const PptxGenJS = await import("pptxgenjs");
   return (PptxGenJS as any).default || (PptxGenJS as any);
@@ -17,24 +15,25 @@ type ExportNode = {
 };
 
 export function collectExportNodes(): ExportNode[] {
-  // Supporte les 2 attributs (ancien + nouveau)
-  const nodes = Array.from(
-    document.querySelectorAll<HTMLElement>(
-      '[data-export-question="true"], [data-export-id]'
-    )
-  );
+  const selectors = [
+    '[data-export-question="true"]',
+    "[data-export-id]",
+    "[data-question-key]",
+  ].join(", ");
+
+  const nodes = Array.from(document.querySelectorAll<HTMLElement>(selectors));
 
   return nodes
     .map((el) => {
       const id =
         el.getAttribute("data-export-id") ||
-        el.getAttribute("id") ||
         el.getAttribute("data-question-key") ||
+        el.getAttribute("id") ||
         "question";
 
       const title =
         el.getAttribute("data-export-title") ||
-        el.querySelector("h2, h3")?.textContent?.trim() ||
+        el.querySelector("h1, h2, h3, h4")?.textContent?.trim() ||
         el.getAttribute("data-question-key") ||
         id;
 
@@ -43,28 +42,34 @@ export function collectExportNodes(): ExportNode[] {
     .filter((x) => !!x.element);
 }
 
-/** Masque tous les .non-exportable d’un subtree */
 function hideNonExportables(root: HTMLElement) {
   const els = Array.from(root.querySelectorAll<HTMLElement>(".non-exportable"));
   const previous = els.map((el) => ({ el, display: el.style.display }));
-  els.forEach((el) => (el.style.display = "none"));
-  return () => previous.forEach(({ el, display }) => (el.style.display = display));
+  els.forEach((el) => {
+    el.style.display = "none";
+  });
+
+  return () => {
+    previous.forEach(({ el, display }) => {
+      el.style.display = display;
+    });
+  };
 }
 
-/** Capture HTML -> image PNG dataUrl */
 async function captureElement(el: HTMLElement) {
   const restore = hideNonExportables(el);
 
   try {
     const rect = el.getBoundingClientRect();
+
     const canvas = await html2canvas(el, {
       useCORS: true,
       scale: 2,
       backgroundColor: "#ffffff",
       width: rect.width,
       height: rect.height,
-      windowWidth: rect.width,
-      windowHeight: rect.height,
+      windowWidth: Math.ceil(rect.width),
+      windowHeight: Math.ceil(rect.height),
       scrollX: 0,
       scrollY: 0,
     });
@@ -75,12 +80,11 @@ async function captureElement(el: HTMLElement) {
   }
 }
 
-// ---------------------------------------------
-// PDF: 1 page = 1 question
-// ---------------------------------------------
 export async function exportFullSurveyPdf(filename = "survey-export.pdf") {
   const items = collectExportNodes();
-  if (!items.length) throw new Error("Aucune question trouvée pour l’export");
+  if (!items.length) {
+    throw new Error("Aucune question trouvée pour l’export");
+  }
 
   const pdf = new jsPDF("p", "mm", "a4");
   const pageW = pdf.internal.pageSize.getWidth();
@@ -92,16 +96,13 @@ export async function exportFullSurveyPdf(filename = "survey-export.pdf") {
 
     if (i > 0) pdf.addPage();
 
-    // Header
     pdf.setFontSize(14);
     pdf.text(title.slice(0, 120), 12, 12);
 
-    // Image
     const margin = 12;
     const availableW = pageW - margin * 2;
-    const availableH = pageH - 20 - margin; // header space
+    const availableH = pageH - 20 - margin;
 
-    // jsPDF needs image props
     const imgProps = pdf.getImageProperties(img);
     const ratio = imgProps.width / imgProps.height;
 
@@ -122,14 +123,13 @@ export async function exportFullSurveyPdf(filename = "survey-export.pdf") {
   pdf.save(filename);
 }
 
-// ---------------------------------------------
-// PPT: 1 slide = 1 question
-// ---------------------------------------------
 export async function exportFullSurveyPpt(
-  filename = "survey-export.pptx"
+  filename = "survey-export.pptx",
 ) {
   const items = collectExportNodes();
-  if (!items.length) throw new Error("Aucune question trouvée pour l’export");
+  if (!items.length) {
+    throw new Error("Aucune question trouvée pour l’export");
+  }
 
   const Pptx = await loadPptxGen();
   const pres = new Pptx();
@@ -138,14 +138,13 @@ export async function exportFullSurveyPpt(
   pres.author = "Tada";
   pres.title = "Survey export";
 
-  const slideW = 10; // inches (16:9)
+  const slideW = 10;
   const slideH = 5.625;
 
   for (const item of items) {
     const slide = pres.addSlide();
     const img = await captureElement(item.element);
 
-    // Titre
     slide.addText(item.title.slice(0, 120), {
       x: 0.5,
       y: 0.3,
@@ -157,7 +156,6 @@ export async function exportFullSurveyPpt(
       color: "363636",
     });
 
-    // Image centrée
     const imgX = 0.5;
     const imgY = 1.1;
     const imgW = slideW - 1;

@@ -302,85 +302,15 @@ export function Header({ title = "Dashboard", className, user }: HeaderProps) {
           </DropdownMenu>
 
           {/* Updates */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-blue-600 hover:text-blue-700"
-                aria-label="Updates"
-              >
-                <Gift className="h-5 w-5" />
-              </Button>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent className="w-96 p-0" align="end">
-              <div className="p-4 border-b">
-                <h3 className="font-semibold text-lg">
-                  {headerT("latestUpdates")}
-                </h3>
-              </div>
-
-              <div className="max-h-80 overflow-y-auto">
-                <div className="p-4 border-b hover:bg-gray-50">
-                  <div className="flex items-start space-x-3">
-                    <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded">
-                      {headerT("improved")}
-                    </span>
-                    <div className="flex-1">
-                      <h4 className="font-medium text-sm">
-                        {headerT("aiInsightsTitle")}
-                      </h4>
-                      <p className="text-xs text-gray-600 mt-1">
-                        {headerT("aiInsightsDesc")}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-4 border-b hover:bg-gray-50">
-                  <div className="flex items-start space-x-3">
-                    <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded">
-                      {headerT("new")}
-                    </span>
-                    <div className="flex-1">
-                      <h4 className="font-medium text-sm">
-                        {headerT("pValuesTitle")}
-                      </h4>
-                      <p className="text-xs text-gray-600 mt-1">
-                        {headerT("pValuesDesc")}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-4 border-b hover:bg-gray-50">
-                  <div className="flex items-start space-x-3">
-                    <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded">
-                      {headerT("new")}
-                    </span>
-                    <div className="flex-1">
-                      <h4 className="font-medium text-sm">
-                        {headerT("filterMatchingTitle")}
-                      </h4>
-                      <p className="text-xs text-gray-600 mt-1">
-                        {headerT("filterMatchingDesc")}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 border-t bg-gray-50 flex items-center justify-between">
-                <span className="text-xs text-gray-500">
-                  {headerT("poweredBy")}
-                </span>
-                <Button variant="link" className="text-xs p-0 h-auto">
-                  {headerT("seeAllChanges")}
-                </Button>
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled
+            className="opacity-50 grayscale cursor-not-allowed"
+            aria-label="Updates"
+          >
+            <Gift className="h-5 w-5" />
+          </Button>
 
           <NotificationsBell />
 
