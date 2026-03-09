@@ -1,3 +1,4 @@
+//src/app/[locale]/(dashboard)/layout.tsx
 import { Header } from "@/components/base/header";
 import { Sidebar } from "@/components/base/sidebar";
 import { headers } from "next/headers";

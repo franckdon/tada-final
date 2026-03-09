@@ -1,9 +1,50 @@
-import { remove } from "lodash";
+import { remove, template } from "lodash";
 import { settings } from "survey-core";
 import { title } from "vega-lite/types_unstable/channeldef.js";
 
 export default {
+  fallbackName: "utilisateur",
   home: {
+    templates: {
+      title: "Modèles",
+      items: {
+        brandHealth: {
+          title: "Suivez la santé de votre marque",
+          imageAlt: "Template santé de marque",
+        },
+        campaignImpact: {
+          title: "Mesurez l’impact de vos campagnes",
+          imageAlt: "Template impact de campagne",
+        },
+        adMemorability: {
+          title: "Testez la mémorisation de votre campagne",
+          imageAlt: "Template mémorisation publicitaire",
+        },
+        ideaTesting: {
+          title: "Testez de nouvelles idées avant le lancement",
+          imageAlt: "Template test d’idées",
+        },
+        personas: {
+          title: "Comprenez qui sont réellement vos clients",
+          imageAlt: "Template personas",
+        },
+        usageAttitudes: {
+          title: "Découvrez comment et pourquoi les gens utilisent votre catégorie",
+          imageAlt: "Template usages et attitudes",
+        },
+      },
+    },
+    scheduleCall: {
+    title:
+      "Planifiez un appel avec notre équipe à tout moment pour un accompagnement rapide et efficace.",
+    ctaLabel: "Réserver une démo",
+    worldMapAlt: "Carte du monde",
+    chips: {
+      platformTour: "Faites une visite de la plateforme",
+      strategicSession: "Planifiez une session stratégique",
+      newProject: "Démarrez un nouveau projet",
+    },
+  },
     greeting: {
           title: "Bonjour {name}, bienvenue sur Tada !",
         },
@@ -44,6 +85,14 @@ export default {
     dateRange: {
       default: "6 jan. 2024 - 13 jan. 2024",
     },
+    viewAll: "Voir tout",
+    readAll: "Tout marquer comme lu",
+    noDetails: "Aucun détail supplémentaire.",
+    new: "Nouveau",
+    read: "Lu",
+    notifications: "Notifications",
+    history: "Historique",
+    loadMore: "Voir plus",
     language: "Langue",
     currency: "Devise",
     cancel: "Annuler",

@@ -1,7 +1,48 @@
 import { set } from "lodash";
 
 export default {
+  fallbackName: "user",
   home: {
+    templates: {
+          title: "Templates",
+          items: {
+            brandHealth: {
+              title: "Follow your brand's health",
+              imageAlt: "Template brand health",
+            },
+            campaignImpact: {
+              title: "Measure the impact of your campaigns",
+              imageAlt: "Template campaign impact",
+            },
+            adMemorability: {
+              title: "Test the memorability of your campaign",
+              imageAlt: "Template ad memorability",
+            },
+            ideaTesting: {
+              title: "Test new ideas before launch",
+              imageAlt: "Template idea testing",
+            },
+            personas: {
+              title: "Understand who your real customers are",
+              imageAlt: "Template personas",
+            },
+            usageAttitudes: {
+              title: "Discover how and why people use your category",
+              imageAlt: "Template usage and attitudes",
+            },
+          },
+        },
+    scheduleCall: {
+    title:
+      "Schedule a call with our team anytime for quick and efficient support.",
+    ctaLabel: "Schedule a Demo",
+    worldMapAlt: "World Map",
+    chips: {
+      platformTour: "Take a tour of the platform",
+      strategicSession: "Plan a strategic session",
+      newProject: "Start a new project",
+    },
+  },
     greeting: {
       title: "Hello {name}, welcome back to Tada!",
     },
@@ -67,6 +108,14 @@ export default {
     continue: "Continue",
     next: "Next",
     contactUs: "Talk to us",
+    viewAll: "View all",
+    readAll: "Mark all as read",
+    noDetails: "No additional details.",
+    new: "New",
+    read: "Read",
+    notifications: "Notifications",
+    history: "History",
+    loadMore: "Load more",
     loadingOverlay: {
       title: "Loading mission...",
       subtitle: "Please wait while we prepare your content",

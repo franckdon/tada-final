@@ -192,11 +192,6 @@ export function Sidebar() {
       title: "Billing",
       items: [
         {
-          icon: <CircleDollarSign className="h-5 w-5" />,
-          text: "Pricing",
-          href: "/pricing",
-        },
-        {
           icon: <Package className="h-5 w-5" />,
           text: "Plans",
           href: "/pricing/plans",
