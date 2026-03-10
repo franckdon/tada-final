@@ -322,7 +322,7 @@ function MissionHeroHeader({
             ))}
           </div>
 
-          {collectionPeriod && (
+          {/* {collectionPeriod && (
             <div className="mt-8">
               <div className="text-base font-bold text-slate-900">
                 Field time
@@ -331,7 +331,7 @@ function MissionHeroHeader({
                 {formatDateRange(collectionPeriod)}
               </div>
             </div>
-          )}
+          )} */}
         </div>
 
         <div className="relative">
@@ -367,14 +367,25 @@ export function MyRuntimeProvider({
 
   useAction(generateExecutiveSummaryAction, {});
 
+  const participants = useMemo(() => extractSexAndAge(responses), [responses]);
+
+  const validParticipants = useMemo(
+    () =>
+      participants.filter((p) => {
+        const age = parseInt(p.age, 10);
+        return (p.sexe === "male" || p.sexe === "female") && !Number.isNaN(age);
+      }),
+    [participants],
+  );
+
   const sexAgeData = useMemo(
-    () => groupParticipantsByAge(extractSexAndAge(responses)),
-    [responses],
+    () => groupParticipantsByAge(validParticipants),
+    [validParticipants],
   );
 
   const averageAge = useMemo(
-    () => getAverageAge(extractSexAndAge(responses)),
-    [responses],
+    () => getAverageAge(validParticipants),
+    [validParticipants],
   );
 
   const coveredLocations = useMemo(
