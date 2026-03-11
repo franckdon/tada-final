@@ -72,6 +72,10 @@ export type MissionDetailsRow = {
   };
 
   isAssignedToMe: boolean;
+
+  hasResponded: boolean;
+  responseCount: number;
+  lastRespondedAt: string | null;
 };
 
 export async function getMissionAccessInfo(missionId: string, userId: string): Promise<MissionAccessInfo | null> {
@@ -141,7 +145,11 @@ export async function getMissionById(missionId: string, userId: string): Promise
       ma."acceptedAt" AS "ma_acceptedAt",
       ma."startedAt" AS "ma_startedAt",
       ma."completedAt" AS "ma_completedAt",
-      ma."dueDate" AS "ma_dueDate"
+      ma."dueDate" AS "ma_dueDate",
+
+      -- SurveyResponse aggregate for this user
+      COALESCE(sr."responseCount", 0) AS "sr_responseCount",
+      sr."lastRespondedAt" AS "sr_lastRespondedAt"
 
     FROM "mission" m
     LEFT JOIN "mission_config_contributor" mcc
@@ -149,6 +157,18 @@ export async function getMissionById(missionId: string, userId: string): Promise
     LEFT JOIN "mission_assignment" ma
       ON ma."missionId" = m."id"
      AND ma."contributorId" = $2
+
+    LEFT JOIN LATERAL (
+      SELECT
+        COUNT(sr."id")::int AS "responseCount",
+        MAX(COALESCE(sr."submittedAt", sr."createdAt")) AS "lastRespondedAt"
+      FROM "survey" s
+      INNER JOIN "survey_response" sr
+        ON sr."surveyId" = s."id"
+       AND sr."userId" = $2
+      WHERE s."missionId" = m."id"
+    ) sr ON true
+
     WHERE m."id" = $1
     LIMIT 1
   `;
@@ -159,6 +179,7 @@ export async function getMissionById(missionId: string, userId: string): Promise
 
   const hasConfig = !!row.mcc_title;
   const isAssignedToMe = !!row.ma_id;
+  const responseCount = row.sr_responseCount ?? 0;
 
   const mission: MissionDetailsRow = {
     id: row.id,
@@ -214,6 +235,10 @@ export async function getMissionById(missionId: string, userId: string): Promise
       : null,
 
     isAssignedToMe,
+
+    hasResponded: responseCount > 0,
+    responseCount,
+    lastRespondedAt: row.sr_lastRespondedAt,
   };
 
   return mission;

@@ -152,7 +152,7 @@ export function getUnitPriceUSD(args: { planCode: PlanCode | null; credits: numb
   if (planCode === "entreprise") {
     if (credits >= 2000) return 3;
     if (credits >= 500) return 4;
-    return 12;
+    return 4;
   }
 
   return 10;

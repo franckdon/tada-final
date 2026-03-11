@@ -41,7 +41,7 @@ export async function getMissionDetails(userId: string, id: string, query: Missi
     }
   }
 
-  // 3) Mission details (includes config + assignment for this user)
+  // 3) Mission details (includes config + assignment + response status for this user)
   const mission = await repo.getMissionById(id, userId);
   if (!mission) return { ok: false as const, status: 404, message: "Mission introuvable" };
 

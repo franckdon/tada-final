@@ -49,6 +49,10 @@ type MissionRow = {
   ma_startedAt: string | null;
   ma_completedAt: string | null;
   ma_dueDate: string | null;
+
+  // ---- Survey responses (for this user)
+  sr_responseCount: number | null;
+  sr_lastRespondedAt: string | null;
 };
 
 function buildWhere(q: MissionsListQuery) {
@@ -208,7 +212,11 @@ export async function listMissions(userId: string, q: MissionsListQuery) {
       ma."acceptedAt" AS "ma_acceptedAt",
       ma."startedAt" AS "ma_startedAt",
       ma."completedAt" AS "ma_completedAt",
-      ma."dueDate" AS "ma_dueDate"
+      ma."dueDate" AS "ma_dueDate",
+
+      -- SurveyResponse aggregate for this contributor
+      COALESCE(sr."responseCount", 0) AS "sr_responseCount",
+      sr."lastRespondedAt" AS "sr_lastRespondedAt"
 
     FROM "mission" m
     LEFT JOIN "mission_config_contributor" mcc
@@ -216,6 +224,17 @@ export async function listMissions(userId: string, q: MissionsListQuery) {
     ${joinMa} "mission_assignment" ma
       ON ma."missionId" = m."id"
      AND ma."contributorId" = $${params.length + 1}
+
+    LEFT JOIN LATERAL (
+      SELECT
+        COUNT(sr."id")::int AS "responseCount",
+        MAX(COALESCE(sr."submittedAt", sr."createdAt")) AS "lastRespondedAt"
+      FROM "survey" s
+      INNER JOIN "survey_response" sr
+        ON sr."surveyId" = s."id"
+       AND sr."userId" = $${params.length + 1}
+      WHERE s."missionId" = m."id"
+    ) sr ON true
 
     ${whereFinal}
     ${orderBy}
@@ -228,6 +247,7 @@ export async function listMissions(userId: string, q: MissionsListQuery) {
   const items = dataRes.rows.map((m) => {
     const hasConfig = !!m.mcc_title;
     const isAssignedToMe = !!m.ma_id;
+    const responseCount = m.sr_responseCount ?? 0;
 
     return {
       id: m.id,
@@ -268,6 +288,10 @@ export async function listMissions(userId: string, q: MissionsListQuery) {
         : null,
 
       isAssignedToMe,
+
+      hasResponded: responseCount > 0,
+      responseCount,
+      lastRespondedAt: m.sr_lastRespondedAt,
     };
   });
 

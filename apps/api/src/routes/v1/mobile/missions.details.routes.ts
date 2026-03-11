@@ -18,6 +18,20 @@ mobileMissionDetailsRoutes.onError((err, c) => {
 });
 
 /**
+ * GET /v1/mobile/missions/:id/response-status
+ * Permet de savoir si le user connecté a déjà répondu à cette mission.
+ */
+mobileMissionDetailsRoutes.get("/:id/response-status", requireMobileAuth, async (c) => {
+  const userId = c.get("userId") as string;
+  const id = c.req.param("id");
+
+  const r = await service.getMissionResponseStatus(userId, id);
+  if (!r.ok) return jsonError(c, r.status as ContentfulStatusCode, r.message);
+
+  return c.json(r.data);
+});
+
+/**
  * GET /v1/mobile/missions/:id
  * Query:
  * - includeOrganization=true|false

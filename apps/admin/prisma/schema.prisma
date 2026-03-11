@@ -1166,18 +1166,6 @@ model PushDevice {
   @@index([userId, enabled], map: "idx_push_device_user_enabled")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model payemts_contibutor {
-  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at DateTime  @default(now()) @db.Timestamptz(6)
-  amount     BigInt?   @default(0)
-  type       String?
-  method     String?   @db.VarChar
-  other      Json?     @db.Json
-  updated_at DateTime? @db.Date
-  user_id    String?   @unique
-}
-
 model payout_account {
   id                 String               @id @default(dbgenerated("(gen_random_uuid())::text"))
   userId             String
