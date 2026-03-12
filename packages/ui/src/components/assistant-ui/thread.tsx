@@ -1,3 +1,5 @@
+"use client";
+
 import {
   ActionBarPrimitive,
   BranchPickerPrimitive,
@@ -18,32 +20,18 @@ import {
 import type { FC } from "react";
 import { cn } from "../../utils";
 import { Avatar, AvatarImage } from "../avatar";
-
 import { Button } from "../button";
 import { MarkdownText } from "./markdown-text";
 import { TooltipIconButton } from "./tooltip-icon-button";
-import { create } from "zustand";
-
-type AudienceModalState = {
-  open: boolean;
-  setOpen: (open: boolean) => void;
-  openModal: () => void;
-  closeModal: () => void;
-};
-
-export const useAudienceModalStore = create<AudienceModalState>((set) => ({
-  open: false,
-  setOpen: (open) => set({ open }),
-  openModal: () => set({ open: true }),
-  closeModal: () => set({ open: false }),
-}));
+import { useAudienceModalStore } from "@/stores/useAudienceModalStore";
 
 type ThreadProps = {
   welcomeMessage?: string;
+  locale?: string;
 };
 
 const ToolRenderer: FC<any> = (props) => {
-  const openModal = useAudienceModalStore((s) => s.openModal);
+  const openModal = useAudienceModalStore((s) => s.setOpen);
 
   const name =
     props?.toolName ??
@@ -54,22 +42,22 @@ const ToolRenderer: FC<any> = (props) => {
 
   if (name !== "open_audiences_modal") return null;
 
-  const docLang =
-    typeof document !== "undefined"
+  const locale =
+    props?.locale ??
+    (typeof document !== "undefined"
       ? (document.documentElement.lang || "").toLowerCase()
-      : "en";
+      : "en");
 
-  const isFr = docLang.startsWith("fr");
+  const isFr = String(locale).toLowerCase().startsWith("fr");
 
   return (
     <div className="mt-2">
       <button
         type="button"
-        className="text-primary font-medium underline underline-offset-4"
+        className="font-medium text-primary underline underline-offset-4"
         onClick={(e) => {
           e.preventDefault();
-          console.log("[ToolRenderer] open_audiences_modal clicked");
-          openModal();
+          openModal(true);
         }}
       >
         {isFr ? "Choisissez votre audience" : "Choose your audience"}
@@ -87,8 +75,8 @@ const ThreadTopWelcome: FC<{ welcomeMessage: string }> = ({
         <Avatar className="flex size-8 flex-shrink-0 items-center justify-center rounded-[24px] border border-white/15 shadow">
           <AvatarImage
             src="/avatar.png"
-            alt="Dyna"
-            className="max-w-6 h-full"
+            alt="Dina"
+            className="h-full max-w-6"
           />
         </Avatar>
 
@@ -102,10 +90,10 @@ const ThreadTopWelcome: FC<{ welcomeMessage: string }> = ({
   );
 };
 
-export const Thread: FC<ThreadProps> = ({ welcomeMessage }) => {
+export const Thread: FC<ThreadProps> = ({ welcomeMessage, locale = "en" }) => {
   return (
     <ThreadPrimitive.Root className="bg-background box-border flex h-full flex-col overflow-hidden">
-      <ThreadPrimitive.Viewport className="flex-1 min-h-0 flex flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4">
+      <ThreadPrimitive.Viewport className="flex min-h-0 flex-1 flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4">
         {welcomeMessage ? (
           <div className="w-full max-w-[var(--thread-max-width)] pt-4">
             <ThreadTopWelcome welcomeMessage={welcomeMessage} />
@@ -114,9 +102,9 @@ export const Thread: FC<ThreadProps> = ({ welcomeMessage }) => {
 
         <ThreadPrimitive.Messages
           components={{
-            UserMessage: UserMessage,
-            EditComposer: EditComposer,
-            AssistantMessage: AssistantMessage,
+            UserMessage,
+            EditComposer,
+            AssistantMessage: () => <AssistantMessage locale={locale} />,
           }}
         />
 
@@ -125,7 +113,6 @@ export const Thread: FC<ThreadProps> = ({ welcomeMessage }) => {
         </ThreadPrimitive.If>
       </ThreadPrimitive.Viewport>
 
-      {/* ✅ BOTTOM (sticky-like, mais hors scroll => ne bouge jamais) */}
       <div className="bg-inherit px-4 pb-4 pt-3">
         <div className="mx-auto flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg">
           <div className="relative w-full">
@@ -180,6 +167,7 @@ const ComposerAction: FC = () => {
           </TooltipIconButton>
         </ComposerPrimitive.Send>
       </ThreadPrimitive.If>
+
       <ThreadPrimitive.If running>
         <ComposerPrimitive.Cancel asChild>
           <TooltipIconButton
@@ -197,10 +185,10 @@ const ComposerAction: FC = () => {
 
 const UserMessage: FC = () => {
   return (
-    <MessagePrimitive.Root className="grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 w-full max-w-[var(--thread-max-width)] py-4">
+    <MessagePrimitive.Root className="grid w-full max-w-[var(--thread-max-width)] auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 py-4 [&:where(>*)]:col-start-2">
       <UserActionBar />
 
-      <div className="bg-muted text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
+      <div className="bg-muted text-foreground col-start-2 row-start-2 max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5">
         <MessagePrimitive.Content />
       </div>
 
@@ -214,7 +202,7 @@ const UserActionBar: FC = () => {
     <ActionBarPrimitive.Root
       hideWhenRunning
       autohide="not-last"
-      className="flex flex-col items-end col-start-1 row-start-2 mr-3 mt-2.5"
+      className="col-start-1 row-start-2 mr-3 mt-2.5 flex flex-col items-end"
     >
       <ActionBarPrimitive.Edit asChild>
         <TooltipIconButton tooltip="Edit">
@@ -242,27 +230,27 @@ const EditComposer: FC = () => {
   );
 };
 
-const AssistantMessage: FC = () => {
+const AssistantMessage: FC<{ locale?: string }> = ({ locale = "en" }) => {
   return (
-    <MessagePrimitive.Root className="grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative w-full max-w-[var(--thread-max-width)] py-4">
-      <Avatar className="flex size-8 flex-shrink-0 items-center justify-center rounded-[24px] border border-white/15 shadow ">
+    <MessagePrimitive.Root className="relative grid w-full max-w-[var(--thread-max-width)] grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] py-4">
+      <Avatar className="flex size-8 flex-shrink-0 items-center justify-center rounded-[24px] border border-white/15 shadow">
         <AvatarImage
           src="/avatar.png"
           alt="avatar"
-          className="max-w-6 h-full"
+          className="h-full max-w-6"
         />
       </Avatar>
-      <div className="text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-4 col-span-2 col-start-2 row-start-1 my-1.5">
+
+      <div className="text-foreground col-span-2 col-start-2 row-start-1 my-1.5 max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-4">
         <MessagePrimitive.Content
           components={{
             Text: MarkdownText,
-            Tool: ToolRenderer,
+            Tool: (props: any) => <ToolRenderer {...props} locale={locale} />,
           }}
         />
       </div>
 
       <AssistantActionBar />
-
       <BranchPicker className="col-start-2 row-start-2 -ml-2 mr-2" />
     </MessagePrimitive.Root>
   );
@@ -274,7 +262,7 @@ const AssistantActionBar: FC = () => {
       hideWhenRunning
       autohide="not-last"
       autohideFloat="single-branch"
-      className="text-muted-foreground flex gap-1 col-start-3 row-start-2 -ml-1 data-[floating]:bg-background data-[floating]:absolute data-[floating]:rounded-md data-[floating]:border data-[floating]:p-1 data-[floating]:shadow-sm"
+      className="text-muted-foreground data-[floating]:bg-background data-[floating]:absolute data-[floating]:rounded-md data-[floating]:border data-[floating]:p-1 data-[floating]:shadow-sm col-start-3 row-start-2 -ml-1 flex gap-1"
     >
       <ActionBarPrimitive.Copy asChild>
         <TooltipIconButton tooltip="Copy">
@@ -286,6 +274,7 @@ const AssistantActionBar: FC = () => {
           </MessagePrimitive.If>
         </TooltipIconButton>
       </ActionBarPrimitive.Copy>
+
       <ActionBarPrimitive.Reload asChild>
         <TooltipIconButton tooltip="Refresh">
           <RefreshCwIcon />
@@ -313,9 +302,11 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
           <ChevronLeftIcon />
         </TooltipIconButton>
       </BranchPickerPrimitive.Previous>
+
       <span className="font-medium">
         <BranchPickerPrimitive.Number /> / <BranchPickerPrimitive.Count />
       </span>
+
       <BranchPickerPrimitive.Next asChild>
         <TooltipIconButton tooltip="Next">
           <ChevronRightIcon />

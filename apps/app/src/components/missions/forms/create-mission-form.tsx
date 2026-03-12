@@ -243,7 +243,11 @@ export function CreateMissionForm({
   const CREDITS_PER_SAMPLE = 12;
 
   const sampleValue = form.watch("targetSampleSize");
-  const isSampleCompleted = typeof sampleValue === "number" && sampleValue > 0;
+  const numericSampleValue =
+    typeof sampleValue === "number" ? sampleValue : Number(sampleValue ?? 0);
+
+  const isSampleCompleted =
+    Number.isFinite(numericSampleValue) && numericSampleValue > 0;
 
   const openCreditsModal = useCreditsPurchaseFlowStore(
     (s) => s.openCreditsModal,
@@ -552,14 +556,28 @@ export function CreateMissionForm({
           if (section.key === "audiences") return section;
 
           const v = values?.[section.key];
+
           if (typeof v === "string") {
             return {
               ...section,
               content: v,
-              status: v ? "completed" : "pending",
+              status: v.trim() ? "completed" : "pending",
             };
           }
-          return section;
+
+          if (typeof v === "number") {
+            return {
+              ...section,
+              content: String(v),
+              status: v > 0 ? "completed" : "pending",
+            };
+          }
+
+          return {
+            ...section,
+            content: "",
+            status: "pending",
+          };
         }),
       );
     });
