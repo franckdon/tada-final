@@ -30,6 +30,7 @@ import { downloadCsv } from "@/lib/export-csv";
 
 interface MissionDashboardClientProps {
   missionId: string;
+  missionName: string;
   initialQuestions: QuestionData[];
   totalResponses: number;
   missionStatus: string;
@@ -40,6 +41,7 @@ interface MissionDashboardClientProps {
 
 export default function MissionDashboardClient({
   missionId,
+  missionName,
   initialQuestions,
   totalResponses,
   missionStatus,
@@ -73,6 +75,7 @@ export default function MissionDashboardClient({
       questionsCount: questions.length,
       totalResponses,
       missionId,
+      missionName,
       missionStatus,
     });
   }, [
@@ -80,6 +83,7 @@ export default function MissionDashboardClient({
     questions.length,
     totalResponses,
     missionId,
+    missionName,
     missionStatus,
   ]);
 
@@ -397,6 +401,7 @@ export default function MissionDashboardClient({
         open={isExportDialogOpen}
         onOpenChange={setIsExportDialogOpen}
         missionId={missionId}
+        missionName={missionName}
         questions={questions}
         totalResponses={totalResponses}
       />

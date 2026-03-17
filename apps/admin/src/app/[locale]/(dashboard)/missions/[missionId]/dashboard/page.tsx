@@ -1,14 +1,8 @@
-import { BarChartCard } from "@/components/missions/boards/graphs/bar-chart";
 import { BarChartHorizontalCard } from "@/components/missions/boards/graphs/bar-chart-horizontal";
 import { BarChartHorizontalStackedCard } from "@/components/missions/boards/graphs/bar-chart-horizontal-stacked";
-import { BarChartStackedCard } from "@/components/missions/boards/graphs/bar-chart-stacked";
-import {
-  // responses,
-  singleChoice,
-} from "@/components/missions/boards/graphs/mock-generator";
 import { PieChartCard } from "@/components/missions/boards/graphs/pie-chart";
-import { RadarChartCard } from "@/components/missions/boards/graphs/radar-chart";
-import { ChartConfig } from "@/components/missions/boards/graphs/ui/chart";
+import { ArrayChartCard } from "@/components/missions/boards/graphs/array-chart";
+import { ChartInsightsCard } from "@/components/missions/boards/graphs/chart-insights-card";
 import { prisma } from "@/lib/prisma";
 import {
   convertPrismaSurveyToSurveyData,
@@ -18,18 +12,26 @@ import {
 import { notFound } from "next/navigation";
 import { MyRuntimeProvider } from "./my-runtime-provider";
 import { AssistantModal } from "@tada/ui/components/assistant-ui/assistant-modal";
-import { MarkdownPreviewCard } from "@/components/missions/boards/graphs/markdown-preview";
-import { ArrayChartCard } from "@/components/missions/boards/graphs/array-chart";
 import FilterChangeChartType from "@/components/missions/boards/modals/filter-change-chart-type";
 
 export const metadata = {
   title: "Mission | Tada",
 };
 
+function normalizeQuestionKey(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[’`]/g, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 export default async function Page({
   params,
 }: {
-  params: { missionId: string };
+  params: { missionId: string; locale: string };
 }) {
   const mission = await prisma.mission.findUnique({
     where: { id: params.missionId },
@@ -37,8 +39,24 @@ export default async function Page({
       id: true,
       name: true,
       status: true,
+      executiveSummary: true,
+      missionCharts: {
+        where: { status: "published" },
+        select: {
+          id: true,
+          title: true,
+          subType: true,
+          surveyId: true,
+          chartData: true,
+          insights: true,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      },
       surveys: {
         select: {
+          id: true,
           questions: true,
           responses: {
             select: {
@@ -60,9 +78,60 @@ export default async function Page({
   }
 
   const responseDb = convertPrismaSurveyToSurveyData(mission as any);
-
   const questionsData: QuestionData[] =
     extractAllQuestionsDataWithConfig(responseDb);
+
+  const findInsightsForQuestion = (question: QuestionData) => {
+    const normalizedQuestion = normalizeQuestionKey(question.question);
+
+    const matchedChart = mission.missionCharts.find((chart) => {
+      const chartQuestion = normalizeQuestionKey(
+        (chart.chartData as any)?.question,
+      );
+      const chartTitle = normalizeQuestionKey(chart.title);
+
+      return (
+        chartQuestion === normalizedQuestion ||
+        chartTitle === normalizedQuestion
+      );
+    });
+
+    const insights = Array.isArray(matchedChart?.insights)
+      ? (matchedChart?.insights as any[])
+      : [];
+
+    console.log("[PAGE] insight match", {
+      question: question.question,
+      normalizedQuestion,
+      matchedChartId: matchedChart?.id ?? null,
+      matchedChartTitle: matchedChart?.title ?? null,
+      insightsCount: insights.length,
+      rawInsights: matchedChart?.insights ?? null,
+    });
+
+    return insights;
+  };
+
+  console.log(
+    "Mission Charts:",
+    mission.missionCharts.map((chart) => ({
+      id: chart.id,
+      title: chart.title,
+      question: (chart.chartData as any)?.question,
+      insightsCount: Array.isArray(chart.insights) ? chart.insights.length : 0,
+      insights: chart.insights,
+    })),
+  );
+
+  console.log(
+    "[PAGE] questionsData:",
+    questionsData.map((q) => ({
+      question: q.question,
+      chart_type: q.chart_type,
+      participants_responded: q.participants_responded,
+    })),
+  );
+
   return (
     <div>
       <MyRuntimeProvider
@@ -70,217 +139,114 @@ export default async function Page({
         mission={{
           id: mission.id,
           status: mission.status || "in_progress",
-          executiveSummary: null,
+          executiveSummary: mission.executiveSummary,
         }}
       >
         {questionsData
           .filter((question) => question.chart_type !== "not implemented")
-          .map((question: QuestionData, index) => (
-            <div key={index}>
-              {question.chart_type === "BarChartHorizontalCard" && (
-                <BarChartHorizontalCard
-                  data={
-                    question.data as Array<{ label: string; value: number }>
-                  }
-                  config={question.config}
-                  primaryDataKey="value"
-                  categoryKey="label"
-                  title={question.question}
-                  description=""
-                  participationQuestions={`${index + 1} de ${
-                    questionsData.length
-                  } | ${
-                    question.participants_responded
-                  } Participants (${Math.round(
-                    (question.participants_responded /
-                      responseDb.metadata.total_responses) *
-                      100,
-                  )}%)`}
-                />
-              )}
-              {question.chart_type === "PieChart" && (
-                <PieChartCard
-                  data={
-                    question.data as Array<{
-                      label: string;
-                      value: number;
-                    }>
-                  }
-                  config={question.config}
-                  primaryDataKey="value"
-                  categoryKey="label"
-                  title={question.question}
-                  description=""
-                  participationQuestions={`${index + 1} de ${
-                    questionsData.length
-                  } | ${
-                    question.participants_responded
-                  } Participants (${Math.round(
-                    (question.participants_responded /
-                      responseDb.metadata.total_responses) *
-                      100,
-                  )}%)`}
-                  participantCount={question.participants_responded}
-                />
-              )}
-              {question.chart_type === "BarChartHorizontalStackedCard" && (
-                <BarChartHorizontalStackedCard
-                  data={
-                    question.data as unknown as Array<{
-                      label: string;
-                      value: number;
-                    }>
-                  }
-                  config={question.config}
-                  categoryKey="label"
-                  title={question.question}
-                  description=""
-                  participationQuestions={`${index + 1} de ${
-                    questionsData.length
-                  } | ${
-                    question.participants_responded
-                  } Participants (${Math.round(
-                    (question.participants_responded /
-                      responseDb.metadata.total_responses) *
-                      100,
-                  )}%)`}
-                  participantCount={question.participants_responded}
-                  primaryKeys={question.primaryKeys}
-                  min={question.min || 0}
-                  max={question.max || 100}
-                />
-              )}
-              {question.chart_type === "ArrayChartCard" && (
-                <ArrayChartCard
-                  texts={question.data as string[]}
-                  title={question.question}
-                  description=""
-                  participationQuestions={`${index + 1} de ${
-                    questionsData.length
-                  } | ${
-                    question.participants_responded
-                  } Participants (${Math.round(
-                    (question.participants_responded /
-                      responseDb.metadata.total_responses) *
-                      100,
-                  )}%)`}
-                />
-              )}
-            </div>
-          ))}
+          .map((question: QuestionData, index) => {
+            const insights = findInsightsForQuestion(question);
 
-        {/*    <div className="w-full">
-              <MarkdownPreviewCard
-                title="Quels sont les facteurs que vous prenez particulièrement en compte lorsque vous achetez des substituts de viande d'origine végétale ?"
-                description=""
-                participationQuestions="2 de 5 | 1000 Participants (100%)"
-                content="Huit groupes comportant chacun quatre caractéristiques de substituts de viande d'origine végétale sont présentés ci-dessous."
-              />
-            </div>
-            <div className=" w-full">
-              <BarChartHorizontalCard
-                data={MOCK_DATA_SINGLE_CHOICE}
-                config={{
-                  OUI: { label: "OUI", color: "hsl(var(--chart-1))" },
-                  NON: { label: "NON", color: "hsl(var(--chart-2))" },
-                  "JE NE SAIS PAS": {
-                    label: "JE NE SAIS PAS",
-                    color: "hsl(var(--chart-3))",
-                  },
-                  value: {
-                    label: "value",
-                    color: "hsl(var(--chart-1))",
-                  },
-                }}
-                primaryDataKey="value"
-                categoryKey="name"
-                title="[Choix unique] Avez-vous l'intention de partir en vacances cette année ?"
-                description=""
-                participationQuestions="1 de 16 | 1000 Participants (100%)"
-              />
-            </div>
-            <div className=" w-full">
-              <BarChartHorizontalCard
-                data={MOCK_DATA}
-                config={MOCK_CONFIG}
-                primaryDataKey="desktop"
-                categoryKey="month"
-                title="[Choix multiple] Dans lesquels de ces pays francophones avez-vous déjà passé des vacances ?"
-                description="(Réponses à choix multiples)"
-                participationQuestions="2 de 16 | 1000 Participants (100%)"
-              />
-            </div>
-            <div className=" w-full">
-              <BarChartCard
-                data={MOCK_DATA}
-                config={MOCK_CONFIG}
-                primaryDataKey="desktop"
-                categoryKey="month"
-                title="[Préférence] Que préférez-vous en vacances ?"
-                description="(Réponses à choix multiples)"
-                participationQuestions="3 de 16 | 1000 Participants (100%)"
-              />
-            </div>
-            <div className=" w-full">
-              <PieChartCard
-                data={MOCK_DATA}
-                config={MOCK_CONFIG}
-                primaryDataKey="desktop"
-                categoryKey="month"
-                title="[Étoiles] Un hôtel fait de la publicité avec le slogan « Les vacances sont ce qu'il y a de mieux avec nous ! » Comment évaluez-vous ce slogan ?"
-                description=""
-                participationQuestions="4 de 16 | 1000 Participants (100%)"
-                participantCount={1000}
-              />
-            </div>
-            <div>
-              <RadarChartCard
-                data={MOCK_DATA}
-                config={MOCK_CONFIG}
-                primaryDataKey="desktop"
-                categoryKey="month"
-                title="[Choix multiple] Dans lesquels de ces pays francophones avez-vous déjà passé des vacances ?"
-                description="(Réponses à choix multiples)"
-                participationQuestions="2 de 16 | 1000 Participants (100%)"
-              />
-            </div>
-            <div>
-              <BarChartHorizontalStackedCard
-                data={MOCK_DATA_NPS}
-                config={MOCK_CONFIG_NPS}
-                categoryKey="category"
-                title="[Curseur numérique] Quelle est la probabilité que vous recommandiez à un ami ou à un collègue de partir en vacances en France ?"
-                description="Instructions pour les participants: 0 = Très improbable // 10 = Très probable"
-                participationQuestions="6 de 16 | 1000 Participants (100%)"
-                primaryKeys={getNumericKeysDescending(MOCK_DATA_NPS)}
-              />
-            </div>
+            return (
+              <div key={index} className="mb-10 space-y-5">
+                {question.chart_type === "BarChartHorizontalCard" && (
+                  <BarChartHorizontalCard
+                    data={
+                      question.data as Array<{ label: string; value: number }>
+                    }
+                    config={question.config}
+                    primaryDataKey="value"
+                    categoryKey="label"
+                    title={question.question}
+                    description=""
+                    participationQuestions={`${index + 1} de ${
+                      questionsData.length
+                    } | ${
+                      question.participants_responded
+                    } Participants (${Math.round(
+                      (question.participants_responded /
+                        responseDb.metadata.total_responses) *
+                        100,
+                    )}%)`}
+                  />
+                )}
 
-            <div>
-              <BarChartCard
-                data={MOCK_DATA}
-                config={MOCK_CONFIG}
-                primaryDataKey="desktop"
-                categoryKey="month"
-                title="[Choix multiple] Dans lesquels de ces pays francophones avez-vous déjà
-          passé des vacances ?"
-                description="(Réponses à choix multiples)"
-                participationQuestions="2 de 16 | 1000 Participants (100%)"
-                primaryKeys={["desktop", "mobile"]}
-              />
-            </div>
-            <div>
-              <BarChartStackedCard
-                data={MOCK_DATA}
-                config={MOCK_CONFIG}
-                categoryKey="month"
-                title="[Choix multiple] Dans lesquels de ces pays francophones avez-vous déjà
-          passé des vacances ?"
-                description="(Réponses à choix multiples)"
-                participationQuestions="2 de 16 | 1000 Participants (100%)"
-                primaryKeys={["desktop", "mobile"]}
-              />
-            </div> */}
+                {question.chart_type === "PieChart" && (
+                  <PieChartCard
+                    data={
+                      question.data as Array<{
+                        label: string;
+                        value: number;
+                      }>
+                    }
+                    config={question.config}
+                    primaryDataKey="value"
+                    categoryKey="label"
+                    title={question.question}
+                    description=""
+                    participationQuestions={`${index + 1} de ${
+                      questionsData.length
+                    } | ${
+                      question.participants_responded
+                    } Participants (${Math.round(
+                      (question.participants_responded /
+                        responseDb.metadata.total_responses) *
+                        100,
+                    )}%)`}
+                    participantCount={question.participants_responded}
+                  />
+                )}
+
+                {question.chart_type === "BarChartHorizontalStackedCard" && (
+                  <BarChartHorizontalStackedCard
+                    data={
+                      question.data as unknown as Array<{
+                        label: string;
+                        value: number;
+                      }>
+                    }
+                    config={question.config}
+                    categoryKey="label"
+                    title={question.question}
+                    description=""
+                    participationQuestions={`${index + 1} de ${
+                      questionsData.length
+                    } | ${
+                      question.participants_responded
+                    } Participants (${Math.round(
+                      (question.participants_responded /
+                        responseDb.metadata.total_responses) *
+                        100,
+                    )}%)`}
+                    participantCount={question.participants_responded}
+                    primaryKeys={question.primaryKeys}
+                    min={question.min || 0}
+                    max={question.max || 100}
+                  />
+                )}
+
+                {question.chart_type === "ArrayChartCard" && (
+                  <ArrayChartCard
+                    texts={question.data as string[]}
+                    title={question.question}
+                    description=""
+                    participationQuestions={`${index + 1} de ${
+                      questionsData.length
+                    } | ${
+                      question.participants_responded
+                    } Participants (${Math.round(
+                      (question.participants_responded /
+                        responseDb.metadata.total_responses) *
+                        100,
+                    )}%)`}
+                  />
+                )}
+
+                <ChartInsightsCard insights={insights} locale={params.locale} />
+              </div>
+            );
+          })}
+
         <FilterChangeChartType />
         <AssistantModal />
       </MyRuntimeProvider>

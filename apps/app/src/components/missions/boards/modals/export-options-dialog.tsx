@@ -1,4 +1,3 @@
-// src/components/missions/boards/modals/export-options-dialog.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -32,6 +31,7 @@ interface ExportOptionsDialogProps {
   onOpenChange: (open: boolean) => void;
 
   missionId: string;
+  missionName: string;
   questions: QuestionWithView[];
   totalResponses: number;
 }
@@ -40,6 +40,7 @@ export function ExportOptionsDialog({
   open,
   onOpenChange,
   missionId,
+  missionName,
   questions,
   totalResponses,
 }: ExportOptionsDialogProps) {
@@ -88,7 +89,7 @@ export function ExportOptionsDialog({
           missionId,
           questions,
           totalResponses,
-          "aggregated"
+          "aggregated",
         );
 
         toast({
@@ -100,7 +101,10 @@ export function ExportOptionsDialog({
       }
 
       if (activeFormat === "pdf") {
-        await exportFullSurveyPdf(`mission-${missionId}-questionnaire.pdf`);
+        await exportFullSurveyPdf(`mission-${missionId}-questionnaire.pdf`, {
+          studyTitle: missionName,
+          yearLabel: String(new Date().getFullYear()),
+        });
 
         toast({
           title: "Export PDF prêt",
@@ -111,7 +115,10 @@ export function ExportOptionsDialog({
       }
 
       if (activeFormat === "ppt") {
-        await exportFullSurveyPpt(`mission-${missionId}-questionnaire.pptx`);
+        await exportFullSurveyPpt(`mission-${missionId}-questionnaire.pptx`, {
+          studyTitle: missionName,
+          yearLabel: String(new Date().getFullYear()),
+        });
 
         toast({
           title: "Export PPT prêt",
@@ -134,17 +141,16 @@ export function ExportOptionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl p-0 overflow-hidden">
+      <DialogContent className="max-w-3xl overflow-hidden p-0">
         <div className="flex h-full">
-          {/* Colonne gauche : formats */}
           <div className="w-48 border-r border-slate-200 bg-slate-50">
-            <div className="px-6 py-4 border-b border-slate-200">
-              <p className="font-semibold text-slate-900 text-[15px]">
+            <div className="border-b border-slate-200 px-6 py-4">
+              <p className="text-[15px] font-semibold text-slate-900">
                 Export options
               </p>
             </div>
 
-            <nav className="flex flex-col p-2 gap-1">
+            <nav className="flex flex-col gap-1 p-2">
               <FormatNavItem
                 label="PowerPoint"
                 format="ppt"
@@ -176,9 +182,8 @@ export function ExportOptionsDialog({
             </nav>
           </div>
 
-          {/* Colonne droite : contenu */}
-          <div className="flex-1 flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div className="flex flex-1 flex-col">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
               <DialogHeader className="space-y-1">
                 <DialogTitle className="text-[15px] font-semibold">
                   {getRightTitle(activeFormat)}
@@ -198,15 +203,15 @@ export function ExportOptionsDialog({
               </DialogClose>
             </div>
 
-            <div className="flex-1 p-6 flex flex-col gap-4">
+            <div className="flex flex-1 flex-col gap-4 p-6">
               {activeFormat === "csv" && (
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-4 space-y-3">
+                <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-4">
                   <p className="text-sm font-medium text-slate-900">
                     Delimiter format
                   </p>
 
                   <div className="space-y-2 text-sm text-slate-700">
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    <label className="flex cursor-pointer items-center gap-2">
                       <input
                         type="radio"
                         name="csv-delimiter"
@@ -217,7 +222,7 @@ export function ExportOptionsDialog({
                       <span>Use EU delimiter format (;)</span>
                     </label>
 
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    <label className="flex cursor-pointer items-center gap-2">
                       <input
                         type="radio"
                         name="csv-delimiter"
@@ -297,10 +302,9 @@ function FormatNavItem({ label, active, onClick }: FormatNavItemProps) {
         "transition-colors",
         active
           ? "bg-white text-slate-900 shadow-sm"
-          : "text-slate-600 hover:bg-slate-100"
+          : "text-slate-600 hover:bg-slate-100",
       )}
     >
-      {/* Icône simple */}
       <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 text-[10px] font-semibold text-slate-700">
         {label[0]}
       </span>

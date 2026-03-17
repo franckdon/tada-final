@@ -1,9 +1,7 @@
-// src/app/[locale]/(dashboard)/missions/[missionId]/dashboard/my-runtime-provider.tsx
 "use client";
 
 import { generateExecutiveSummaryAction } from "@/actions/missions/generate-executive-summary-action";
 import { MarkdownPreviewCard } from "@/components/missions/boards/graphs/markdown-preview";
-import { executiveSummaryMock } from "@/components/missions/boards/graphs/mock-generator";
 import { ParticipantInfo } from "@/components/missions/boards/graphs/participant-info";
 import {
   extractSexAndAge,
@@ -46,10 +44,9 @@ export function MyRuntimeProvider({
   mission: MissionLite;
 }>) {
   const [executiveSummary, setExecutiveSummary] = useState<string>(
-    mission?.executiveSummary ?? executiveSummaryMock,
+    mission?.executiveSummary ?? "",
   );
 
-  // ✅ stabilise les données même si responses est null
   const safeResponses = responses ?? EMPTY_RESPONSES;
 
   const chat = useChat({
@@ -59,13 +56,23 @@ export function MyRuntimeProvider({
 
   const runtime = useAISDKRuntime(chat);
 
-  // ⚠️ useAction retourne un objet parfois instable -> on évite de le mettre en deps
-  const generateExecutiveSummary = useAction(
-    generateExecutiveSummaryAction,
-    {},
-  );
+  const generateExecutiveSummary = useAction(generateExecutiveSummaryAction, {
+    onSuccess: (result) => {
+      const generatedSummary =
+        result?.data?.data?.executiveSummary ??
+        result?.data?.executiveSummary ??
+        result?.data?.summary ??
+        "";
 
-  // ✅ garde anti double-run / anti boucle
+      if (generatedSummary && typeof generatedSummary === "string") {
+        setExecutiveSummary(generatedSummary);
+      }
+    },
+    onError: (error) => {
+      console.error("[EXEC_SUMMARY][onError]", error);
+    },
+  });
+
   const hasTriggeredRef = useRef(false);
 
   const sexAgeData = useMemo(() => {
@@ -79,13 +86,11 @@ export function MyRuntimeProvider({
   }, [safeResponses]);
 
   useEffect(() => {
-    // 1) Si le résumé est déjà là, on l'affiche et on stoppe
     if (mission?.executiveSummary) {
       setExecutiveSummary(mission.executiveSummary);
       return;
     }
 
-    // 2) Sinon, on ne génère qu'une seule fois, seulement si mission completed + on a des réponses
     if (
       !hasTriggeredRef.current &&
       mission?.status === "completed" &&
@@ -93,10 +98,6 @@ export function MyRuntimeProvider({
       safeResponses.metadata.total_responses > 0
     ) {
       hasTriggeredRef.current = true;
-
-      // ✅ IMPORTANT:
-      // Ton action serveur re-fetch déjà les responses via Prisma,
-      // donc on n'envoie que missionId pour éviter un payload énorme et des deps instables.
       generateExecutiveSummary.execute({ missionId: mission.id });
     }
   }, [
@@ -104,8 +105,9 @@ export function MyRuntimeProvider({
     mission?.status,
     mission?.executiveSummary,
     safeResponses.metadata.total_responses,
-    // ⚠️ volontairement PAS generateExecutiveSummary dans les deps
   ]);
+
+  useEffect(() => {}, [executiveSummary]);
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
@@ -137,14 +139,20 @@ export function MyRuntimeProvider({
         </div>
 
         <div className="mt-8 gap-4 space-y-8">
-          <div className="w-full">
-            <MarkdownPreviewCard
-              title=""
-              description=""
-              participationQuestions=""
-              content={executiveSummary}
-            />
-          </div>
+          {executiveSummary ? (
+            <div className="w-full">
+              <MarkdownPreviewCard
+                title="Résumé Exécutif"
+                description=""
+                participationQuestions=""
+                content={executiveSummary}
+              />
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">
+              Aucun executive summary à afficher pour le moment.
+            </div>
+          )}
 
           {children}
         </div>

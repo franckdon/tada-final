@@ -116,9 +116,6 @@ model Mission {
   workspaceId                  String?
   image                        String?
   sampleSummary                String?
-  samplesummary                String?
-  targetsamplesize             Int?
-  preliminaryrecommendations   String?
   studystructure               String?
   targetSampleSize             Int?
   preliminaryRecommendations   String?

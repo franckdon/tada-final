@@ -40,7 +40,7 @@ export function UpdateMissionForm({
   const [isAudiencesFilterModalOpen, setIsAudiencesFilterModalOpen] =
     useState(false);
   const [title, setTitle] = useState(
-    inComingMission.name || t("missions.createMission.form.name")
+    inComingMission.name || t("missions.createMission.form.name"),
   );
   const [editingTitle, setEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState("");
@@ -138,8 +138,8 @@ export function UpdateMissionForm({
                 content: tempContent,
                 status: tempContent ? "completed" : "pending",
               }
-            : section
-        )
+            : section,
+        ),
       );
       setEditingSection(null);
     }
@@ -184,7 +184,7 @@ export function UpdateMissionForm({
         editingSection &&
         editSectionRef.current &&
         !editSectionRef.current.contains(
-          (event as unknown as React.ChangeEvent<HTMLInputElement>).target
+          (event as unknown as React.ChangeEvent<HTMLInputElement>).target,
         )
       ) {
         saveContentChanges();
@@ -203,7 +203,7 @@ export function UpdateMissionForm({
         editingTitle &&
         editTitleRef.current &&
         !editTitleRef.current.contains(
-          (event as unknown as React.ChangeEvent<HTMLInputElement>).target
+          (event as unknown as React.ChangeEvent<HTMLInputElement>).target,
         )
       ) {
         saveTitleChanges();
@@ -233,8 +233,8 @@ export function UpdateMissionForm({
                     content: values[section.key],
                     status: values[section.key] ? "completed" : "pending",
                   }
-                : s
-            )
+                : s,
+            ),
           );
         }
       });
@@ -247,8 +247,8 @@ export function UpdateMissionForm({
     if (activeFiltersCount > 0) {
       setSections((prev) =>
         prev.map((s) =>
-          s.key === "audiences" ? { ...s, status: "completed" } : s
-        )
+          s.key === "audiences" ? { ...s, status: "completed" } : s,
+        ),
       );
     }
   }, [activeFiltersCount]);
@@ -361,8 +361,10 @@ export function UpdateMissionForm({
                   section.status === "pending"
                     ? "bg-yellow-400"
                     : section.status === "completed"
-                    ? "bg-green-500"
-                    : "bg-gray-400"
+                      ? "bg-green-500"
+                      : section.status === "live"
+                        ? "bg-blue-500"
+                        : "bg-gray-400"
                 }`}
               />
 
@@ -408,10 +410,10 @@ export function UpdateMissionForm({
                             Object.keys(selectedFilters[groupId] || {}).map(
                               (filterId) => {
                                 const group = filterGroups.find(
-                                  (g) => g.id === groupId
+                                  (g) => g.id === groupId,
                                 );
                                 const filter = group?.filters.find(
-                                  (f) => f.id === filterId
+                                  (f) => f.id === filterId,
                                 );
 
                                 return (
@@ -420,7 +422,7 @@ export function UpdateMissionForm({
                                   ] as string[]
                                 )?.map((value) => {
                                   const option = filter?.options?.find(
-                                    (o) => o.value === value
+                                    (o) => o.value === value,
                                   );
                                   return (
                                     <span
@@ -439,7 +441,7 @@ export function UpdateMissionForm({
                                             groupId,
                                             filterId,
                                             value,
-                                            false
+                                            false,
                                           )
                                         }
                                       >
@@ -463,8 +465,8 @@ export function UpdateMissionForm({
                                     </span>
                                   );
                                 });
-                              }
-                            )
+                              },
+                            ),
                           )}
                         </div>
                       </div>

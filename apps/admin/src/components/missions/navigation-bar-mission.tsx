@@ -118,9 +118,9 @@ export function NavigationBarMission({
               </SelectTrigger>
               <SelectContent>
                 {/* TODO: add live status for admin */}
-                {/*  <SelectItem value="live">
+                <SelectItem value="live">
                   {t("missions.status.live")}
-                </SelectItem> */}
+                </SelectItem>
                 <SelectItem value="on hold">
                   {t("missions.status.on_hold")}
                 </SelectItem>
@@ -151,7 +151,8 @@ export function NavigationBarMission({
               "flex items-center text-sm transition-colors px-4 py-2 rounded-sm",
               "dark:bg-[#1D1D1D] dark:text-[#878787]",
               "bg-white text-gray-600",
-              currentTab === tab.id && "text-white dark:bg-[#2C2C2C] bg-primary"
+              currentTab === tab.id &&
+                "text-white dark:bg-[#2C2C2C] bg-primary",
             )}
           >
             <span className="mr-2">{tab.icon}</span>

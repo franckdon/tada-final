@@ -325,6 +325,7 @@ export default async function Page({ params }: { params: PageParams }) {
       >
         <MissionDashboardClient
           missionId={missionId}
+          missionName={mission.name}
           initialQuestions={questionsData}
           totalResponses={totalResponses}
           missionStatus={mission.status || "in_progress"}

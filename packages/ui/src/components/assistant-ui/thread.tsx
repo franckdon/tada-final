@@ -23,16 +23,14 @@ import { Avatar, AvatarImage } from "../avatar";
 import { Button } from "../button";
 import { MarkdownText } from "./markdown-text";
 import { TooltipIconButton } from "./tooltip-icon-button";
-import { useAudienceModalStore } from "@/stores/useAudienceModalStore";
 
 type ThreadProps = {
   welcomeMessage?: string;
   locale?: string;
+  onOpenAudiencesModal?: () => void;
 };
 
 const ToolRenderer: FC<any> = (props) => {
-  const openModal = useAudienceModalStore((s) => s.setOpen);
-
   const name =
     props?.toolName ??
     props?.name ??
@@ -40,14 +38,11 @@ const ToolRenderer: FC<any> = (props) => {
     props?.call?.name ??
     props?.toolCall?.name;
 
+  const onOpenAudiencesModal = props?.onOpenAudiencesModal;
+
   if (name !== "open_audiences_modal") return null;
 
-  const locale =
-    props?.locale ??
-    (typeof document !== "undefined"
-      ? (document.documentElement.lang || "").toLowerCase()
-      : "en");
-
+  const locale = props?.locale ?? "en";
   const isFr = String(locale).toLowerCase().startsWith("fr");
 
   return (
@@ -57,7 +52,7 @@ const ToolRenderer: FC<any> = (props) => {
         className="font-medium text-primary underline underline-offset-4"
         onClick={(e) => {
           e.preventDefault();
-          openModal(true);
+          onOpenAudiencesModal?.();
         }}
       >
         {isFr ? "Choisissez votre audience" : "Choose your audience"}
@@ -90,7 +85,11 @@ const ThreadTopWelcome: FC<{ welcomeMessage: string }> = ({
   );
 };
 
-export const Thread: FC<ThreadProps> = ({ welcomeMessage, locale = "en" }) => {
+export const Thread: FC<ThreadProps> = ({
+  welcomeMessage,
+  locale = "en",
+  onOpenAudiencesModal,
+}) => {
   return (
     <ThreadPrimitive.Root className="bg-background box-border flex h-full flex-col overflow-hidden">
       <ThreadPrimitive.Viewport className="flex min-h-0 flex-1 flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4">
@@ -104,7 +103,12 @@ export const Thread: FC<ThreadProps> = ({ welcomeMessage, locale = "en" }) => {
           components={{
             UserMessage,
             EditComposer,
-            AssistantMessage: () => <AssistantMessage locale={locale} />,
+            AssistantMessage: () => (
+              <AssistantMessage
+                locale={locale}
+                onOpenAudiencesModal={onOpenAudiencesModal}
+              />
+            ),
           }}
         />
 
@@ -230,7 +234,10 @@ const EditComposer: FC = () => {
   );
 };
 
-const AssistantMessage: FC<{ locale?: string }> = ({ locale = "en" }) => {
+const AssistantMessage: FC<{
+  locale?: string;
+  onOpenAudiencesModal?: () => void;
+}> = ({ locale = "en", onOpenAudiencesModal }) => {
   return (
     <MessagePrimitive.Root className="relative grid w-full max-w-[var(--thread-max-width)] grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] py-4">
       <Avatar className="flex size-8 flex-shrink-0 items-center justify-center rounded-[24px] border border-white/15 shadow">
@@ -245,7 +252,13 @@ const AssistantMessage: FC<{ locale?: string }> = ({ locale = "en" }) => {
         <MessagePrimitive.Content
           components={{
             Text: MarkdownText,
-            Tool: (props: any) => <ToolRenderer {...props} locale={locale} />,
+            Tool: (props: any) => (
+              <ToolRenderer
+                {...props}
+                locale={locale}
+                onOpenAudiencesModal={onOpenAudiencesModal}
+              />
+            ),
           }}
         />
       </div>
